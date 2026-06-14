@@ -1,0 +1,373 @@
+{% extends "base.html" %}
+
+{% block title %}Taking Exam - {{ exam.title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Prevent text selection and disable right-click where needed */
+    .unselectable {
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+    }
+
+    .exam-layout {
+        display: flex;
+        gap: 20px;
+        min-height: calc(100vh - 120px);
+        margin-top: 1rem;
+    }
+
+    .question-area {
+        flex: 3;
+        display: flex;
+        flex-direction: column;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+        overflow: hidden;
+    }
+
+    .question-scroll {
+        flex: 1;
+        overflow-y: auto;
+        padding: 24px;
+    }
+
+    .question-container { display: none; animation: fadeIn 0.3s ease-out; }
+    .question-container.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+    .option-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 16px;
+        margin-bottom: 12px;
+        border: 2px solid var(--border);
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .option-row:hover { border-color: var(--color-purple); background: rgba(106, 27, 154, 0.05); }
+    .option-row.selected { border-color: var(--color-purple); background: rgba(106, 27, 154, 0.1); }
+    .option-row input[type="radio"] { display: none; }
+
+    .opt-bubble {
+        width: 32px; height: 32px; border-radius: 50%;
+        background: var(--surface-2); display: flex; align-items: center;
+        justify-content: center; font-weight: bold;
+        flex-shrink: 0; transition: all 0.2s;
+    }
+    .option-row.selected .opt-bubble { background: var(--color-purple); color: white; }
+
+    .nav-bar {
+        border-top: 1px solid var(--border);
+        padding: 16px 24px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: var(--surface);
+    }
+
+    /* Palette Sidebar */
+    .palette-sidebar {
+        flex: 1;
+        max-width: 300px;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+        display: flex;
+        flex-direction: column;
+    }
+
+    .palette-grid {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 8px;
+        padding: 16px;
+        overflow-y: auto;
+    }
+
+    .p-item {
+        aspect-ratio: 1;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 0.85rem; font-weight: 500; cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .p-item:hover { border-color: var(--color-purple); }
+    .p-item.current { border: 2px solid var(--color-purple); font-weight: bold; }
+    .p-item.answered { background: var(--color-purple); color: white; border-color: var(--color-purple); }
+
+    .timer-warning { color: var(--red) !important; animation: pulse 1s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+    .image-wrapper img {
+        max-width: 100%;
+        border-radius: 8px;
+        margin: 10px 0;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    @media (max-width: 768px) {
+        .exam-layout { flex-direction: column; }
+        .palette-sidebar { max-width: 100%; order: -1; }
+        .palette-grid { grid-template-columns: repeat(8, 1fr); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container unselectable">
+    
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <div>
+            <h2 style="margin: 0;">{{ exam.title }}</h2>
+            <p style="margin: 0; color: var(--text-muted); font-size: 0.85rem;">Session ID: {{ session_id }}</p>
+        </div>
+        <div id="timerDisplay" style="background: var(--surface-2); border: 2px solid var(--border); padding: 8px 16px; border-radius: 8px; font-weight: bold; font-family: monospace; font-size: 1.25rem;">
+            --:--:--
+        </div>
+    </div>
+
+    <div class="exam-layout">
+        <!-- Question Area -->
+        <div class="question-area">
+            <div class="question-scroll">
+                {% for q in questions %}
+                <div class="question-container" id="q-{{ loop.index0 }}" data-qid="{{ q._id }}">
+                    <div style="font-size: 0.85rem; color: var(--text-muted); font-weight: bold; margin-bottom: 12px; text-transform: uppercase;">
+                        Question {{ loop.index }} of {{ questions|length }}
+                    </div>
+                    
+                    <div style="font-size: 1.15rem; font-weight: 500; line-height: 1.6; margin-bottom: 24px;">
+                        {{ q.text }}
+                        {% if q.image_url %}
+                        <div class="image-wrapper"><img src="{{ q.image_url }}" alt="Question Image"></div>
+                        {% endif %}
+                    </div>
+
+                    <div class="options-container">
+                        {% for opt in q.options %}
+                        <label class="option-row">
+                            <input type="radio" name="question_{{ q._id }}" value="{{ opt.key }}">
+                            <span class="opt-bubble">{{ opt.key }}</span>
+                            <div style="flex: 1;">
+                                {{ opt.text }}
+                                {% if opt.image_url %}
+                                <div class="image-wrapper"><img src="{{ opt.image_url }}" alt="Option Image" style="max-height: 100px;"></div>
+                                {% endif %}
+                            </div>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="nav-bar">
+                <button type="button" class="btn btn-secondary" id="btnPrev" onclick="navigate(-1)"><i class="ph-bold ph-arrow-left"></i> Previous</button>
+                <div style="font-size: 0.85rem; color: var(--text-muted); font-weight: 500;">
+                    <span id="syncStatus" style="display: flex; align-items: center; gap: 4px; color: var(--success);"><i class="ph-fill ph-cloud-check"></i> Saved</span>
+                </div>
+                <button type="button" class="btn btn-primary" id="btnNext" onclick="navigate(1)">Next <i class="ph-bold ph-arrow-right"></i></button>
+                <button type="button" class="btn btn-primary" id="btnSubmit" onclick="submitExam()" style="display: none; background: var(--success); border-color: var(--success);"><i class="ph-bold ph-check-circle"></i> Submit Exam</button>
+            </div>
+        </div>
+
+        <!-- Palette Sidebar -->
+        <div class="palette-sidebar">
+            <div style="padding: 16px; border-bottom: 1px solid var(--border); font-weight: bold;">Question Palette</div>
+            <div class="palette-grid" id="palette">
+                {% for q in questions %}
+                <div class="p-item" id="p-{{ loop.index0 }}" onclick="goTo({{ loop.index0 }})">{{ loop.index }}</div>
+                {% endfor %}
+            </div>
+            <div style="padding: 16px; border-top: 1px solid var(--border); font-size: 0.8rem; color: var(--text-muted); display: flex; gap: 16px;">
+                <div style="display: flex; align-items: center; gap: 6px;"><div style="width: 12px; height: 12px; background: var(--color-purple); border-radius: 2px;"></div> Answered</div>
+                <div style="display: flex; align-items: center; gap: 6px;"><div style="width: 12px; height: 12px; border: 1px solid var(--border); border-radius: 2px;"></div> Unanswered</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const sessionId = "{{ session_id }}";
+    const totalQ = {{ questions|length }};
+    let currentQ = 0;
+    
+    // Initial Time (in seconds) passed from backend
+    let timeLeft = parseInt("{{ time_remaining }}") || 3600;
+    
+    // Initialize LocalStorage Keys
+    const LS_KEY = `exam_${sessionId}_answers`;
+    let answersState = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
+
+    // ── Timer Logic ────────────────────────────────────────────────────────
+    function formatTime(secs) {
+        const h = Math.floor(secs / 3600);
+        const m = Math.floor((secs % 3600) / 60);
+        const s = secs % 60;
+        const pad = n => String(n).padStart(2, '0');
+        if (h > 0) return `${pad(h)}:${pad(m)}:${pad(s)}`;
+        return `${pad(m)}:${pad(s)}`;
+    }
+
+    const timerInterval = setInterval(() => {
+        timeLeft--;
+        const display = document.getElementById('timerDisplay');
+        display.innerText = formatTime(timeLeft);
+        
+        if (timeLeft < 300) display.classList.add('timer-warning'); // 5 mins
+        
+        if (timeLeft <= 0) {
+            clearInterval(timerInterval);
+            submitExam(true); // Forced timeout submit
+        }
+    }, 1000);
+
+    // ── Navigation & Palette ───────────────────────────────────────────────
+    function goTo(idx) {
+        document.querySelectorAll('.question-container').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.p-item').forEach(el => el.classList.remove('current'));
+
+        document.getElementById('q-' + idx).classList.add('active');
+        document.getElementById('p-' + idx).classList.add('current');
+
+        document.getElementById('btnPrev').style.visibility = (idx === 0) ? 'hidden' : 'visible';
+        
+        if (idx === totalQ - 1) {
+            document.getElementById('btnNext').style.display = 'none';
+            document.getElementById('btnSubmit').style.display = 'inline-flex';
+        } else {
+            document.getElementById('btnNext').style.display = 'inline-flex';
+            document.getElementById('btnSubmit').style.display = 'none';
+        }
+        currentQ = idx;
+    }
+
+    function navigate(dir) {
+        const next = currentQ + dir;
+        if (next >= 0 && next < totalQ) goTo(next);
+    }
+
+    // ── Answer Handling & LocalStorage ─────────────────────────────────────
+    document.querySelectorAll('input[type="radio"]').forEach(radio => {
+        radio.addEventListener('change', function() {
+            const container = this.closest('.question-container');
+            const qid = container.dataset.qid;
+            const pIdx = parseInt(container.id.replace('q-', ''));
+            
+            // UI Updates
+            document.getElementById('p-' + pIdx).classList.add('answered');
+            document.querySelectorAll(`input[name="${this.name}"]`).forEach(r => {
+                r.closest('.option-row').classList.remove('selected');
+            });
+            this.closest('.option-row').classList.add('selected');
+            
+            // Save to LocalStorage
+            answersState[qid] = {
+                question_id: qid,
+                selected_option: this.value,
+                answered_at: new Date().toISOString()
+            };
+            localStorage.setItem(LS_KEY, JSON.stringify(answersState));
+            
+            triggerSync(); // Attempt to sync immediately on change
+        });
+    });
+
+    // ── Restore State on Load ──────────────────────────────────────────────
+    function restoreState() {
+        Object.keys(answersState).forEach(qid => {
+            const val = answersState[qid].selected_option;
+            const radio = document.querySelector(`input[name="question_${qid}"][value="${val}"]`);
+            if (radio) {
+                radio.checked = true;
+                const container = radio.closest('.question-container');
+                const pIdx = container.id.replace('q-', '');
+                document.getElementById('p-' + pIdx).classList.add('answered');
+                radio.closest('.option-row').classList.add('selected');
+            }
+        });
+    }
+
+    // ── Backend Sync API ───────────────────────────────────────────────────
+    let syncTimeout = null;
+    function triggerSync() {
+        // Debounce sync requests
+        clearTimeout(syncTimeout);
+        document.getElementById('syncStatus').innerHTML = '<i class="ph-bold ph-spinner-gap" style="animation: spin 1s linear infinite;"></i> Saving...';
+        document.getElementById('syncStatus').style.color = 'var(--text-muted)';
+        
+        syncTimeout = setTimeout(async () => {
+            try {
+                const response = await fetch(`/api/sessions/${sessionId}/sync`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        time_remaining_seconds: timeLeft,
+                        answers: Object.values(answersState)
+                    })
+                });
+                if (response.ok) {
+                    document.getElementById('syncStatus').innerHTML = '<i class="ph-fill ph-cloud-check"></i> Saved';
+                    document.getElementById('syncStatus').style.color = 'var(--success)';
+                } else {
+                    throw new Error('Sync failed');
+                }
+            } catch (err) {
+                console.error(err);
+                document.getElementById('syncStatus').innerHTML = '<i class="ph-bold ph-warning"></i> Offline (Saved Locally)';
+                document.getElementById('syncStatus').style.color = 'var(--color-gold)';
+            }
+        }, 1500); // 1.5s debounce
+    }
+
+    // ── Final Submission ───────────────────────────────────────────────────
+    async function submitExam(isTimeout = false) {
+        if (!isTimeout) {
+            const answeredCount = Object.keys(answersState).length;
+            if (answeredCount < totalQ) {
+                const confirmSubmit = confirm(`You have answered ${answeredCount} out of ${totalQ} questions. Are you sure you want to submit?`);
+                if (!confirmSubmit) return;
+            } else {
+                if (!confirm('Are you sure you want to submit your exam?')) return;
+            }
+        }
+        
+        try {
+            const response = await fetch(`/api/sessions/${sessionId}/submit`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ answers: Object.values(answersState) })
+            });
+            const result = await response.json();
+            
+            if (result.success) {
+                localStorage.removeItem(LS_KEY); // Clear cache
+                alert(`Exam Submitted successfully! Your score: ${result.score_percent}%`);
+                window.location.href = '/dashboard';
+            } else {
+                alert('Error submitting exam: ' + result.error);
+            }
+        } catch (err) {
+            alert('Network error submitting exam. Answers are safely cached. Try submitting again when online.');
+        }
+    }
+
+    // Init
+    restoreState();
+    goTo(0);
+    
+    // Fallback periodic sync every 30 seconds
+    setInterval(triggerSync, 30000);
+</script>
+{% endblock %}

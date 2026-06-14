@@ -1,0 +1,1440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exam Platform</title>
+    <style>
+        :root {
+            --primary: #6912db;
+            --primary-hover: #7816c7;
+            --dark-bg: #170a28;
+            --dark-bg-2: #301a4a;
+            --dark-bg-3: #170d2a;
+            --text-light: #ffffff;
+            --text-muted: #b4a8d0;
+            --text-subtle: #937aa8;
+            --card-bg: #ffffff;
+            --surface: #f4f0f8;
+            --surface-2: #faf8fc;
+            --border: #eae2f0;
+            --text-body: #6f628d;
+            --text-heading: #190f2a;
+            --text-link: #403355;
+            --success: #10b981;
+            --red: #dc2626;
+            --gray-400: #94a3b8;
+            --gray-300: #452469;
+            --gray-600: #9ca3af;
+            --zenith-bg: #1a1a1a;
+            --zenith-layer-1: #2a2a2a;
+            --zenith-layer-2: #333333;
+            --zenith-layer-3: #3a3a3a;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            font-size: clamp(14px, 1.2vw, 16px);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: var(--surface);
+            overflow-x: hidden;
+            line-height: 1.6;
+        }
+
+        .hero {
+            background: #ffffff;
+            min-height: 90vh;
+            padding: 3rem 5rem 11.25rem 6.5rem;
+            position: relative;
+            border-bottom-left-radius: 6.75rem;
+            border-bottom-right-radius: 6.75rem;
+            overflow: visible;
+            display: flex;
+            align-items: center;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: rgba(240, 239, 237, 0.991);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.15);
+            padding: 0.5rem 1.125rem;
+            border-radius: 1.875rem;
+            color: #e4bf38e8;
+            font-size: 0.975rem;
+            font-weight: 500;
+            margin-bottom: 1.875rem;
+        }
+
+        .badge svg {
+            width: 1rem;
+            height: 1rem;
+            color: #c9962f;
+        }
+
+        .hero-content {
+            max-width: 29.25rem;
+        }
+
+        .hero h1 {
+            color: #000000;
+            font-size: 3.9rem;
+            font-weight: 700;
+            line-height: 1.15;
+            margin-bottom: 1.25rem;
+            letter-spacing: -0.03125rem;
+        }
+
+        .hero h1 span {
+            color: #e4a238;
+        }
+
+        .hero p {
+            color: var(--text-muted);
+            font-size: 1.8rem;
+            line-height: 1.6;
+            margin-bottom: 1.875rem;
+            max-width: 32.25rem;
+        }
+
+        .cta-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: var(--primary);
+            color: white;
+            padding: 0.875rem 1.75rem;
+            border-radius: 0.625rem;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1.125rem;
+            transition: all 0.3s ease;
+            border: none;
+            cursor: pointer;
+        }
+
+        .cta-btn:hover {
+            background: var(--primary-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 0.625rem 1.875rem rgba(37, 99, 235, 0.3);
+        }
+
+        .cta-btn svg {
+            width: 1.125rem;
+            height: 1.125rem;
+            transition: transform 0.3s ease;
+        }
+
+        .cta-btn:hover svg {
+            transform: translateX(3px);
+        }
+
+        .licensed-by {
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+            margin-top: 2.5rem;
+            color: var(--text-subtle);
+            font-size: 1.1rem;
+        }
+
+        .licensed-by img {
+            height: 1.5rem;
+            width: auto;
+            opacity: 0.8;
+        }
+
+        .licensed-by .divider {
+            width: 1px;
+            height: 1rem;
+            background: rgba(255,255,255,0.2);
+            margin: 0 0.5rem;
+        }
+
+        .hero-single-image {
+            position: absolute;
+            right: 6rem;
+            top: 40%;
+            transform: translateY(-50%);
+            width: calc(50% - 2rem);
+            max-height: 70vh;
+            aspect-ratio: 1 / 1;
+            border-radius: 1.5rem;
+            overflow: hidden;
+            border: none;
+            box-shadow: none;
+            background: transparent;
+            display: none;
+        }
+
+        .hero-single-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background: transparent;
+        }
+
+        .floating-card {
+            position: absolute;
+            background: white;
+            border-radius: 1rem;
+            padding: 1rem 1.25rem;
+            box-shadow: 0 0.9375rem 3.125rem rgba(0,0,0,0.15);
+            z-index: 10;
+        }
+
+        .card-progress {
+            top: 44%;
+            left: 28%;
+            transform: translate(-50%, -50%);
+            width: 10rem;
+            text-align: center;
+        }
+
+        .card-progress .chart {
+            width: 4.375rem;
+            height: 4.375rem;
+            margin: 0 auto 0.625rem;
+            position: relative;
+        }
+
+        .card-progress .chart svg {
+            transform: rotate(-90deg);
+        }
+
+        .card-progress .chart .percent {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1.125rem;
+            font-weight: 700;
+            color: #22172c;
+        }
+
+        .card-progress .label {
+            font-size: 0.75rem;
+            color: var(--text-body);
+            font-weight: 500;
+        }
+
+        .card-badge {
+            bottom: 8.125rem;
+            right: -0.625rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.625rem 1rem;
+        }
+
+        .card-badge .icon {
+            width: 2rem;
+            height: 2rem;
+            background: var(--primary);
+            border-radius: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .card-badge .icon svg {
+            width: 1.125rem;
+            height: 1.125rem;
+            color: white;
+        }
+
+        .card-badge .text {
+            font-size: 0.8125rem;
+            font-weight: 600;
+            color: #221a2e;
+        }
+
+        .logo-section {
+            position: relative;
+            z-index: 20;
+            margin-top: -6.25rem;
+            padding: 0 3.75rem;
+        }
+
+        .logo-container {
+            background: white;
+            border-radius: 1.5rem;
+            padding: 2.5rem 3.125rem;
+            box-shadow: 0 1.25rem 3.75rem rgba(0,0,0,0.08);
+            max-width: 80.75rem;
+            margin: 0 auto;
+        }
+
+        .logo-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1.875rem;
+        }
+
+        .logo-header-left h2 {
+            font-size: 2.1rem;
+            font-weight: 700;
+            color: var(--text-heading);
+            line-height: 1.3;
+        }
+
+        .logo-header-left p {
+            font-size: 0.875rem;
+            color: var(--text-body);
+            margin-top: 0.5rem;
+        }
+
+        .logo-header-left p span {
+            color: var(--primary);
+            font-weight: 700;
+        }
+
+        .logo-header-right {
+            font-size: 3.6rem;
+            font-weight: 800;
+            color: transparent;
+            -webkit-text-stroke: 2px var(--gray-300);
+            line-height: 1;
+        }
+
+        .marquee-wrapper {
+            overflow: hidden;
+            position: relative;
+        }
+
+        .marquee-wrapper::before,
+        .marquee-wrapper::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            width: 5rem;
+            height: 100%;
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        .marquee-wrapper::before {
+            left: 0;
+            background: linear-gradient(to right, white, transparent);
+        }
+
+        .marquee-wrapper::after {
+            right: 0;
+            background: linear-gradient(to left, white, transparent);
+        }
+
+        .marquee-track {
+            display: flex;
+            gap: 1.5rem;
+            animation: scroll 25s linear infinite;
+            width: max-content;
+        }
+
+        .marquee-track:hover {
+            animation-play-state: paused;
+        }
+
+        .logo-box {
+            flex-shrink: 0;
+            width: 10rem;
+            height: 6.25rem;
+            background: var(--surface-2);
+            border-radius: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1.25rem;
+            border: 1px solid var(--border);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .logo-box:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 0.625rem 1.875rem rgba(0,0,0,0.1);
+        }
+
+        .logo-box img {
+            max-width: 100%;
+            max-height: 3.75rem;
+            object-fit: contain;
+            filter: grayscale(0.3);
+            transition: filter 0.3s ease;
+        }
+
+        .logo-box:hover img {
+            filter: grayscale(0);
+        }
+
+        .tools-section {
+            padding: 5rem 1.25rem 2.5rem 1.25rem;
+            text-align: center;
+            max-width: 56.25rem;
+            margin: 0 auto;
+        }
+
+        .tools-section h2 {
+            font-size: 2.25rem;
+            font-weight: 700;
+            color: var(--text-heading);
+            line-height: 1.2;
+            margin-bottom: 3.125rem;
+        }
+
+        .floating-nav-container {
+            position: relative;
+            height: 5rem;
+        }
+
+        .floating-nav {
+            display: flex;
+            gap: 0.5rem;
+            background: white;
+            border-radius: 1rem;
+            padding: 0.75rem 1rem;
+            box-shadow: 0 0.25rem 1.875rem rgba(0,0,0,0.08);
+            max-width: 56.25rem;
+            margin: 0 auto;
+            overflow-x: auto;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .floating-nav::-webkit-scrollbar {
+            display: none;
+        }
+
+        .floating-nav.sticky {
+            position: fixed;
+            top: 1.25rem;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            width: calc(100% - 2.5rem);
+            max-width: 56.25rem;
+            animation: slideDown 0.4s ease;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateX(-50%) translateY(-1.25rem);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+        }
+
+        .nav-btn {
+            padding: 0.625rem 1.25rem;
+            border-radius: 1.5rem;
+            border: none;
+            background: transparent;
+            color: var(--text-body);
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .nav-btn:hover {
+            color: var(--primary);
+            background: #f1f5f9;
+        }
+
+        .nav-btn.active {
+            background: #dbeafe;
+            color: var(--primary);
+            font-weight: 600;
+        }
+
+        .content-section {
+            min-height: 37.5rem;
+            padding: 6.25rem 3.75rem;
+            max-width: 68.75rem;
+            margin: 0 auto;
+        }
+
+        .content-section:nth-child(even) {
+            background: var(--surface-2);
+        }
+
+        .feature-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 3rem;
+            flex-wrap: wrap;
+        }
+
+        .feature-row.reverse {
+            flex-direction: row-reverse;
+        }
+
+        .feature-text {
+            flex: 1 1 45%;
+            min-width: 280px;
+        }
+
+        .feature-image {
+            flex: 1 1 45%;
+            min-width: 280px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .feature-image img {
+            width: 100%;
+            max-width: 34rem;
+            height: auto;
+            display: block;
+        }
+
+        .content-section h3 {
+            font-size: 2.25rem;
+            font-weight: 700;
+            color: var(--text-heading);
+            margin-bottom: 1.5rem;
+        }
+
+        .content-section p {
+            font-size: 1.2rem;
+            color: var(--text-body);
+            line-height: 1.75;
+            max-width: 42rem;
+        }
+
+        @media (max-width: 900px) {
+            .feature-row,
+            .feature-row.reverse {
+                flex-direction: column;
+            }
+
+            .feature-image,
+            .feature-text {
+                flex: 1 1 100%;
+                max-width: 100%;
+            }
+        }
+
+        /* Zenith Bank style dark section - 3 layered divs on PC, 2 on mobile */
+        .zenith-section {
+            background: var(--zenith-bg);
+            padding: 5rem 1.25rem 7.5rem 1.25rem;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .zenith-section h2 {
+            font-size: 2.625rem;
+            font-weight: 700;
+            color: var(--text-light);
+            margin-bottom: 2.5rem;
+            position: relative;
+            z-index: 3;
+        }
+
+        .zenith-nav {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            flex-wrap: wrap;
+            margin-bottom: 3.75rem;
+            position: relative;
+            z-index: 3;
+        }
+
+        .zenith-nav-btn {
+            color: var(--gray-600);
+            font-size: 0.9375rem;
+            font-weight: 500;
+            cursor: pointer;
+            padding-bottom: 0.5rem;
+            background: none;
+            border: none;
+            border-bottom: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .zenith-nav-btn:hover,
+        .zenith-nav-btn.active {
+            color: var(--text-light);
+            border-bottom-color: var(--red);
+        }
+
+        .zenith-layer-bg {
+            background: var(--zenith-layer-1);
+            border-radius: 1.5rem;
+            max-width: 56.25rem;
+            margin: 0 auto;
+            padding: 2.5rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        .zenith-layer-mid {
+            background: var(--zenith-layer-2);
+            border-radius: 1.5rem;
+            padding: 2.5rem;
+            position: relative;
+            z-index: 2;
+            margin-top: -3.75rem;
+            margin-left: -1.25rem;
+            margin-right: -1.25rem;
+        }
+
+        .zenith-card {
+            background: var(--zenith-layer-3);
+            border-radius: 1.5rem;
+            padding: 3.75rem 3.125rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 2.5rem;
+            text-align: left;
+            position: relative;
+            z-index: 3;
+            margin-top: -3.75rem;
+            margin-left: -1.25rem;
+            margin-right: -1.25rem;
+        }
+
+        .zenith-card-content {
+            flex: 1;
+            max-width: 25rem;
+        }
+
+        .zenith-tag {
+            display: inline-block;
+            background: var(--red);
+            color: white;
+            padding: 0.5rem 1.25rem;
+            border-radius: 1.25rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 1.5rem;
+        }
+
+        .zenith-card-content h3 {
+            font-size: 2.25rem;
+            font-weight: 700;
+            color: var(--text-light);
+            line-height: 1.2;
+            margin-bottom: 1.25rem;
+        }
+
+        .zenith-card-content p {
+            font-size: 1rem;
+            color: var(--gray-600);
+            line-height: 1.6;
+        }
+
+        .zenith-card-image {
+            flex: 1;
+            max-width: 25rem;
+        }
+
+        .zenith-card-image img {
+            width: 100%;
+            border-radius: 1rem;
+            box-shadow: 0 1.25rem 3.75rem rgba(0,0,0,0.4);
+        }
+
+        /* Footer */
+        .footer-subscribe {
+            background: var(--surface-2);
+            padding: 3.75rem 1.25rem 2.5rem 1.25rem;
+            border-top: 1px solid var(--border);
+        }
+
+        .footer-subscribe-inner {
+            max-width: 68.75rem;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 2.5rem;
+        }
+
+        .footer-subscribe h2 {
+            font-size: 2.25rem;
+            font-weight: 700;
+            color: var(--text-heading);
+        }
+
+        .subscribe-form {
+            display: flex;
+            background: var(--border);
+            border-radius: 3.125rem;
+            padding: 0.375rem;
+            min-width: 23.75rem;
+        }
+
+        .subscribe-form input {
+            flex: 1;
+            border: none;
+            background: transparent;
+            padding: 0.75rem 1.25rem;
+            font-size: 0.9375rem;
+            color: var(--text-heading);
+            outline: none;
+        }
+
+        .subscribe-form input::placeholder {
+            color: var(--text-body);
+        }
+
+        .subscribe-form button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.75rem;
+            border-radius: 3.125rem;
+            font-size: 0.9375rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        .subscribe-form button:hover {
+            background: var(--primary-hover);
+        }
+
+        .footer-main {
+            background: var(--surface-2);
+            padding: 2.5rem 1.25rem 3.75rem 1.25rem;
+            border-top: 1px solid var(--border);
+        }
+
+        .footer-main-inner {
+            max-width: 68.75rem;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            gap: 3.75rem;
+        }
+
+        .footer-brand {
+            max-width: 20rem;
+        }
+
+        .footer-brand .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.625rem;
+            margin-bottom: 1rem;
+            font-size: 1.375rem;
+            font-weight: 700;
+            color: var(--text-heading);
+        }
+
+        .footer-brand .logo-icon {
+            width: 2rem;
+            height: 2rem;
+            background: var(--primary);
+            border-radius: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .footer-brand .logo-icon svg {
+            width: 1.125rem;
+            height: 1.125rem;
+            color: white;
+        }
+
+        .footer-brand p {
+            font-size: 0.9375rem;
+            color: var(--text-body);
+            line-height: 1.6;
+            margin-bottom: 1.5rem;
+        }
+
+        .footer-social {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .footer-social a {
+            width: 2.25rem;
+            height: 2.25rem;
+            background: var(--text-heading);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.3s ease;
+        }
+
+        .footer-social a:hover {
+            background: var(--primary);
+        }
+
+        .footer-social a svg {
+            width: 1rem;
+            height: 1rem;
+            color: white;
+        }
+
+        .footer-links {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .footer-links-label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--gray-400);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 0.25rem;
+        }
+
+        .footer-links a {
+            font-size: 0.9375rem;
+            color: var(--text-link);
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s ease;
+        }
+
+        .footer-links a:hover {
+            color: var(--primary);
+        }
+
+        .footer-bottom {
+            background: var(--surface-2);
+            padding: 1.25rem;
+            border-top: 1px solid var(--border);
+        }
+
+        .footer-bottom-inner {
+            max-width: 68.75rem;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .footer-bottom p {
+            font-size: 0.8125rem;
+            color: var(--gray-400);
+        }
+
+        @keyframes scroll {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+
+        /* Tablet screens (768px - 1024px) */
+        @media (max-width: 64rem) {
+            html {
+                font-size: 14px;
+            }
+            .hero {
+                padding: 3rem 2.5rem 8rem 2.5rem;
+            }
+            .hero h1 {
+                font-size: 2.5rem;
+            }
+            .hero-single-image {
+                width: 20rem;
+                height: 20rem;
+                right: 2.5rem;
+            }
+            .hero-images {
+                width: 26rem;
+                height: 24rem;
+                right: 2rem;
+            }
+            .img-1 { width: 11rem; height: 11rem; }
+            .img-2 { width: 9.5rem; height: 9.25rem; }
+            .img-3 { width: 9rem; height: 8.75rem; }
+            .img-4 { width: 10rem; height: 9.75rem; }
+            .logo-section {
+                padding: 0 1.5rem;
+                margin-top: -4rem;
+            }
+            .logo-container {
+                padding: 2rem 1.5rem;
+            }
+            .tools-section h2 {
+                font-size: 1.875rem;
+            }
+            .content-section {
+                padding: 4rem 2.5rem;
+            }
+            .zenith-section h2 {
+                font-size: 2.125rem;
+            }
+            .zenith-card {
+                padding: 2.5rem 2rem;
+            }
+            .zenith-card-content h3 {
+                font-size: 1.875rem;
+            }
+            .footer-subscribe h2 {
+                font-size: 1.875rem;
+            }
+        }
+
+        /* Mobile screens (below 768px) */
+        @media (max-width: 48rem) {
+            html {
+                font-size: 13px;
+            }
+            .hero {
+                padding: 2.5rem 1.5rem 7.5rem 1.5rem;
+                min-height: 95vh;
+            }
+            .hero h1 {
+                font-size: 2rem;
+            }
+            .hero p {
+                font-size: 0.9375rem;
+            }
+            .hero-images {
+                display: none;
+            }
+            .hero-single-image {
+                display: none;
+            }
+            .badge {
+                font-size: 0.75rem;
+                padding: 0.375rem 1rem;
+            }
+            .cta-btn {
+                padding: 0.75rem 1.5rem;
+                font-size: 0.875rem;
+            }
+            .licensed-by {
+                font-size: 0.6875rem;
+                margin-top: 2rem;
+            }
+            .logo-section {
+                padding: 0 1rem;
+                margin-top: -3.75rem;
+            }
+            .logo-container {
+                padding: 1.5rem 1.25rem;
+            }
+            .logo-header {
+                flex-direction: column;
+                gap: 0.75rem;
+            }
+            .logo-header-left h2 {
+                font-size: 1.375rem;
+            }
+            .logo-header-left p {
+                font-size: 0.8125rem;
+            }
+            .logo-header-right {
+                font-size: 2.5rem;
+            }
+            .logo-box {
+                width: 8.5rem;
+                height: 5.5rem;
+            }
+            .tools-section {
+                padding: 3.75rem 1rem 2rem 1rem;
+            }
+            .tools-section h2 {
+                font-size: 1.5rem;
+                margin-bottom: 1.875rem;
+            }
+            .floating-nav-container {
+                height: 3.5rem;
+            }
+            .floating-nav {
+                flex-wrap: nowrap;
+                justify-content: flex-start;
+                overflow-x: auto;
+                padding: 0.5rem 0.75rem;
+                border-radius: 0.875rem;
+                margin: 0 0.75rem;
+                -webkit-overflow-scrolling: touch;
+                scroll-snap-type: x mandatory;
+            }
+            .floating-nav.sticky {
+                position: fixed;
+                top: 0.75rem;
+                width: calc(100% - 1.5rem);
+                max-width: 100%;
+                left: 50%;
+                transform: translateX(-50%);
+                padding: 0.5rem 0.75rem;
+                margin: 0;
+                z-index: 1000;
+            }
+            .nav-btn {
+                padding: 0.5rem 1rem;
+                font-size: 0.8125rem;
+                flex-shrink: 0;
+                scroll-snap-align: start;
+            }
+            .content-section {
+                padding: 3.75rem 1.5rem;
+                min-height: 25rem;
+            }
+            .content-section h3 {
+                font-size: 1.5rem;
+            }
+            .content-section p {
+                font-size: 0.875rem;
+            }
+            .zenith-section {
+                padding: 3.75rem 1rem 5rem 1rem;
+            }
+            .zenith-section h2 {
+                font-size: 1.625rem;
+                margin-bottom: 1.5rem;
+            }
+            .zenith-nav {
+                gap: 1rem;
+                margin-bottom: 2.5rem;
+            }
+            .zenith-nav-btn {
+                font-size: 0.8125rem;
+                padding-bottom: 0.375rem;
+            }
+            .zenith-layer-bg {
+                padding: 1rem;
+                max-width: 100%;
+            }
+            .zenith-layer-mid {
+                display: none;
+            }
+            .zenith-card {
+                padding: 2rem 1.5rem;
+                margin-top: 0;
+                margin-left: 0;
+                margin-right: 0;
+                flex-direction: column;
+                text-align: center;
+                gap: 1.5rem;
+            }
+            .zenith-card-content {
+                max-width: 100%;
+            }
+            .zenith-card-content h3 {
+                font-size: 1.625rem;
+            }
+            .zenith-card-content p {
+                font-size: 0.875rem;
+            }
+            .zenith-card-image {
+                max-width: 100%;
+            }
+            .zenith-tag {
+                font-size: 0.6875rem;
+                padding: 0.375rem 0.875rem;
+            }
+            .footer-subscribe {
+                padding: 2.5rem 1rem 1.875rem 1rem;
+            }
+            .footer-subscribe-inner {
+                flex-direction: column;
+                text-align: center;
+                gap: 1.5rem;
+            }
+            .footer-subscribe h2 {
+                font-size: 1.5rem;
+            }
+            .subscribe-form {
+                min-width: 100%;
+                max-width: 100%;
+            }
+            .subscribe-form input {
+                font-size: 0.875rem;
+                padding: 0.625rem 1rem;
+            }
+            .subscribe-form button {
+                font-size: 0.875rem;
+                padding: 0.625rem 1.25rem;
+            }
+            .footer-main {
+                padding: 1.875rem 1rem 2.5rem 1rem;
+            }
+            .footer-main-inner {
+                flex-direction: column;
+                gap: 1.875rem;
+            }
+            .footer-brand .logo {
+                font-size: 1.125rem;
+            }
+            .footer-brand p {
+                font-size: 0.875rem;
+            }
+            .footer-links a {
+                font-size: 0.875rem;
+            }
+            .footer-bottom-inner {
+                flex-direction: column;
+                gap: 0.375rem;
+                text-align: center;
+            }
+            .footer-bottom p {
+                font-size: 0.75rem;
+            }
+        }
+
+        @media (min-width: 48.0625rem) {
+            .hero-images {
+                display: none;
+            }
+            .hero-single-image {
+                display: block;
+            }
+        }
+    </style>
+<base target="_blank">
+</head>
+<body>
+    <section class="hero" id="hero">
+        <div class="hero-content">
+            <div class="badge">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 6v6l4 2"/>
+                </svg>
+                Trusted by educators nationwide since 2020
+            </div>
+            <h1>Simple tools to <span>create and take exams</span></h1>
+            <p>Build assessments, manage test sessions, and review results with an exam platform designed for schools, universities, and certification bodies.</p>
+            <a href="{{ url_for('auth.login') }}" class="cta-btn">
+                Get Started Free
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M5 12h14M12 5l7 7-7 7"/>
+                </svg>
+            </a>
+
+            <div class="licensed-by">
+                <span>Zen out with secure online exams</span>
+            </div>
+        </div>
+
+        <div class="hero-images">
+            <div class="img-circle img-1">
+                <img src="https://picsum.photos/seed/exam1/400/400" alt="Student studying">
+            </div>
+            <div class="img-circle img-2">
+                <img src="https://picsum.photos/seed/exam2/400/400" alt="Exam hall">
+            </div>
+            <div class="img-circle img-3">
+                <img src="https://picsum.photos/seed/exam3/400/400" alt="Test results">
+            </div>
+            <div class="img-circle img-4">
+                <img src="https://picsum.photos/seed/exam4/400/400" alt="Teacher grading">
+            </div>
+
+            <div class="floating-card card-progress">
+                <div class="chart">
+                    <svg width="70" height="70" viewBox="0 0 70 70">
+                        <circle cx="35" cy="35" r="30" fill="none" stroke="#e2e8f0" stroke-width="6"/>
+                        <circle cx="35" cy="35" r="30" fill="none" stroke="#10b981" stroke-width="6" 
+                            stroke-dasharray="141.37" stroke-dashoffset="35.34" stroke-linecap="round"/>
+                    </svg>
+                    <div class="percent">75%</div>
+                </div>
+                <div class="label">Pass Rate</div>
+            </div>
+
+            <div class="floating-card card-badge">
+                <div class="icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="16" y1="13" x2="8" y2="13"/>
+                        <line x1="16" y1="17" x2="8" y2="17"/>
+                        <polyline points="10 9 9 9 8 9"/>
+                    </svg>
+                </div>
+                <div class="text">Exam Papers</div>
+            </div>
+        </div>
+
+        <div class="hero-single-image">
+            <img src="{{ url_for('static', filename='public/hero_img.png') }}" alt="Exam platform">
+        </div>
+    </section>
+
+    <section class="logo-section">
+        <div class="logo-container">
+            <div class="logo-header">
+                <div class="logo-header-left">
+                    <h2>National Exams We Support</h2>
+                    <p>Join <span>5 thousand</span> institutions on our exam platform</p>
+                </div>
+                <div class="logo-header-right">5k+</div>
+            </div>
+
+            <div class="marquee-wrapper">
+                <div class="marquee-track">
+                    <div class="logo-box"><img src="https://picsum.photos/seed/logo1/200/100?grayscale" alt="Partner 1"></div>
+                    <div class="logo-box"><img src="https://picsum.photos/seed/logo2/200/100?grayscale" alt="Partner 2"></div>
+                    <div class="logo-box"><img src="https://picsum.photos/seed/logo3/200/100?grayscale" alt="Partner 3"></div>
+                    <div class="logo-box"><img src="https://picsum.photos/seed/logo4/200/100?grayscale" alt="Partner 4"></div>
+                    <div class="logo-box"><img src="https://picsum.photos/seed/logo5/200/100?grayscale" alt="Partner 5"></div>
+                    <div class="logo-box"><img src="https://picsum.photos/seed/logo6/200/100?grayscale" alt="Partner 6"></div>
+                    <div class="logo-box"><img src="https://picsum.photos/seed/logo7/200/100?grayscale" alt="Partner 7"></div>
+                    <div class="logo-box"><img src="https://picsum.photos/seed/logo8/200/100?grayscale" alt="Partner 8"></div>
+                    <div class="logo-box"><img src="https://picsum.photos/seed/logo1/200/100?grayscale" alt="Partner 1"></div>
+                    <div class="logo-box"><img src="https://picsum.photos/seed/logo2/200/100?grayscale" alt="Partner 2"></div>
+                    <div class="logo-box"><img src="https://picsum.photos/seed/logo3/200/100?grayscale" alt="Partner 3"></div>
+                    <div class="logo-box"><img src="https://picsum.photos/seed/logo4/200/100?grayscale" alt="Partner 4"></div>
+                    <div class="logo-box"><img src="https://picsum.photos/seed/logo5/200/100?grayscale" alt="Partner 5"></div>
+                    <div class="logo-box"><img src="https://picsum.photos/seed/logo6/200/100?grayscale" alt="Partner 6"></div>
+                    <div class="logo-box"><img src="https://picsum.photos/seed/logo7/200/100?grayscale" alt="Partner 7"></div>
+                    <div class="logo-box"><img src="https://picsum.photos/seed/logo8/200/100?grayscale" alt="Partner 8"></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="tools-section">
+        <h2>All the tools you need to create and manage exams with ease</h2>
+    </section>
+
+    <div class="floating-nav-container" id="navContainer">
+        <nav class="floating-nav" id="floatingNav">
+            <a href="#exam-creation" class="nav-btn active">Exam Creation</a>
+            <a href="#question-bank" class="nav-btn">Question Bank</a>
+            <a href="#live-proctoring" class="nav-btn">Live Proctoring</a>
+            <a href="#certificates" class="nav-btn">Certificates</a>
+        </nav>
+    </div>
+
+    <section class="content-section" id="exam-creation">
+        <div class="feature-row">
+            <div class="feature-text">
+                <h3>Exam Creation</h3>
+                <p>Build custom exams with multiple question types including multiple choice, essay, fill-in-the-blank, and matching. Set time limits, randomize question order, and create adaptive tests that adjust difficulty based on student performance.</p>
+            </div>
+            <div class="feature-image">
+                <img src="{{ url_for('static', filename='public/remove-1.png') }}" alt="Exam creation illustration">
+            </div>
+        </div>
+    </section>
+
+    <section class="content-section" id="question-bank">
+        <div class="feature-row reverse">
+            <div class="feature-text">
+                <h3>Question Bank</h3>
+                <p>Store and organize thousands of questions in a centralized database. Tag questions by topic, difficulty, and subject. Reuse questions across multiple exams and collaborate with your team to build comprehensive assessment libraries.</p>
+            </div>
+            <div class="feature-image">
+                <img src="{{ url_for('static', filename='public/remove-2.png') }}" alt="Question bank illustration">
+            </div>
+        </div>
+    </section>
+
+    <section class="content-section" id="live-proctoring">
+        <div class="feature-row">
+            <div class="feature-text">
+                <h3>Live Proctoring</h3>
+                <p>Monitor exam sessions in real-time with AI-powered proctoring. Detect suspicious behavior, lock down browsers, and record sessions for review. Ensure academic integrity without the need for physical invigilation.</p>
+            </div>
+            <div class="feature-image">
+                <img src="{{ url_for('static', filename='public/remove-1.png') }}" alt="Live proctoring illustration">
+            </div>
+        </div>
+    </section>
+
+    <section class="zenith-section" id="certificates">
+        <h2>Access exams on any device, anytime</h2>
+        <div class="zenith-nav">
+            <button class="zenith-nav-btn active">Web Platform</button>
+            <button class="zenith-nav-btn">Mobile App</button>
+            <button class="zenith-nav-btn">Offline Mode</button>
+            <button class="zenith-nav-btn">Tablet</button>
+            <button class="zenith-nav-btn">Desktop</button>
+        </div>
+
+        <div class="zenith-layer-bg">
+            <div class="zenith-layer-mid">
+                <div class="zenith-card">
+                    <div class="zenith-card-content">
+                        <div class="zenith-tag">Web Platform</div>
+                        <h3>Create and take exams from anywhere</h3>
+                        <p>Our responsive web platform works seamlessly on any browser. No downloads required. Students can start exams instantly, and educators can build assessments from their desk or on the go.</p>
+                    </div>
+                    <div class="zenith-card-image">
+                        <img src="https://picsum.photos/seed/zenith1/600/400" alt="Exam platform on laptop">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="footer-subscribe">
+        <div class="footer-subscribe-inner">
+            <h2>Subscribe to exam updates</h2>
+            <form class="subscribe-form" onsubmit="event.preventDefault();">
+                <input type="email" placeholder="Your email address">
+                <button type="submit">Subscribe</button>
+            </form>
+        </div>
+    </section>
+
+    <footer class="footer-main">
+        <div class="footer-main-inner">
+            <div class="footer-brand">
+                <div class="logo">
+                    <div class="logo-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                            <line x1="16" y1="13" x2="8" y2="13"/>
+                            <line x1="16" y1="17" x2="8" y2="17"/>
+                            <polyline points="10 9 9 9 8 9"/>
+                        </svg>
+                    </div>
+                    ExamPlatform
+                </div>
+                <p>ExamPlatform provides the best tools for creating, managing, and taking examinations. Trusted by schools and institutions across the nation.</p>
+                <div class="footer-social">
+                    <a href="#" aria-label="Facebook">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>
+                        </svg>
+                    </a>
+                    <a href="#" aria-label="Twitter">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M23 3a10.9 10.9 0 0 1-3.14 1.53 4.48 4.48 0 0 0-7.86 3v1A10.66 10.66 0 0 1 3 4s-4 9 5 13a11.64 11.64 0 0 1-7 2c9 5 20 0 20-11.5a4.5 4.5 0 0 0-.08-.83A7.72 7.72 0 0 0 23 3z"/>
+                        </svg>
+                    </a>
+                </div>
+            </div>
+            <div class="footer-links">
+                <div class="footer-links-label">Links</div>
+                <a href="#">About Us</a>
+                <a href="#">Sign up</a>
+                <a href="#">Sign in</a>
+                <a href="#">Exam App</a>
+            </div>
+        </div>
+    </footer>
+
+    <div class="footer-bottom">
+        <div class="footer-bottom-inner">
+            <p>ExamPlatform &copy; 2026. All Right Reserved.</p>
+            <p>Built for educators, by educators.</p>
+        </div>
+    </div>
+
+    <script>
+        const nav = document.getElementById('floatingNav');
+        const navContainer = document.getElementById('navContainer');
+        const navBtns = document.querySelectorAll('.nav-btn');
+        const sections = document.querySelectorAll('.content-section');
+
+        window.addEventListener('scroll', () => {
+            const containerRect = navContainer.getBoundingClientRect();
+            if (containerRect.top <= 20) {
+                nav.classList.add('sticky');
+            } else {
+                nav.classList.remove('sticky');
+            }
+
+            sections.forEach((section, index) => {
+                const rect = section.getBoundingClientRect();
+                if (rect.top <= 100 && rect.bottom >= 100) {
+                    navBtns.forEach(btn => btn.classList.remove('active'));
+                    if (navBtns[index]) navBtns[index].classList.add('active');
+                }
+            });
+        });
+
+        navBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const target = document.querySelector(btn.getAttribute('href'));
+                if (target) {
+                    const offset = nav.classList.contains('sticky') ? 100 : 140;
+                    window.scrollTo({
+                        top: target.offsetTop - offset,
+                        behavior: 'smooth'
+                    });
+                }
+            });
+        });
+
+        const zenithNavBtns = document.querySelectorAll('.zenith-nav-btn');
+        const zenithTag = document.querySelector('.zenith-tag');
+        const zenithTitle = document.querySelector('.zenith-card-content h3');
+        const zenithDesc = document.querySelector('.zenith-card-content p');
+        const zenithImg = document.querySelector('.zenith-card-image img');
+
+        const zenithData = {
+            'Web Platform': {
+                tag: 'Web Platform',
+                title: 'Create and take exams from anywhere',
+                desc: 'Our responsive web platform works seamlessly on any browser. No downloads required. Students can start exams instantly, and educators can build assessments from their desk or on the go.',
+                img: 'https://picsum.photos/seed/zenith1/600/400'
+            },
+            'Mobile App': {
+                tag: 'Mobile App',
+                title: 'Exams in your pocket',
+                desc: 'Download our mobile app for iOS and Android. Take exams offline, receive push notifications for upcoming tests, and review results on the move.',
+                img: 'https://picsum.photos/seed/zenith2/600/400'
+            },
+            'Offline Mode': {
+                tag: 'Offline Mode',
+                title: 'No internet? No problem',
+                desc: 'Download exam papers beforehand and take them without an internet connection. Answers sync automatically when you reconnect. Perfect for remote areas.',
+                img: 'https://picsum.photos/seed/zenith3/600/400'
+            },
+            'Tablet': {
+                tag: 'Tablet',
+                title: 'The perfect exam canvas',
+                desc: 'Large screen real estate makes tablet the ideal device for long-form exams and essay writing. Supports stylus input for handwritten answers and diagrams.',
+                img: 'https://picsum.photos/seed/zenith4/600/400'
+            },
+            'Desktop': {
+                tag: 'Desktop',
+                title: 'Power user experience',
+                desc: 'Full-featured desktop application with advanced proctoring, screen recording, and multi-monitor support. Best for high-stakes certification exams.',
+                img: 'https://picsum.photos/seed/zenith5/600/400'
+            }
+        };
+
+        zenithNavBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                zenithNavBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const key = btn.textContent.trim();
+                const data = zenithData[key];
+                if (data) {
+                    zenithTag.textContent = data.tag;
+                    zenithTitle.textContent = data.title;
+                    zenithDesc.textContent = data.desc;
+                    zenithImg.src = data.img;
+                }
+            });
+        });
+    </script>
+</body>
+</html>

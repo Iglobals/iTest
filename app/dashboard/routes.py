@@ -37,3 +37,17 @@ def index():
         upcoming_exams = list(exams_col.find({"class_id": {"$in": class_ids}, "status": "published"})) if exams_col is not None else []
         
         return render_template('dashboard/student.html', classes=enrolled_classes, exams=upcoming_exams)
+
+@dashboard_bp.route('/exams/create')
+@require_auth()
+def create_exam():
+    if g.current_user.get('role') not in ['teacher', 'org_admin', 'platform_admin']:
+        return "Unauthorized", 403
+    return render_template('exam/create.html')
+
+@dashboard_bp.route('/exams/<exam_id>/take')
+@require_auth()
+def take_exam(exam_id):
+    if g.current_user.get('role') != 'student':
+        return "Only students can take exams", 403
+    return render_template('exam/take.html', exam_id=exam_id)

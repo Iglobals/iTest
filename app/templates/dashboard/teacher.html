@@ -1,48 +1,150 @@
 {% extends "dashboard/base.html" %}
 
+{% block page_title %}Welcome back, {{ g.current_user.full_name.split(' ')[0] }}!{% endblock %}
+{% block page_subtitle %}Here is what is happening with your classes and exams.{% endblock %}
+
 {% block dashboard_content %}
-<div class="grid-auto-fit">
-  <div class="dashboard-card">
-    <div class="card-header">
-      <h3 class="card-title">My Classes</h3>
-      <i data-lucide="users" class="card-icon"></i>
-    </div>
-    <p class="stat-value">{{ classes | length }}</p>
-  </div>
-  
-  <div class="dashboard-card">
-    <div class="card-header">
-      <h3 class="card-title">Active Exams</h3>
-      <i data-lucide="file-text" class="card-icon"></i>
-    </div>
-    <p class="stat-value">{{ exams | length }}</p>
-  </div>
+<div class="dashboard-body">
 
-  <div class="dashboard-card">
-    <div class="card-header">
-      <h3 class="card-title">Pending Grades</h3>
-      <i data-lucide="check-square" class="card-icon"></i>
-    </div>
-    <p class="stat-value">0</p>
-  </div>
-</div>
+    <!-- LEFT COLUMN -->
+    <div class="left-col">
 
-<div class="dashboard-card" style="margin-bottom: 2rem;">
-  <h2 class="card-title" style="margin-bottom: 1rem; font-size: 1.25rem;">Recent Classes</h2>
-  {% if classes %}
-    <div style="display: flex; flex-direction: column; gap: 1rem;">
-    {% for cls in classes %}
-      <div style="padding: 1rem; border: 1px solid var(--border-color); border-radius: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
-        <div>
-          <h4 style="margin: 0 0 0.25rem 0;">{{ cls.name }}</h4>
-          <span style="color: var(--text-secondary); font-size: 0.875rem;">{{ cls.students | length }} Students Enrolled</span>
+        <!-- Hero Card -->
+        <div class="hero-card">
+            <div class="hero-content">
+                <div class="hero-left">
+                    <h2>Create.<br>Assess.<br>Excel.</h2>
+                    <p>Powerful exam creation and assessment made simple.</p>
+                    <div class="hero-buttons">
+                        <a href="{{ url_for('dashboard.create_exam') }}" class="btn-primary">
+                            <i data-lucide="plus-circle" style="width: 14px; height: 14px;"></i>
+                            Create New Exam
+                        </a>
+                        <a href="#" class="btn-secondary">
+                            <i data-lucide="list" style="width: 14px; height: 14px;"></i>
+                            View Exams
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <div class="hero-yellow-circle"></div>
+            <div class="hero-dots"></div>
+            <div class="hero-person">
+                <img src="{{ url_for('static', filename='public/dashboard1.png') }}" alt="Teacher">
+            </div>
         </div>
-        <button class="btn btn-outline" style="padding: 0.5rem 1rem; width: auto; margin-bottom: 0;">Manage</button>
-      </div>
-    {% endfor %}
-    </div>
-  {% else %}
-    <p style="color: var(--text-secondary);">You haven't created any classes yet.</p>
-  {% endif %}
+
+        <!-- Recent Classes -->
+        <div class="section-card">
+            <div class="section-header">
+                <h2>Recent Classes</h2>
+                {% if classes %}
+                <a href="#" class="view-all">View all</a>
+                {% endif %}
+            </div>
+            {% if classes %}
+            <div class="exam-list">
+                {% for cls in classes %}
+                <div class="exam-item">
+                    <div class="exam-icon">
+                        <i data-lucide="users"></i>
+                    </div>
+                    <div class="exam-details">
+                        <h4>{{ cls.name }}</h4>
+                        <p>{{ cls.students | length }} Students Enrolled</p>
+                    </div>
+                    <div class="exam-meta">
+                        <button class="btn-secondary" style="width:auto;height:auto;padding:0.4em 0.8em;font-size:0.75em;border:1px solid var(--gray-300);">Manage</button>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <i data-lucide="users"></i>
+                <h3>No Classes Yet</h3>
+                <p>Create your first class to start adding students and exams.</p>
+                <button class="btn-primary" style="margin: 1em auto 0; width: auto; padding: 0.5em 1.5em; height: auto;">Create Class</button>
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Recent Exams -->
+        <div class="section-card">
+            <div class="section-header">
+                <h2>Recent Exams</h2>
+                {% if exams %}
+                <a href="#" class="view-all">View all</a>
+                {% endif %}
+            </div>
+            {% if exams %}
+            <div class="exam-list">
+                {% for exam in exams %}
+                <div class="exam-item">
+                    <div class="exam-icon">
+                        <i data-lucide="file-text"></i>
+                    </div>
+                    <div class="exam-details">
+                        <h4>{{ exam.title }}</h4>
+                        <p>Created: {{ exam.created_at.strftime('%b %d, %Y') if exam.created_at else 'N/A' }}</p>
+                    </div>
+                    <div class="exam-meta">
+                        <span class="status-badge {{ exam.status if exam.status else 'draft' }}">{{ exam.status | capitalize if exam.status else 'Draft' }}</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <i data-lucide="file-edit"></i>
+                <h3>No Exams Created</h3>
+                <p>You have not created any exams yet. Start building your question bank!</p>
+            </div>
+            {% endif %}
+        </div>
+
+    </div><!-- /left-col -->
+
+    <!-- RIGHT COLUMN -->
+    <div class="right-col">
+
+        <!-- Overview Stats -->
+        <div class="overview-card">
+            <h3>Overview</h3>
+            
+            <div class="overview-stat">
+                <div class="overview-stat-icon" style="background:var(--purple-bg);color:var(--purple);">
+                    <i data-lucide="users"></i>
+                </div>
+                <div class="overview-stat-info">
+                    <h4>{{ classes | length }}</h4>
+                    <p>My Classes</p>
+                </div>
+            </div>
+            
+            <div class="overview-stat">
+                <div class="overview-stat-icon" style="background:var(--success-bg);color:var(--success);">
+                    <i data-lucide="file-text"></i>
+                </div>
+                <div class="overview-stat-info">
+                    <h4>{{ exams | length }}</h4>
+                    <p>Active Exams</p>
+                </div>
+            </div>
+            
+            <div class="overview-stat">
+                <div class="overview-stat-icon" style="background:#fef3c7;color:#d97706;">
+                    <i data-lucide="check-square"></i>
+                </div>
+                <div class="overview-stat-info">
+                    <h4>0</h4>
+                    <p>Pending Grades</p>
+                </div>
+            </div>
+
+        </div>
+
+    </div><!-- /right-col -->
+
 </div>
 {% endblock %}

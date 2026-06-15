@@ -67,8 +67,9 @@ def callback():
                     "ica_sub": sub,
                     "email": user_info.get('email'),
                     "full_name": f"{user_info.get('given_name', '')} {user_info.get('family_name', '')}".strip() or "Unknown User",
-                    "role": "student", # Default
+                    "role": None, # Will be set during onboarding
                     "avatar_url": user_info.get('picture', ''),
+                    "onboarded": False,
                     "created_at": datetime.utcnow(),
                     "last_login_at": datetime.utcnow(),
                     "is_active": True
@@ -84,12 +85,19 @@ def callback():
         session['access_token'] = access_token
         session['refresh_token'] = tokens.refresh_token
         
+        # Store basic user info for UI rendering
+        if users_col is not None and user:
+            session['user_info'] = {
+                'name': user.get('full_name', 'Unknown User'),
+                'avatar_url': user.get('avatar_url', '')
+            }
+        
         # 6. Redirect to dashboard
         return redirect(url_for('dashboard.index'))
     except Exception as e:
         return f"Authentication failed: {str(e)}", 500
 
-@auth_bp.route('/logout', methods=['POST'])
+@auth_bp.route('/logout', methods=['GET', 'POST'])
 def logout():
     session.clear()
     return redirect(url_for('landing.index'))

@@ -20,6 +20,9 @@ def create_app(config_name='default'):
     from app.dashboard.routes import dashboard_bp
     app.register_blueprint(dashboard_bp)
     
+    from app.onboarding.routes import onboarding_bp
+    app.register_blueprint(onboarding_bp)
+    
     from app.organizations.routes import org_bp
     app.register_blueprint(org_bp)
     

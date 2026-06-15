@@ -31,6 +31,15 @@ def require_auth(redirect_on_fail=True):
                     return jsonify({"error": "User not found"}), 401
                 g.current_user = user
                 g.ica_payload = ica_payload
+                
+                # Enforce onboarding
+                if not user.get("onboarded", False):
+                    endpoint = request.endpoint or ""
+                    if not endpoint.startswith("onboarding.") and not endpoint.startswith("auth.logout") and not endpoint.startswith("static"):
+                        if redirect_on_fail:
+                            return redirect(url_for("onboarding.index"))
+                        return jsonify({"error": "Onboarding required"}), 403
+
             except Exception as e:
                 import traceback
                 traceback.print_exc()

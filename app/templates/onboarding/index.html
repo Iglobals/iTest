@@ -1,0 +1,334 @@
+{% extends "raw_base.html" %}
+
+{% block title %}Onboarding - iTest{% endblock %}
+
+{% block head %}
+<style>
+  :root {
+    --primary-color: #6d28d9; /* Purple */
+    --primary-hover: #5b21b6;
+    --bg-color: #f8fafc;
+    --card-bg: #ffffff;
+    --text-primary: #0f172a;
+    --text-secondary: #64748b;
+    --border-color: #e2e8f0;
+    --ring-color: rgba(109, 40, 217, 0.5);
+  }
+
+  body {
+    background-color: var(--bg-color);
+    color: var(--text-primary);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    margin: 0;
+    padding: 0;
+  }
+
+  .onboarding-container {
+    width: 100%;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: clamp(1rem, 5vw, 4rem) clamp(1rem, 5vw, 2rem);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .wizard-header {
+    text-align: center;
+    margin-bottom: clamp(2rem, 5vw, 4rem);
+  }
+
+  .wizard-title {
+    font-size: clamp(1.5rem, 4vw, 2.5rem);
+    font-weight: 800;
+    margin: 0 0 0.5rem 0;
+    color: var(--text-primary);
+  }
+
+  .wizard-subtitle {
+    font-size: clamp(1rem, 2vw, 1.125rem);
+    color: var(--text-secondary);
+    margin: 0;
+  }
+
+  .step {
+    display: none;
+    animation: fadeIn 0.3s ease-out forwards;
+  }
+
+  .step.active {
+    display: block;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Cards Grid */
+  .role-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .role-card {
+    background: var(--card-bg);
+    border: 2px solid var(--border-color);
+    border-radius: 1rem;
+    padding: 2rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .role-card:hover {
+    border-color: var(--primary-color);
+    transform: translateY(-4px);
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+  }
+
+  .role-card.selected {
+    border-color: var(--primary-color);
+    background-color: #f3f0ff;
+  }
+
+  .role-icon {
+    width: 48px;
+    height: 48px;
+    color: var(--primary-color);
+    margin-bottom: 1rem;
+  }
+
+  .role-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+  }
+
+  .role-desc {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    line-height: 1.5;
+  }
+
+  .org-link-container {
+    text-align: center;
+    margin-top: 2rem;
+  }
+
+  .org-link {
+    color: var(--primary-color);
+    font-weight: 700;
+    font-size: 1.125rem;
+    text-decoration: none;
+    cursor: pointer;
+    transition: color 0.2s;
+  }
+
+  .org-link:hover {
+    color: var(--primary-hover);
+    text-decoration: underline;
+  }
+
+  /* Forms */
+  .form-group {
+    margin-bottom: 1.5rem;
+  }
+
+  .form-label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: var(--text-primary);
+  }
+
+  .form-input {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    font-size: 1rem;
+    transition: all 0.2s;
+    box-sizing: border-box;
+  }
+
+  .form-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px var(--ring-color);
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.75rem 1.5rem;
+    font-weight: 600;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+    font-size: 1rem;
+    width: 100%;
+  }
+
+  .btn-primary {
+    background-color: var(--primary-color);
+    color: white;
+  }
+
+  .btn-primary:hover {
+    background-color: var(--primary-hover);
+  }
+
+  .btn-outline {
+    background-color: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+    margin-bottom: 1rem;
+  }
+
+  .btn-outline:hover {
+    background-color: #f1f5f9;
+    color: var(--text-primary);
+  }
+  
+  .wizard-actions {
+    margin-top: 2rem;
+  }
+
+</style>
+<!-- Include Lucide Icons -->
+<script src="https://unpkg.com/lucide@latest"></script>
+{% endblock %}
+
+{% block content %}
+<div class="onboarding-container">
+  <div class="wizard-header">
+    <h1 class="wizard-title">Welcome to iTest</h1>
+    <p class="wizard-subtitle">Let's get your account set up. How will you be using iTest?</p>
+  </div>
+
+  <form id="onboardingForm" method="POST" action="{{ url_for('onboarding.index') }}">
+    <input type="hidden" name="role" id="selectedRole" value="">
+
+    <!-- Step 1: Role Selection -->
+    <div id="step-1" class="step active">
+      <div class="role-cards">
+        <div class="role-card" onclick="selectRole('student')">
+          <i data-lucide="graduation-cap" class="role-icon"></i>
+          <div class="role-title">Student</div>
+          <div class="role-desc">I want to take exams, view my grades, and join classes.</div>
+        </div>
+        
+        <div class="role-card" onclick="selectRole('teacher')">
+          <i data-lucide="book-open" class="role-icon"></i>
+          <div class="role-title">Examiner</div>
+          <div class="role-desc">I want to create exams, manage classes, and grade students.</div>
+        </div>
+      </div>
+
+      <div class="org-link-container">
+        <span class="text-secondary" style="color: var(--text-secondary); margin-right: 0.5rem;">Representing a school or institution?</span>
+        <a class="org-link" onclick="selectRole('org_admin')">or Create an Organization</a>
+      </div>
+    </div>
+
+    <!-- Step 2: Student Details -->
+    <div id="step-student" class="step">
+      <h2 class="wizard-title" style="font-size: 1.5rem; margin-bottom: 1.5rem;">Student Details</h2>
+      <div class="form-group">
+        <label class="form-label">Institution / School Name</label>
+        <input type="text" name="institution" class="form-input" placeholder="e.g. University of Science">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Programme / Major</label>
+        <input type="text" name="programme" class="form-input" placeholder="e.g. Computer Science">
+      </div>
+      <div class="wizard-actions">
+        <button type="button" class="btn btn-outline" onclick="goBack()">Back</button>
+        <button type="submit" class="btn btn-primary">Complete Setup</button>
+      </div>
+    </div>
+
+    <!-- Step 2: Teacher Details -->
+    <div id="step-teacher" class="step">
+      <h2 class="wizard-title" style="font-size: 1.5rem; margin-bottom: 1.5rem;">Examiner Details</h2>
+      <div class="form-group">
+        <label class="form-label">Institution / Organization</label>
+        <input type="text" name="institution" class="form-input" placeholder="Where do you teach?">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Phone Number (Optional)</label>
+        <input type="tel" name="phone" class="form-input" placeholder="+1 234 567 8900">
+      </div>
+      <div class="wizard-actions">
+        <button type="button" class="btn btn-outline" onclick="goBack()">Back</button>
+        <button type="submit" class="btn btn-primary">Complete Setup</button>
+      </div>
+    </div>
+
+    <!-- Step 2: Org Details -->
+    <div id="step-org_admin" class="step">
+      <h2 class="wizard-title" style="font-size: 1.5rem; margin-bottom: 1.5rem;">Organization Setup</h2>
+      <div class="form-group">
+        <label class="form-label">Organization Name *</label>
+        <input type="text" name="org_name" id="org_name_input" class="form-input" placeholder="e.g. Springfield High School">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Contact Email</label>
+        <input type="email" name="org_email" class="form-input" placeholder="contact@organization.com" value="{{ g.current_user.email }}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Short Description</label>
+        <input type="text" name="org_description" class="form-input" placeholder="Brief description of your organization">
+      </div>
+      <div class="wizard-actions">
+        <button type="button" class="btn btn-outline" onclick="goBack()">Back</button>
+        <button type="submit" class="btn btn-primary" onclick="return validateOrg()">Create Organization</button>
+      </div>
+    </div>
+  </form>
+</div>
+
+<script>
+  // Initialize Lucide icons
+  lucide.createIcons();
+
+  function selectRole(role) {
+    document.getElementById('selectedRole').value = role;
+    
+    // Hide step 1
+    document.getElementById('step-1').classList.remove('active');
+    
+    // Show step 2 based on role
+    document.getElementById('step-' + role).classList.add('active');
+  }
+
+  function goBack() {
+    // Hide all step 2s
+    document.getElementById('step-student').classList.remove('active');
+    document.getElementById('step-teacher').classList.remove('active');
+    document.getElementById('step-org_admin').classList.remove('active');
+    
+    // Show step 1
+    document.getElementById('step-1').classList.add('active');
+    document.getElementById('selectedRole').value = '';
+  }
+  
+  function validateOrg() {
+    const orgName = document.getElementById('org_name_input').value.trim();
+    if (!orgName) {
+      alert("Please enter an Organization Name.");
+      return false;
+    }
+    return true;
+  }
+</script>
+{% endblock %}

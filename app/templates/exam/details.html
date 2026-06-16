@@ -385,6 +385,32 @@
                         <label>Enable AI Proctoring</label>
                     </div>
                 </div>
+                
+                <!-- Instructions -->
+                <div class="form-group" style="grid-column: 1 / -1;">
+                    <label>Exam Instructions & Guidelines</label>
+                    <textarea class="form-control" id="exam_instructions" rows="8" style="max-width: 100%; resize: vertical;">{% if exam.instructions %}{{ exam.instructions }}{% else %}Online Exam Guidelines & Instructions
+Welcome to your online exam. Please read all instructions carefully before you begin.
+
+Exam Details & Timing
+Duration: [e.g., 2 hours]
+Availability: The exam opens on [Date] at [Time] and closes on [Date] at [Time].
+Time Limit: Once you click "Start," the timer will begin counting down immediately. You cannot pause the timer.
+
+Technical Requirements
+Browser: Use the latest version of [e.g., Google Chrome or Mozilla Firefox].
+Connection: Ensure you have a stable internet connection.
+Backup Plan: If you lose connection, don't panic. Reconnect immediately and refresh the page. Your progress is auto-saved.
+
+Exam Rules & Academic Integrity
+Closed-Book Policy: Unless otherwise specified, this is a closed-book exam. Do not use notes, textbooks, or unauthorized websites.
+Proctoring: This exam is monitored using [e.g., webcam monitoring/AI proctoring]. Ensure your face is clearly visible at all times.
+No Communication: Do not communicate with other students, tutors, or use any messaging apps during the exam.
+
+Support & Troubleshooting
+Encountering technical issues? Contact the IT helpdesk immediately at [Email Address] or call [Phone Number].
+For urgent academic questions, please reach out to the examiner via [e.g., internal chat or email].{% endif %}</textarea>
+                </div>
             </div>
         </form>
     </div>
@@ -1011,11 +1037,11 @@
             });
             
             if (options.length < 2) {
-                alert("Please provide at least 2 options for multiple choice.");
+                showToast("Please provide at least 2 options for multiple choice.", "error");
                 return;
             }
             if (!options.some(o => o.isCorrect)) {
-                alert("Please select one correct option.");
+                showToast("Please select one correct option.", "error");
                 return;
             }
         }
@@ -1052,9 +1078,10 @@
                     body: JSON.stringify(payload)
                 });
                 document.getElementById('exam_published').checked = true;
-                alert("Question saved and Exam published!");
+                showToast("Question saved and Exam published!", "success");
             } catch (err) {
                 console.error("Failed to publish exam", err);
+                showToast("Failed to publish exam.", "error");
             }
         }
         
@@ -1068,6 +1095,7 @@
             description: document.getElementById('exam_desc').value,
             subject_tag_id: document.getElementById('exam_subject').value,
             impact: parseFloat(document.getElementById('exam_impact').value),
+            instructions: document.getElementById('exam_instructions').value,
             settings: {
                 duration_minutes: parseInt(document.getElementById('exam_duration').value),
                 pass_mark_percent: parseInt(document.getElementById('exam_pass_mark').value),
@@ -1098,13 +1126,13 @@
             });
             const data = await res.json();
             if (data.success) {
-                alert("Exam settings saved successfully!");
+                showToast("Exam settings saved successfully!", "success");
             } else {
-                alert("Error saving settings: " + (data.error || "Unknown error"));
+                showToast("Error saving settings: " + (data.error || "Unknown error"), "error");
             }
         } catch (err) {
             console.error(err);
-            alert("Error saving settings");
+            showToast("Error saving settings", "error");
         }
     }
 </script>

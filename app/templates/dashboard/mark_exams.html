@@ -1,0 +1,148 @@
+{% extends "dashboard/base.html" %}
+
+{% block page_title %}Submissions{% endblock %}
+{% block page_subtitle %}Review and grade submissions for {{ exam.title }}{% endblock %}
+
+{% block dashboard_head %}
+<style>
+    .submissions-container {
+        display: flex;
+        flex-direction: column;
+        gap: 1em;
+        margin-top: 1.5em;
+    }
+    
+    .submission-card {
+        background: var(--white);
+        border: 1px solid var(--gray-200);
+        border-radius: 0.75em;
+        padding: 1.25em;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .submission-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(91, 33, 209, 0.1);
+        border-color: var(--purple-light);
+    }
+    
+    .sub-info {
+        display: flex;
+        align-items: center;
+        gap: 1em;
+    }
+    
+    .sub-avatar {
+        width: 40px;
+        height: 40px;
+        background: var(--purple-bg);
+        color: var(--purple);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: 1.1em;
+    }
+    
+    .sub-details h4 {
+        margin: 0;
+        font-size: 1.05em;
+        color: var(--gray-900);
+    }
+    
+    .sub-details p {
+        margin: 0.25em 0 0 0;
+        font-size: 0.85em;
+        color: var(--gray-500);
+    }
+    
+    .sub-stats {
+        display: flex;
+        gap: 2em;
+        text-align: right;
+    }
+    
+    .stat-box p {
+        margin: 0 0 0.25em 0;
+        font-size: 0.8em;
+        color: var(--gray-500);
+        text-transform: uppercase;
+    }
+    
+    .stat-box h3 {
+        margin: 0;
+        font-size: 1.2em;
+        color: var(--gray-900);
+    }
+    
+    .status-badge {
+        display: inline-block;
+        padding: 0.25em 0.75em;
+        border-radius: 1em;
+        font-size: 0.8em;
+        font-weight: 600;
+    }
+    .status-passed { background: var(--success-bg); color: var(--success); }
+    .status-failed { background: var(--danger-bg); color: var(--danger); }
+    .status-pending { background: var(--gray-100); color: var(--gray-600); }
+</style>
+{% endblock %}
+
+{% block dashboard_content %}
+<div class="dashboard-body" style="grid-template-columns: 1fr; display: block;">
+    <a href="{{ url_for('dashboard.manage_exams') }}" class="btn-outline" style="display:inline-flex; width:auto; height:auto; padding: 0.5em 1em; margin-bottom: 1em; text-decoration: none;">
+        <i data-lucide="arrow-left" style="margin-right: 0.5em;"></i> Back to Manage Exams
+    </a>
+    
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h3>Student Submissions ({{ submissions|length }})</h3>
+        <!-- Bulk actions could go here -->
+    </div>
+    
+    {% if submissions %}
+    <div class="submissions-container">
+        {% for sub in submissions %}
+        <div class="submission-card">
+            <div class="sub-info">
+                <div class="sub-avatar">
+                    {{ sub.student_name[0] | upper }}
+                </div>
+                <div class="sub-details">
+                    <h4>{{ sub.student_name }}</h4>
+                    <p>{{ sub.student_email }} &bull; Submitted: {{ sub.score_record.submitted_at.strftime('%b %d, %I:%M %p') }}</p>
+                </div>
+            </div>
+            
+            <div class="sub-stats">
+                <div class="stat-box">
+                    <p>Status</p>
+                    {% if sub.score_record.passed %}
+                    <span class="status-badge status-passed">Passed</span>
+                    {% else %}
+                    <span class="status-badge status-failed">Failed</span>
+                    {% endif %}
+                </div>
+                <div class="stat-box">
+                    <p>Score</p>
+                    <h3>{{ sub.score_record.score }} / {{ sub.score_record.total_marks }}</h3>
+                </div>
+                <div class="stat-box" style="display:flex; align-items:center;">
+                    <a href="{{ url_for('dashboard.view_result', session_id=sub.score_record.session_id) }}" class="btn-primary" style="padding:0.4em 0.8em; font-size:0.85em; border-radius:0.5em; text-decoration:none;">Review</a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state" style="margin-top:2em;">
+        <i data-lucide="inbox"></i>
+        <h3>No Submissions Yet</h3>
+        <p>Students have not completed this exam yet.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

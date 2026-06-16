@@ -213,6 +213,7 @@ def update_exam(exam_id):
             "title": data.get("title", existing_exam.get("title")),
             "description": data.get("description", existing_exam.get("description")),
             "impact": data.get("impact", existing_exam.get("impact", 1.0)),
+            "instructions": data.get("instructions", existing_exam.get("instructions", "")),
             "updated_at": datetime.utcnow()
         }
         
@@ -261,5 +262,24 @@ def update_exam(exam_id):
         exams_col.update_one({"_id": exam_obj_id}, {"$set": update_data})
         return jsonify({"success": True, "message": "Exam updated successfully"}), 200
 
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+@exams_bp.route('/<exam_id>', methods=['DELETE'])
+@require_role('teacher', 'org_admin', 'platform_admin')
+def delete_exam(exam_id):
+    exams_col = get_collection('exams')
+    try:
+        # Check permissions
+        exam = exams_col.find_one({"_id": ObjectId(exam_id)})
+        if not exam:
+            return jsonify({"error": "Exam not found"}), 404
+            
+        if str(exam.get("created_by")) != str(g.current_user["_id"]) and g.current_user.get("role") not in ["org_admin", "platform_admin"]:
+            return jsonify({"error": "Unauthorized to delete this exam"}), 403
+            
+        # Soft delete
+        exams_col.update_one({"_id": ObjectId(exam_id)}, {"$set": {"status": "deleted", "updated_at": datetime.utcnow()}})
+        
+        return jsonify({"success": True, "message": "Exam soft deleted"})
     except Exception as e:
         return jsonify({"error": str(e)}), 400

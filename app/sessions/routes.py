@@ -62,7 +62,7 @@ def start_session():
     if exam.get("settings", {}).get("randomize_questions", False):
         random.shuffle(questions)
         
-    question_order = [str(q.get("question_id")) for q in questions if q.get("question_id")]
+    question_order = [str(q.get("_id", i)) for i, q in enumerate(questions)]
     
     new_session = {
         "exam_id": ObjectId(exam_id),

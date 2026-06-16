@@ -1,0 +1,177 @@
+{% extends "dashboard/base.html" %}
+
+{% block page_title %}Exam Results{% endblock %}
+{% block page_subtitle %}{{ exam.title }}{% endblock %}
+
+{% block dashboard_head %}
+<style>
+    .result-container {
+        max-width: 800px;
+        margin: 0 auto;
+    }
+    
+    .score-card {
+        background: var(--white);
+        border: 1px solid var(--gray-200);
+        border-radius: 1em;
+        padding: 2em;
+        text-align: center;
+        margin-bottom: 2em;
+    }
+    
+    .score-circle {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        margin: 0 auto 1em auto;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: {% if score_record and score_record.passed %}var(--success-bg){% else %}var(--danger-bg){% endif %};
+        color: {% if score_record and score_record.passed %}var(--success){% else %}var(--danger){% endif %};
+        border: 4px solid currentColor;
+    }
+    
+    .score-circle h2 {
+        font-size: 2em;
+        margin: 0;
+        font-weight: 700;
+    }
+    
+    .score-circle p {
+        font-size: 0.8em;
+        margin: 0;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    
+    .question-list {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5em;
+    }
+    
+    .question-card {
+        background: var(--white);
+        border: 1px solid var(--gray-200);
+        border-radius: 0.75em;
+        padding: 1.5em;
+    }
+    
+    .q-header {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 1em;
+        font-weight: 500;
+    }
+    
+    .q-text {
+        font-size: 1.1em;
+        color: var(--gray-900);
+        margin-bottom: 1.5em;
+    }
+    
+    .answer-box {
+        padding: 1em;
+        border-radius: 0.5em;
+        margin-bottom: 1em;
+    }
+    
+    .answer-correct {
+        background: var(--success-bg);
+        border: 1px solid var(--success);
+        color: var(--success);
+    }
+    
+    .answer-wrong {
+        background: var(--danger-bg);
+        border: 1px solid var(--danger);
+        color: var(--danger);
+    }
+    
+    .answer-pending {
+        background: var(--gray-100);
+        border: 1px dashed var(--gray-300);
+        color: var(--gray-600);
+    }
+    
+    .correct-answer-ref {
+        font-size: 0.9em;
+        color: var(--gray-600);
+        background: var(--gray-50);
+        padding: 0.75em;
+        border-radius: 0.5em;
+        border-left: 3px solid var(--success);
+    }
+</style>
+{% endblock %}
+
+{% block dashboard_content %}
+<div class="dashboard-body" style="display:block;">
+    <div class="result-container">
+        
+        <a href="{{ url_for('dashboard.my_exams') }}" class="btn-outline" style="display:inline-flex; width:auto; height:auto; padding: 0.5em 1em; margin-bottom: 2em; text-decoration: none;">
+            <i data-lucide="arrow-left" style="margin-right: 0.5em;"></i> Back to My Exams
+        </a>
+
+        {% if score_record %}
+        <div class="score-card">
+            <div class="score-circle">
+                <h2>{{ score_record.score_percent|int }}%</h2>
+                <p>Score</p>
+            </div>
+            <h3>{% if score_record.passed %}Congratulations, you passed!{% else %}Unfortunately, you did not pass.{% endif %}</h3>
+            <p style="color:var(--gray-500); margin-top:0.5em;">You scored {{ score_record.score }} out of {{ score_record.total_marks }} points.</p>
+        </div>
+        {% else %}
+        <div class="score-card">
+            <h3>Score Pending</h3>
+            <p>Your score is still being calculated or requires manual grading.</p>
+        </div>
+        {% endif %}
+
+        <h3 style="margin-bottom: 1em;">Review Answers</h3>
+        
+        <div class="question-list">
+            {% for item in review_data %}
+            <div class="question-card">
+                <div class="q-header">
+                    <span>Question {{ loop.index }}</span>
+                    {% if item.is_correct == True %}
+                    <span style="color:var(--success);"><i data-lucide="check-circle" style="width:16px;height:16px;"></i> Correct</span>
+                    {% elif item.is_correct == False %}
+                    <span style="color:var(--danger);"><i data-lucide="x-circle" style="width:16px;height:16px;"></i> Incorrect</span>
+                    {% else %}
+                    <span style="color:var(--gray-500);"><i data-lucide="clock" style="width:16px;height:16px;"></i> Pending Review</span>
+                    {% endif %}
+                </div>
+                
+                <div class="q-text">
+                    {{ item.question.text | safe }}
+                </div>
+                
+                {% if item.is_correct == True %}
+                <div class="answer-box answer-correct">
+                    <strong>Your Answer:</strong> {{ item.student_response }}
+                </div>
+                {% elif item.is_correct == False %}
+                <div class="answer-box answer-wrong">
+                    <strong>Your Answer:</strong> {{ item.student_response if item.student_response else '(No Answer Selected)' }}
+                </div>
+                <div class="correct-answer-ref">
+                    <strong>Correct Answer:</strong> {{ item.correct_response }}
+                </div>
+                {% else %}
+                <div class="answer-box answer-pending">
+                    <strong>Your Answer:</strong> {{ item.student_response if item.student_response else '(No Answer Selected)' }}
+                </div>
+                {% endif %}
+                
+            </div>
+            {% endfor %}
+        </div>
+
+    </div>
+</div>
+{% endblock %}

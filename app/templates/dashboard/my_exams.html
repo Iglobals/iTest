@@ -1,0 +1,233 @@
+{% extends "dashboard/base.html" %}
+
+{% block page_title %}My Exams{% endblock %}
+{% block page_subtitle %}View available exams and your past results.{% endblock %}
+
+{% block dashboard_head %}
+<style>
+    /* CSS Trick 1: auto-fit with minmax for grids */
+    .exam-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(clamp(280px, 30vw, 350px), 1fr));
+        gap: clamp(1em, 2vw, 1.5em);
+        margin-top: 1.5em;
+        /* CSS Trick 2: 100% width limited by max-width */
+        width: 100%;
+        max-width: 1200px;
+    }
+
+    .exam-card {
+        background: var(--white);
+        border: 1px solid var(--gray-200);
+        border-radius: 1em;
+        padding: clamp(1em, 2vw, 1.5em);
+        display: flex;
+        flex-direction: column;
+        gap: 0.75em;
+        transition: transform 0.2s, box-shadow 0.2s;
+        text-decoration: none;
+        color: inherit;
+    }
+
+    .exam-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(91, 33, 209, 0.1);
+        border-color: var(--purple-light);
+    }
+
+    .card-header {
+        display: flex;
+        align-items: flex-start;
+        gap: 1em;
+    }
+
+    .card-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 0.5em;
+        background: var(--purple-bg);
+        color: var(--purple);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .card-title { flex: 1; }
+    .card-title h3 {
+        margin: 0 0 0.25em 0;
+        font-size: clamp(1em, 1.5vw, 1.1em);
+        font-weight: 600;
+        color: var(--gray-900);
+    }
+    .card-title p {
+        margin: 0;
+        font-size: 0.85em;
+        color: var(--gray-500);
+    }
+
+    .card-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: auto;
+        padding-top: 1em;
+        border-top: 1px solid var(--gray-100);
+    }
+
+    .tabs {
+        display: flex;
+        gap: 1em;
+        border-bottom: 2px solid var(--gray-200);
+        margin-bottom: 2em;
+        width: 100%;
+        max-width: 1200px;
+    }
+
+    .tab-btn {
+        padding: 0.75em 1.5em;
+        background: none;
+        border: none;
+        font-size: 1em;
+        font-weight: 500;
+        color: var(--gray-500);
+        cursor: pointer;
+        position: relative;
+    }
+
+    .tab-btn.active {
+        color: var(--purple);
+    }
+
+    .tab-btn.active::after {
+        content: '';
+        position: absolute;
+        bottom: -2px;
+        left: 0;
+        width: 100%;
+        height: 2px;
+        background: var(--purple);
+        border-radius: 2px 2px 0 0;
+    }
+
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+</style>
+{% endblock %}
+
+{% block dashboard_content %}
+<div class="dashboard-body" style="grid-template-columns: 1fr; display: block;">
+
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('available')">Available Exams ({{ available_exams|length }})</button>
+        <button class="tab-btn" onclick="switchTab('taken')">Taken Exams ({{ taken_exams|length }})</button>
+    </div>
+
+    <!-- Available Exams Tab -->
+    <div id="available" class="tab-content active">
+        {% if available_exams %}
+        <div class="exam-grid">
+            {% for exam in available_exams %}
+            <div class="exam-card">
+                <div class="card-header">
+                    <div class="card-icon">
+                        <i data-lucide="file-text"></i>
+                    </div>
+                    <div class="card-title">
+                        <h3>{{ exam.title }}</h3>
+                        <p>{{ exam.subject_tag_id if exam.subject_tag_id else 'General' }}</p>
+                    </div>
+                </div>
+                
+                <div style="font-size: 0.85em; color: var(--gray-600); line-height: 1.5;">
+                    <div style="display:flex; align-items:center; gap: 0.5em;">
+                        <i data-lucide="clock" style="width:14px; height:14px;"></i> 
+                        {{ exam.settings.duration_minutes if exam.settings else 60 }} mins
+                    </div>
+                    <div style="display:flex; align-items:center; gap: 0.5em; margin-top: 0.25em;">
+                        <i data-lucide="rotate-ccw" style="width:14px; height:14px;"></i>
+                        Attempts: {{ exam.attempts_made|default(0) }} / {{ exam.settings.max_attempts|default(1) }}
+                    </div>
+                </div>
+
+                <div class="card-meta">
+                    <span class="status-badge published">Available</span>
+                    <a href="{{ url_for('dashboard.take_exam', exam_id=exam._id) }}" class="btn-primary" style="padding:0.4em 0.8em; font-size:0.85em; border-radius:0.5em; text-decoration:none; width:auto; height:auto;">
+                        {% if exam.attempts_made %}Retake Exam{% else %}Take Exam{% endif %}
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <i data-lucide="check-circle"></i>
+            <h3>No Exams Available</h3>
+            <p>You have no pending exams to take right now.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Taken Exams Tab -->
+    <div id="taken" class="tab-content">
+        {% if taken_exams %}
+        <div class="exam-grid">
+            {% for item in taken_exams %}
+            <div class="exam-card">
+                <div class="card-header">
+                    <div class="card-icon" style="background:#fef3c7; color:#d97706;">
+                        <i data-lucide="award"></i>
+                    </div>
+                    <div class="card-title">
+                        <h3>{{ item.exam.title }}</h3>
+                        <p>Submitted: {{ item.score.submitted_at.strftime('%b %d, %Y') }}</p>
+                    </div>
+                </div>
+                
+                <div style="font-size: 0.85em; color: var(--gray-600); line-height: 1.5;">
+                    <div style="display:flex; align-items:center; gap: 0.5em;">
+                        <i data-lucide="target" style="width:14px; height:14px;"></i> 
+                        Score: {{ item.score.score }} / {{ item.score.total_marks }}
+                    </div>
+                    <div style="display:flex; align-items:center; gap: 0.5em; margin-top: 0.25em;">
+                        <i data-lucide="percent" style="width:14px; height:14px;"></i>
+                        Percentage: {{ item.score.score_percent }}%
+                    </div>
+                </div>
+
+                <div class="card-meta">
+                    {% if item.score.passed %}
+                    <span class="status-badge success" style="background:var(--success-bg); color:var(--success);">Passed</span>
+                    {% else %}
+                    <span class="status-badge danger" style="background:var(--danger-bg); color:var(--danger);">Failed</span>
+                    {% endif %}
+                    <a href="{{ url_for('dashboard.view_result', session_id=item.score.session_id) }}" class="btn-outline" style="padding:0.4em 0.8em; font-size:0.85em; border-radius:0.5em; text-decoration:none;">
+                        View Results
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <i data-lucide="inbox"></i>
+            <h3>No Completed Exams</h3>
+            <p>You haven't taken any exams yet.</p>
+        </div>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}
+
+{% block dashboard_js %}
+<script>
+    function switchTab(tabId) {
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+        
+        document.getElementById(tabId).classList.add('active');
+        event.currentTarget.classList.add('active');
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,300 @@
+{% extends "raw_base.html" %}
+
+{% block title %}Exam Setup - {{ exam.title }}{% endblock %}
+
+{% block head %}
+<style>
+    body { margin: 0; padding: 0; background: var(--gray-50); font-family: -apple-system, sans-serif; }
+    
+    .setup-container {
+        max-width: 800px;
+        margin: 2rem auto;
+        background: var(--white);
+        border-radius: 1rem;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        border: 1px solid var(--gray-200);
+        overflow: hidden;
+    }
+
+    .setup-header {
+        background: var(--purple);
+        color: white;
+        padding: 2rem;
+        text-align: center;
+    }
+
+    .setup-header h1 { margin: 0 0 0.5rem 0; font-size: 1.5rem; }
+    .setup-header p { margin: 0; opacity: 0.9; }
+
+    .setup-steps {
+        padding: 2rem;
+    }
+
+    .step-card {
+        display: none;
+        animation: fadeIn 0.3s ease-out;
+    }
+    .step-card.active { display: block; }
+
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+    .video-preview {
+        width: 100%;
+        max-width: 400px;
+        margin: 1rem auto;
+        border-radius: 0.5rem;
+        background: #000;
+        aspect-ratio: 16/9;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+    }
+    .video-preview video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .action-row {
+        display: flex;
+        justify-content: flex-end;
+        gap: 1rem;
+        margin-top: 2rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--gray-200);
+    }
+
+    .btn {
+        padding: 0.75rem 1.5rem;
+        border-radius: 0.5rem;
+        font-weight: 600;
+        cursor: pointer;
+        border: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .btn-primary { background: var(--purple); color: white; }
+    .btn-outline { background: transparent; border: 1px solid var(--gray-300); color: var(--gray-700); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .status-box {
+        padding: 1rem;
+        border-radius: 0.5rem;
+        margin: 1rem 0;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .status-pending { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
+    .status-success { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+    .status-error { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+
+    .instructions-content {
+        white-space: pre-wrap;
+        line-height: 1.6;
+        color: var(--gray-800);
+        background: var(--gray-50);
+        padding: 1.5rem;
+        border-radius: 0.5rem;
+        border: 1px solid var(--gray-200);
+        max-height: 400px;
+        overflow-y: auto;
+        -ms-overflow-style: none;  /* IE and Edge */
+        scrollbar-width: none;  /* Firefox */
+    }
+    .instructions-content::-webkit-scrollbar {
+        display: none; /* Chrome, Safari and Opera */
+    }
+</style>
+<script src="https://unpkg.com/lucide@latest"></script>
+{% endblock %}
+
+{% block content %}
+<div class="setup-container">
+    <div class="setup-header">
+        <h1>{{ exam.title }}</h1>
+        <p>Pre-Exam Setup & Verification</p>
+    </div>
+
+    <div class="setup-steps">
+        {% if exam.settings and exam.settings.ai_proctoring_enabled %}
+        
+        <!-- Step 1: Camera & Mic -->
+        <div class="step-card active" id="step-camera">
+            <h2><i data-lucide="camera"></i> Camera & Microphone Check</h2>
+            <p>This is a proctored exam. Please allow access to your camera and microphone to continue.</p>
+            
+            <div class="video-preview">
+                <video id="cameraPreview" autoplay muted playsinline></video>
+            </div>
+            
+            <div class="status-box status-pending" id="cameraStatus">
+                <i data-lucide="loader" class="spin"></i> Waiting for permissions...
+            </div>
+
+            <div class="action-row">
+                <button class="btn btn-outline" id="btnCancelCamera" onclick="window.location.href='/dashboard'">Cancel</button>
+            </div>
+        </div>
+
+        <!-- Step 2: Screen Sharing -->
+        <div class="step-card" id="step-screen">
+            <h2><i data-lucide="monitor"></i> Screen Sharing Check</h2>
+            <p>You must share your <strong>Entire Screen</strong> for this exam. Do not select a single tab or window.</p>
+            
+            <div class="video-preview">
+                <video id="screenPreview" autoplay muted playsinline></video>
+            </div>
+
+            <div class="status-box status-pending" id="screenStatus">
+                <i data-lucide="monitor-up"></i> Click "Share Screen" below
+            </div>
+
+            <div class="action-row">
+                <button class="btn btn-outline" onclick="requestScreenShare()" id="btnShareScreen">Share Screen</button>
+            </div>
+        </div>
+        
+        {% endif %}
+
+        <!-- Step 3: Instructions -->
+        <div class="step-card {% if not exam.settings or not exam.settings.ai_proctoring_enabled %}active{% endif %}" id="step-instructions">
+            <h2><i data-lucide="file-text"></i> Exam Instructions</h2>
+            
+            <div class="instructions-content">{{ exam.instructions if exam.instructions else 'Online Exam Guidelines & Instructions\nWelcome to your online exam. Please read all instructions carefully before you begin.\n\nExam Details & Timing\nDuration: 60 mins\nTime Limit: Once you click "Start," the timer will begin counting down immediately. You cannot pause the timer.\n\nTechnical Requirements\nBrowser: Use the latest version of your browser.\nConnection: Ensure you have a stable internet connection.\nBackup Plan: If you lose connection, don\'t panic. Reconnect immediately and refresh the page. Your progress is auto-saved.\n\nExam Rules & Academic Integrity\nClosed-Book Policy: Unless otherwise specified, this is a closed-book exam. Do not use notes, textbooks, or unauthorized websites.\nProctoring: Ensure your face is clearly visible at all times.\nNo Communication: Do not communicate with other students, tutors, or use any messaging apps during the exam.\n\nSupport & Troubleshooting\nEncountering technical issues? Contact the IT helpdesk immediately.\nFor urgent academic questions, please reach out to the examiner via internal chat or email.' }}</div>
+
+            <div class="action-row">
+                <button class="btn btn-primary" id="btnStartExam" onclick="startExam()" style="background-color: var(--success); font-size: 1.1em;">Begin Exam <i data-lucide="play-circle"></i></button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    lucide.createIcons();
+    
+    const isProctored = {{ 'true' if exam.settings and exam.settings.ai_proctoring_enabled else 'false' }};
+    const examId = "{{ exam._id }}";
+    
+    // Globals for streams
+    window.cameraStream = null;
+    window.screenStream = null;
+
+    if (isProctored) {
+        initCamera();
+    }
+
+    function initCamera() {
+        const status = document.getElementById('cameraStatus');
+        navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+            .then(stream => {
+                window.cameraStream = stream;
+                document.getElementById('cameraPreview').srcObject = stream;
+                status.className = 'status-box status-success';
+                status.innerHTML = '<i data-lucide="check-circle"></i> Camera & Microphone ready. Continuing...';
+                
+                // Hide the cancel button
+                const cancelBtn = document.getElementById('btnCancelCamera');
+                if (cancelBtn) cancelBtn.style.display = 'none';
+                
+                lucide.createIcons();
+                
+                // Auto-advance to next step
+                setTimeout(() => nextStep('step-screen'), 1500);
+            })
+            .catch(err => {
+                status.className = 'status-box status-error';
+                status.innerHTML = '<i data-lucide="alert-circle"></i> Permission denied or device not found';
+                lucide.createIcons();
+            });
+    }
+
+    function requestScreenShare() {
+        const status = document.getElementById('screenStatus');
+        navigator.mediaDevices.getDisplayMedia({ video: { displaySurface: "monitor" } })
+            .then(stream => {
+                // Validation: Ensure full screen is shared, not just a tab
+                const track = stream.getVideoTracks()[0];
+                const settings = track.getSettings();
+                
+                if (settings.displaySurface !== 'monitor') {
+                    track.stop();
+                    status.className = 'status-box status-error';
+                    status.innerHTML = '<i data-lucide="alert-circle"></i> You must select "Entire Screen". Tabs or windows are not allowed.';
+                    lucide.createIcons();
+                    return;
+                }
+
+                window.screenStream = stream;
+                document.getElementById('screenPreview').srcObject = stream;
+                status.className = 'status-box status-success';
+                status.innerHTML = '<i data-lucide="check-circle"></i> Screen sharing ready. Continuing...';
+                
+                document.getElementById('btnShareScreen').style.display = 'none';
+                
+                lucide.createIcons();
+                
+                // Auto-advance to next step
+                setTimeout(() => nextStep('step-instructions'), 1500);
+                
+                track.onended = () => {
+                    // If they stop sharing
+                    document.getElementById('btnShareScreen').style.display = 'inline-flex';
+                    status.className = 'status-box status-error';
+                    status.innerHTML = '<i data-lucide="alert-circle"></i> Screen sharing was stopped.';
+                    lucide.createIcons();
+                };
+            })
+            .catch(err => {
+                status.className = 'status-box status-error';
+                status.innerHTML = '<i data-lucide="alert-circle"></i> Screen sharing failed or was denied';
+                lucide.createIcons();
+            });
+    }
+
+    function nextStep(stepId) {
+        document.querySelectorAll('.step-card').forEach(el => el.classList.remove('active'));
+        document.getElementById(stepId).classList.add('active');
+    }
+
+    async function startExam() {
+        const btn = document.getElementById('btnStartExam');
+        btn.disabled = true;
+        btn.innerHTML = '<i data-lucide="loader" class="spin"></i> Preparing...';
+        lucide.createIcons();
+
+        try {
+            const response = await fetch('/api/sessions/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ exam_id: examId })
+            });
+            const result = await response.json();
+            
+            if (result.success) {
+                // Stop streams so the next page can acquire them fresh if needed,
+                // or just leave them. take.html asks for camera again.
+                if(window.cameraStream) window.cameraStream.getTracks().forEach(t => t.stop());
+                if(window.screenStream) window.screenStream.getTracks().forEach(t => t.stop());
+                
+                window.location.href = `/dashboard/sessions/${result.data._id}/take`;
+            } else {
+                alert('Error starting exam: ' + result.error);
+                btn.disabled = false;
+                btn.innerHTML = 'Begin Exam <i data-lucide="play-circle"></i>';
+                lucide.createIcons();
+            }
+        } catch (err) {
+            alert('Network error. Please try again.');
+            btn.disabled = false;
+            btn.innerHTML = 'Begin Exam <i data-lucide="play-circle"></i>';
+            lucide.createIcons();
+        }
+    }
+</script>
+<style> @keyframes spin { 100% { transform: rotate(360deg); } } .spin { animation: spin 1s linear infinite; } </style>
+{% endblock %}

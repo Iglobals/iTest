@@ -41,7 +41,7 @@
         </a>
         {% endif %}
         {% if g.current_user.get('role') == 'student' %}
-        <a href="#" class="nav-item">
+        <a href="{{ url_for('dashboard.my_exams') }}" class="nav-item">
             <i data-lucide="file-text"></i>
             My Exams
         </a>
@@ -115,6 +115,10 @@
 
     {% block dashboard_content %}{% endblock %}
 </main>
+
+<!-- Custom Toast Notification Container -->
+<div id="toastContainer" class="toast-container"></div>
+
 {% endblock %}
 
 {% block extra_js %}
@@ -150,6 +154,43 @@
             notificationPopup.classList.remove('active');
         }
     });
+
+    // Custom Toast Notification Logic
+    function showToast(message, type = 'success') {
+        const container = document.getElementById('toastContainer');
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        
+        let iconName = 'check-circle';
+        if (type === 'error') iconName = 'x-circle';
+        else if (type === 'info') iconName = 'info';
+        
+        toast.innerHTML = `
+            <div class="toast-icon"><i data-lucide="${iconName}"></i></div>
+            <div class="toast-message">${message}</div>
+            <button class="toast-close" onclick="this.parentElement.remove()">&times;</button>
+        `;
+        
+        container.appendChild(toast);
+        lucide.createIcons();
+        
+        // Remove after 3 seconds
+        setTimeout(() => {
+            toast.style.animation = 'slideOutRight 0.3s forwards';
+            setTimeout(() => {
+                if (toast.parentElement) toast.remove();
+            }, 300);
+        }, 3000);
+    }
+
+    // Flash messages from Flask
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                showToast("{{ message }}", "{{ category if category in ['success', 'error', 'info'] else 'info' }}");
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
 </script>
 {% block dashboard_js %}{% endblock %}
 {% endblock %}

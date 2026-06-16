@@ -79,7 +79,7 @@ body {
 .logo-icon {
     width: 1.5em;
     height: 1.5em;
-    background: var(--purple);
+    background: var(--gold);
     border-radius: 0.375em;
     display: flex;
     align-items: center;
@@ -138,6 +138,7 @@ body {
 .nav-item:hover, .nav-item.active {
     background: var(--purple-bg);
     color: var(--purple);
+    border-right: 3px solid var(--gold);
 }
 
 .nav-item svg {
@@ -223,14 +224,14 @@ body {
     right: 0.25em;
     width: 0.875em;
     height: 0.875em;
-    background: var(--purple);
+    background: var(--gold);
     border-radius: 50%;
     border: 2px solid var(--white);
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 0.5em;
-    color: white;
+    color: var(--gray-900);
     font-weight: 700;
 }
 
@@ -337,8 +338,9 @@ body {
 }
 
 .btn-primary {
-    background: var(--purple-dark);
-    color: white;
+    background: var(--gold);
+    color: var(--gray-900);
+    box-shadow: 0 4px 12px rgba(246, 196, 67, 0.3);
 }
 
 .btn-secondary {
@@ -417,9 +419,9 @@ body {
 
 .view-all {
     font-size: 0.8125em;
-    color: var(--purple);
+    color: var(--gold);
     text-decoration: none;
-    font-weight: 500;
+    font-weight: 600;
 }
 
 .exam-list {
@@ -591,7 +593,7 @@ body {
 .chart-score-box h3 {
     font-size: 2em;
     font-weight: 700;
-    color: var(--purple);
+    color: var(--gold);
     margin: 0;
 }
 

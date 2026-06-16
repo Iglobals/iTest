@@ -3,8 +3,23 @@ from app.auth.decorators import require_role
 from app.utils.mongo import get_collection
 from datetime import datetime
 from bson import ObjectId
+import re
+import uuid
 
 exams_bp = Blueprint('exams', __name__, url_prefix='/api/exams')
+
+def generate_unique_slug(title, collection):
+    base_slug = re.sub(r'[^a-z0-9]+', '-', str(title).lower()).strip('-')
+    if not base_slug:
+        base_slug = "exam"
+    
+    short_id = str(uuid.uuid4())[:8]
+    slug = f"{base_slug}-{short_id}"
+    
+    while collection.find_one({"slug": slug}):
+        short_id = str(uuid.uuid4())[:8]
+        slug = f"{base_slug}-{short_id}"
+    return slug
 
 @exams_bp.route('/', methods=['POST'])
 @require_role('teacher', 'org_admin', 'platform_admin')
@@ -18,12 +33,13 @@ def create_exam():
     # e.g. {"class_ids": [], "student_ids": [], "excluded_student_ids": []}
     
     # Ensure IDs are ObjectIds where applicable
-    class_ids = [ObjectId(cid) for cid in visibility.get("class_ids", []) if cid]
-    student_ids = [ObjectId(sid) for sid in visibility.get("student_ids", []) if sid]
-    excluded_student_ids = [ObjectId(esid) for esid in visibility.get("excluded_student_ids", []) if esid]
+    class_ids = [ObjectId(cid) for cid in visibility.get("class_ids", []) if cid and ObjectId.is_valid(cid)]
+    student_ids = [ObjectId(sid) for sid in visibility.get("student_ids", []) if sid and ObjectId.is_valid(sid)]
+    excluded_student_ids = [ObjectId(esid) for esid in visibility.get("excluded_student_ids", []) if esid and ObjectId.is_valid(esid)]
     
     exam = {
         "title": data.get("title", "Untitled Exam"),
+        "slug": generate_unique_slug(data.get("title", "Untitled Exam"), exams_col),
         "description": data.get("description", ""),
         "cover_image_url": data.get("cover_image_url", None),
         "created_by": g.current_user["_id"],
@@ -35,8 +51,8 @@ def create_exam():
             "student_ids": student_ids,
             "excluded_student_ids": excluded_student_ids
         },
-        "subject_tag_id": ObjectId(data["subject_tag_id"]) if data.get("subject_tag_id") else None,
-        "organization_id": ObjectId(data["organization_id"]) if data.get("organization_id") else None,
+        "subject_tag_id": ObjectId(data["subject_tag_id"]) if data.get("subject_tag_id") and ObjectId.is_valid(data["subject_tag_id"]) else data.get("subject_tag_id"),
+        "organization_id": ObjectId(data["organization_id"]) if data.get("organization_id") and ObjectId.is_valid(data["organization_id"]) else None,
         "instructions": data.get("instructions", ""),
         "settings": data.get("settings", {
             "duration_minutes": 60,
@@ -62,7 +78,7 @@ def create_exam():
     result = exams_col.insert_one(exam)
     return jsonify({
         "success": True, 
-        "data": {"_id": str(result.inserted_id), "title": exam["title"]}
+        "data": {"_id": str(result.inserted_id), "title": exam["title"], "slug": exam["slug"]}
     }), 201
 
 
@@ -91,6 +107,76 @@ def get_exam(exam_id):
         return jsonify({"success": True, "data": exam}), 200
     except Exception:
         return jsonify({"error": "Invalid ID"}), 400
+
+
+@exams_bp.route('/slug/<slug>', methods=['GET'])
+def get_exam_by_slug(slug):
+    exams_col = get_collection('exams')
+    try:
+        exam = exams_col.find_one({"slug": slug})
+        if not exam:
+            return jsonify({"error": "Not found"}), 404
+        
+        exam["_id"] = str(exam["_id"])
+        exam["created_by"] = str(exam["created_by"])
+        
+        if exam.get("organization_id"):
+            exam["organization_id"] = str(exam["organization_id"])
+        if exam.get("subject_tag_id"):
+            exam["subject_tag_id"] = str(exam["subject_tag_id"])
+            
+        vis = exam.get("visibility", {})
+        vis["class_ids"] = [str(i) for i in vis.get("class_ids", [])]
+        vis["student_ids"] = [str(i) for i in vis.get("student_ids", [])]
+        vis["excluded_student_ids"] = [str(i) for i in vis.get("excluded_student_ids", [])]
+        
+        return jsonify({"success": True, "data": exam}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@exams_bp.route('/<exam_id>/questions', methods=['PUT'])
+@require_role('teacher', 'org_admin', 'platform_admin')
+def update_exam_questions(exam_id):
+    data = request.json
+    exams_col = get_collection('exams')
+    
+    try:
+        exam_obj_id = ObjectId(exam_id)
+        existing_exam = exams_col.find_one({"_id": exam_obj_id})
+        
+        if not existing_exam:
+            return jsonify({"error": "Not found"}), 404
+            
+        if existing_exam["created_by"] != g.current_user["_id"] and g.current_user.get("role") != "platform_admin":
+            return jsonify({"error": "Unauthorized"}), 403
+            
+        questions = data.get("questions", [])
+        
+        # Ensure questions have IDs if missing
+        for q in questions:
+            if "_id" not in q or not q["_id"]:
+                q["_id"] = str(uuid.uuid4())
+                
+        total_questions = len(questions)
+        total_marks = sum([float(q.get("marks", 1)) for q in questions])
+        
+        update_data = {
+            "questions": questions,
+            "total_questions": total_questions,
+            "total_marks": total_marks,
+            "updated_at": datetime.utcnow()
+        }
+        
+        exams_col.update_one({"_id": exam_obj_id}, {"$set": update_data})
+        return jsonify({
+            "success": True, 
+            "message": "Questions updated successfully",
+            "data": update_data
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
 
 
 @exams_bp.route('/<exam_id>', methods=['PUT'])
@@ -126,26 +212,37 @@ def update_exam(exam_id):
         update_data = {
             "title": data.get("title", existing_exam.get("title")),
             "description": data.get("description", existing_exam.get("description")),
+            "impact": data.get("impact", existing_exam.get("impact", 1.0)),
             "updated_at": datetime.utcnow()
         }
         
+        if "subject_tag_id" in data:
+            if data["subject_tag_id"] and ObjectId.is_valid(data["subject_tag_id"]):
+                update_data["subject_tag_id"] = ObjectId(data["subject_tag_id"])
+            else:
+                update_data["subject_tag_id"] = data["subject_tag_id"]
+                
+        if "settings" in data:
+            update_data["settings"] = existing_exam.get("settings", {})
+            update_data["settings"].update(data["settings"])
+            
         # Update visibility and schedule if provided
         if "visibility" in data:
             vis = data["visibility"]
-            update_data["visibility"] = {
-                "type": vis.get("type", existing_exam["visibility"]["type"]),
-                "class_ids": [ObjectId(cid) for cid in vis.get("class_ids", []) if cid],
-                "student_ids": [ObjectId(sid) for sid in vis.get("student_ids", []) if sid],
-                "excluded_student_ids": [ObjectId(esid) for esid in vis.get("excluded_student_ids", []) if esid]
-            }
+            update_data["visibility"] = existing_exam.get("visibility", {})
+            update_data["visibility"]["type"] = vis.get("type", update_data["visibility"].get("type"))
+            update_data["visibility"]["class_ids"] = [ObjectId(cid) for cid in vis.get("class_ids", []) if cid and ObjectId.is_valid(cid)]
+            update_data["visibility"]["student_ids"] = vis.get("student_emails", []) # Store emails directly for MVP or convert to object IDs
+            update_data["visibility"]["excluded_student_ids"] = vis.get("excluded_student_emails", [])
             
         if "schedule" in data:
             sched = data["schedule"]
-            update_data["schedule"] = {
-                "available_from": sched.get("available_from", existing_exam["schedule"]["available_from"]),
-                "available_until": sched.get("available_until", existing_exam["schedule"]["available_until"]),
-                "is_published": sched.get("is_published", existing_exam["schedule"]["is_published"])
-            }
+            update_data["schedule"] = existing_exam.get("schedule", {})
+            update_data["schedule"]["available_from"] = sched.get("available_from", update_data["schedule"].get("available_from"))
+            update_data["schedule"]["available_until"] = sched.get("available_until", update_data["schedule"].get("available_until"))
+            if "is_published" in sched:
+                update_data["schedule"]["is_published"] = sched["is_published"]
+                update_data["status"] = "published" if sched["is_published"] else "draft"
             
         # If General Exam and is_published, notify students (basic implementation)
         if not is_private and existing_exam.get("schedule", {}).get("is_published"):

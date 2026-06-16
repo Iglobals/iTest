@@ -35,9 +35,9 @@
             <i data-lucide="users"></i>
             Classes
         </a>
-        <a href="{{ url_for('dashboard.create_exam') }}" class="nav-item">
+        <a href="{{ url_for('dashboard.manage_exams') }}" class="nav-item">
             <i data-lucide="file-text"></i>
-            Create Exam
+            Manage Exams
         </a>
         {% endif %}
         {% if g.current_user.get('role') == 'student' %}

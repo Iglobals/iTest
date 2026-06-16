@@ -6,6 +6,24 @@ from bson import ObjectId
 
 classes_bp = Blueprint('classes', __name__, url_prefix='/api/classes')
 
+@classes_bp.route('/', methods=['GET'])
+@require_auth(redirect_on_fail=False)
+def list_classes():
+    classes_col = get_collection('classes')
+    try:
+        classes = list(classes_col.find({}))
+        for cls in classes:
+            cls["_id"] = str(cls["_id"])
+            if cls.get("organization_id"):
+                cls["organization_id"] = str(cls["organization_id"])
+            for teacher in cls.get("teachers", []):
+                if "user_id" in teacher: teacher["user_id"] = str(teacher["user_id"])
+            for student in cls.get("students", []):
+                if "user_id" in student: student["user_id"] = str(student["user_id"])
+        return jsonify({"success": True, "data": classes}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @classes_bp.route('/', methods=['POST'])
 @require_role('teacher', 'org_admin')
 def create_class():

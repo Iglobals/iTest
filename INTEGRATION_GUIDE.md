@@ -124,7 +124,7 @@ For production, you would use the internal **Admin API** to register clients (e.
 
 ### 1. Install the SDK
 ```bash
-npm install @iglobals/auth-client
+npm install @iglobals/auth-client (iglobals-auth-client)
 ```
 
 ### 2. Initialize the Client

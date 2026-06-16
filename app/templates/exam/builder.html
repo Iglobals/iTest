@@ -1,0 +1,727 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Question Builder - {{ exam.title }}{% endblock %}
+{% block page_title %}Question Builder{% endblock %}
+{% block page_subtitle %}Add, reorder, and manage questions for "{{ exam.title }}".{% endblock %}
+
+{% block dashboard_head %}
+<!-- Include KaTeX -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+
+<!-- Include Quill Theme -->
+<link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
+<script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
+
+<!-- SortableJS for drag-and-drop -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+
+<style>
+    .builder-container {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+
+    .questions-list {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .question-card {
+        background: var(--white);
+        border: 1px solid var(--gray-200);
+        border-radius: 1rem;
+        padding: 1.5rem;
+        display: flex;
+        gap: 1rem;
+        transition: box-shadow 0.2s;
+    }
+    
+    .question-card.sortable-ghost {
+        opacity: 0.4;
+    }
+
+    .drag-handle {
+        cursor: grab;
+        color: var(--gray-400);
+        display: flex;
+        align-items: flex-start;
+        padding-top: 0.25rem;
+    }
+
+    .drag-handle:active {
+        cursor: grabbing;
+    }
+
+    .question-content {
+        flex: 1;
+    }
+
+    .question-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+
+    .question-type-badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+        background: var(--purple-light, #f3e8ff);
+        color: var(--purple);
+        border-radius: 0.25rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .question-text {
+        font-size: 1rem;
+        color: var(--gray-900);
+        margin-bottom: 1rem;
+    }
+
+    .question-options {
+        list-style: none;
+        padding: 0;
+        margin: 0 0 1rem 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .question-options li {
+        padding: 0.5rem 1rem;
+        background: var(--gray-50);
+        border: 1px solid var(--gray-200);
+        border-radius: 0.5rem;
+        font-size: 0.9375rem;
+    }
+
+    .question-options li.correct {
+        background: #e8f5e9;
+        border-color: #4caf50;
+        color: #2e7d32;
+        font-weight: 500;
+    }
+
+    .question-actions {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .btn-icon {
+        background: none;
+        border: none;
+        color: var(--gray-500);
+        cursor: pointer;
+        padding: 0.5rem;
+        border-radius: 0.25rem;
+        transition: background 0.2s, color 0.2s;
+    }
+
+    .btn-icon:hover {
+        background: var(--gray-100);
+        color: var(--gray-900);
+    }
+
+    .btn-icon.danger:hover {
+        background: #fee2e2;
+        color: #ef4444;
+    }
+
+    /* Editor Form Styles */
+    .editor-section {
+        background: var(--white);
+        border: 1px dashed var(--purple);
+        border-radius: 1rem;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+        display: none; /* hidden by default */
+    }
+
+    .editor-section.active {
+        display: block;
+        animation: fadeIn 0.3s;
+    }
+
+    .form-group {
+        margin-bottom: 1.25rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .form-group label {
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: var(--gray-700);
+    }
+
+    .form-control {
+        width: 100%;
+        max-width: 100%;
+        padding: 0.625rem 1rem;
+        border: 1px solid var(--gray-300);
+        border-radius: 0.5rem;
+        font-size: 0.9375rem;
+    }
+
+    #quill-editor {
+        height: 150px;
+        border-bottom-left-radius: 0.5rem;
+        border-bottom-right-radius: 0.5rem;
+    }
+
+    .ql-toolbar {
+        border-top-left-radius: 0.5rem;
+        border-top-right-radius: 0.5rem;
+        background: var(--gray-50);
+    }
+
+    .options-builder {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .option-row {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .add-option-btn {
+        background: none;
+        border: 1px dashed var(--gray-300);
+        color: var(--gray-600);
+        padding: 0.5rem;
+        border-radius: 0.5rem;
+        cursor: pointer;
+        margin-top: 0.5rem;
+        width: fit-content;
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+    .add-option-btn:hover {
+        background: var(--gray-50);
+        border-color: var(--purple);
+        color: var(--purple);
+    }
+
+    .image-preview {
+        max-height: 100px;
+        border-radius: 0.25rem;
+        display: none;
+        margin-top: 0.5rem;
+    }
+
+    .bottom-actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 1rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid var(--gray-200);
+    }
+</style>
+{% endblock %}
+
+{% block dashboard_content %}
+<div id="toast-container" style="position: fixed; bottom: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px;"></div>
+
+<div class="builder-container">
+    
+    <div class="header-actions" style="display:flex; justify-content:space-between; align-items:center;">
+        <div>
+            <h3 style="margin:0; font-size:1.2rem;">Questions (<span id="questionCount">0</span>)</h3>
+            <p style="margin:0; font-size:0.875rem; color:var(--gray-500);">Drafts are saved locally until you publish.</p>
+        </div>
+        <button class="btn-primary" onclick="openEditor()">
+            <i data-lucide="plus"></i> Add Question
+        </button>
+    </div>
+
+    <!-- Questions List (Sortable) -->
+    <div class="questions-list" id="questionsList">
+        <!-- Rendered via JS -->
+    </div>
+
+    <!-- Editor Section -->
+    <div class="editor-section" id="editorSection">
+        <h3 id="editorTitle" style="margin-top:0; border-bottom:1px solid var(--gray-200); padding-bottom:0.5rem;">Add New Question</h3>
+        <input type="hidden" id="editingId" value="">
+        
+        <div class="form-group">
+            <label>Question Type</label>
+            <select id="qType" class="form-control" onchange="toggleTypeSpecifics()" style="max-width: 250px;">
+                <option value="mcq">Multiple Choice</option>
+                <option value="essay">Essay / Free Text</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>Question Text (Supports Math Formulas via 'fx' button)</label>
+            <div id="quill-toolbar">
+                <span class="ql-formats">
+                    <button class="ql-bold"></button>
+                    <button class="ql-italic"></button>
+                    <button class="ql-underline"></button>
+                </span>
+                <span class="ql-formats">
+                    <button class="ql-script" value="sub"></button>
+                    <button class="ql-script" value="super"></button>
+                </span>
+                <span class="ql-formats">
+                    <button class="ql-formula"></button>
+                </span>
+                <span class="ql-formats">
+                    <button class="ql-clean"></button>
+                </span>
+            </div>
+            <div id="quill-editor"></div>
+        </div>
+
+        <div class="form-group">
+            <label>Attach Image (Optional)</label>
+            <input type="file" id="qImage" accept="image/*" class="form-control" onchange="handleImageSelect(event)">
+            <input type="hidden" id="qImageUrl" value="">
+            <img id="imagePreview" class="image-preview" src="">
+            <button type="button" class="btn-secondary" id="uploadBtn" style="display:none; margin-top:0.5rem;" onclick="uploadImage()">Upload Image</button>
+            <small id="uploadStatus" style="color:var(--gray-500); display:block; margin-top:0.25rem;"></small>
+        </div>
+
+        <div class="form-group" id="mcqOptionsGroup">
+            <label>Options (Select the correct one)</label>
+            <div class="options-builder" id="optionsBuilder">
+                <!-- JS populated -->
+            </div>
+            <button class="add-option-btn" onclick="addOptionRow()"><i data-lucide="plus" style="width:14px;height:14px;"></i> Add Option</button>
+        </div>
+
+        <div class="form-group">
+            <label>Marks / Points</label>
+            <input type="number" id="qMarks" class="form-control" value="1" min="1" style="max-width: 100px;">
+        </div>
+
+        <div style="display:flex; justify-content:flex-end; gap:1rem; margin-top:1.5rem;">
+            <button class="btn-secondary" onclick="closeEditor()">Cancel</button>
+            <button class="btn-primary" onclick="saveQuestion()">Save Question</button>
+        </div>
+    </div>
+
+    <!-- Bottom Publish Action -->
+    <div class="bottom-actions">
+        <a href="{{ url_for('dashboard.exam_details', slug=exam.slug) }}" class="btn-secondary" style="text-decoration:none;"><i data-lucide="arrow-left"></i> Back to Details</a>
+        <button class="btn-primary" style="background:var(--success); border-color:var(--success);" onclick="publishExam()" id="publishBtn">
+            <i data-lucide="upload-cloud"></i> Publish Exam Updates
+        </button>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block dashboard_js %}
+<script>
+    const examId = "{{ exam._id }}";
+    const dbQuestions = {{ exam.questions | tojson | safe if exam.questions else '[]' }};
+    const storageKey = `exam_draft_${examId}`;
+    
+    let questions = [];
+    let quill;
+    let selectedImageFile = null;
+
+    document.addEventListener('DOMContentLoaded', () => {
+        // Init Quill with Formula
+        quill = new Quill('#quill-editor', {
+            modules: {
+                formula: true,
+                toolbar: '#quill-toolbar'
+            },
+            theme: 'snow'
+        });
+
+        // Load state
+        loadQuestions();
+        renderQuestions();
+
+        // Init Sortable
+        new Sortable(document.getElementById('questionsList'), {
+            handle: '.drag-handle',
+            animation: 150,
+            onEnd: function () {
+                // Reorder array based on DOM
+                const items = document.querySelectorAll('.question-card');
+                const newOrder = [];
+                items.forEach(item => {
+                    const id = item.getAttribute('data-id');
+                    const q = questions.find(q => q._id === id);
+                    if(q) newOrder.push(q);
+                });
+                questions = newOrder;
+                saveToStorage();
+            }
+        });
+    });
+
+    function loadQuestions() {
+        const localData = localStorage.getItem(storageKey);
+        if (localData) {
+            questions = JSON.parse(localData);
+        } else {
+            // If local storage is empty, use DB questions
+            questions = dbQuestions;
+            saveToStorage();
+        }
+    }
+
+    function saveToStorage() {
+        localStorage.setItem(storageKey, JSON.stringify(questions));
+        document.getElementById('questionCount').innerText = questions.length;
+    }
+
+    function generateId() {
+        return Math.random().toString(36).substr(2, 9);
+    }
+
+    function showToast(message, type = 'error') {
+        const container = document.getElementById('toast-container');
+        if (!container) return;
+        
+        const toast = document.createElement('div');
+        toast.style.background = type === 'error' ? 'var(--danger, #ef4444)' : 'var(--success, #22c55e)';
+        toast.style.color = 'white';
+        toast.style.padding = '12px 20px';
+        toast.style.borderRadius = '8px';
+        toast.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+        toast.style.fontSize = '0.9375em';
+        toast.style.animation = 'fadeIn 0.3s ease';
+        toast.style.display = 'flex';
+        toast.style.alignItems = 'center';
+        toast.style.gap = '8px';
+        
+        const icon = type === 'error' ? '<i data-lucide="alert-circle"></i>' : '<i data-lucide="check-circle"></i>';
+        toast.innerHTML = `${icon} <span>${message}</span>`;
+        
+        container.appendChild(toast);
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transition = 'opacity 0.3s ease';
+            setTimeout(() => toast.remove(), 300);
+        }, 4000);
+    }
+
+    function openEditor(qId = null) {
+        document.getElementById('editorSection').classList.add('active');
+        document.getElementById('editorTitle').innerText = qId ? 'Edit Question' : 'Add New Question';
+        
+        if (qId) {
+            const q = questions.find(x => x._id === qId);
+            document.getElementById('editingId').value = q._id;
+            document.getElementById('qType').value = q.type;
+            quill.root.innerHTML = q.text;
+            document.getElementById('qMarks').value = q.marks || 1;
+            
+            // Image
+            document.getElementById('qImageUrl').value = q.image_url || '';
+            const preview = document.getElementById('imagePreview');
+            if (q.image_url) {
+                preview.src = q.image_url;
+                preview.style.display = 'block';
+            } else {
+                preview.src = '';
+                preview.style.display = 'none';
+            }
+            
+            toggleTypeSpecifics();
+            
+            if(q.type === 'mcq') {
+                const builder = document.getElementById('optionsBuilder');
+                builder.innerHTML = '';
+                q.options.forEach((opt, idx) => {
+                    addOptionRow(opt.text, opt.is_correct);
+                });
+            }
+        } else {
+            // Reset
+            document.getElementById('editingId').value = '';
+            document.getElementById('qType').value = 'mcq';
+            quill.root.innerHTML = '';
+            document.getElementById('qMarks').value = 1;
+            document.getElementById('qImageUrl').value = '';
+            document.getElementById('qImage').value = '';
+            document.getElementById('imagePreview').style.display = 'none';
+            document.getElementById('uploadBtn').style.display = 'none';
+            document.getElementById('uploadStatus').innerText = '';
+            selectedImageFile = null;
+            
+            toggleTypeSpecifics();
+            const builder = document.getElementById('optionsBuilder');
+            builder.innerHTML = '';
+            addOptionRow('Option 1', true);
+            addOptionRow('Option 2', false);
+        }
+        
+        window.scrollTo({
+            top: document.getElementById('editorSection').offsetTop - 50,
+            behavior: 'smooth'
+        });
+    }
+
+    function closeEditor() {
+        document.getElementById('editorSection').classList.remove('active');
+    }
+
+    function toggleTypeSpecifics() {
+        const type = document.getElementById('qType').value;
+        if(type === 'mcq') {
+            document.getElementById('mcqOptionsGroup').style.display = 'flex';
+        } else {
+            document.getElementById('mcqOptionsGroup').style.display = 'none';
+        }
+    }
+
+    function addOptionRow(text = '', isCorrect = false) {
+        const builder = document.getElementById('optionsBuilder');
+        const id = 'opt_' + generateId();
+        
+        const row = document.createElement('div');
+        row.className = 'option-row';
+        row.innerHTML = `
+            <input type="radio" name="correct_option" value="${id}" ${isCorrect ? 'checked' : ''} style="accent-color: var(--purple); width: 1.2rem; height: 1.2rem;">
+            <input type="text" class="form-control option-text" data-id="${id}" value="${text}" placeholder="Option text" required>
+            <button class="btn-icon danger" type="button" onclick="this.parentElement.remove()"><i data-lucide="trash-2"></i></button>
+        `;
+        builder.appendChild(row);
+        lucide.createIcons();
+    }
+
+    function handleImageSelect(event) {
+        const file = event.target.files[0];
+        if(!file) return;
+        selectedImageFile = file;
+        
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const preview = document.getElementById('imagePreview');
+            preview.src = e.target.result;
+            preview.style.display = 'block';
+            document.getElementById('uploadBtn').style.display = 'inline-block';
+            document.getElementById('uploadStatus').innerText = 'Ready to upload.';
+        }
+        reader.readAsDataURL(file);
+    }
+
+    async function uploadImage() {
+        if(!selectedImageFile) return;
+        
+        const btn = document.getElementById('uploadBtn');
+        const status = document.getElementById('uploadStatus');
+        btn.disabled = true;
+        btn.innerText = 'Uploading...';
+        
+        try {
+            // 1. Get Signature and limit check from backend
+            const sigRes = await fetch('/api/media/cloudinary-signature');
+            const sigData = await sigRes.json();
+            
+            if(!sigRes.ok) {
+                throw new Error(sigData.error || "Failed to get signature");
+            }
+
+            // 2. Upload to Cloudinary
+            const formData = new FormData();
+            formData.append("file", selectedImageFile);
+            formData.append("api_key", sigData.api_key);
+            formData.append("timestamp", sigData.timestamp);
+            formData.append("signature", sigData.signature);
+            
+            const cloudRes = await fetch(`https://api.cloudinary.com/v1_1/${sigData.cloud_name}/image/upload`, {
+                method: "POST",
+                body: formData
+            });
+            const cloudData = await cloudRes.json();
+            
+            if(cloudData.secure_url) {
+                document.getElementById('qImageUrl').value = cloudData.secure_url;
+                status.innerText = "Upload successful!";
+                status.style.color = "var(--success)";
+                btn.style.display = 'none';
+                
+                // 3. Track upload in backend
+                fetch('/api/media/track-upload', { method: 'POST' });
+            } else {
+                throw new Error("Upload failed to return URL");
+            }
+        } catch(err) {
+            status.innerText = "Error: " + err.message;
+            status.style.color = "var(--danger)";
+            btn.disabled = false;
+            btn.innerText = 'Retry Upload';
+            if(err.message.includes('limit reached')) {
+                showToast(err.message, 'error');
+            }
+        }
+    }
+
+    function saveQuestion() {
+        const id = document.getElementById('editingId').value || generateId();
+        const type = document.getElementById('qType').value;
+        const text = quill.root.innerHTML;
+        const marks = parseFloat(document.getElementById('qMarks').value) || 1;
+        const imageUrl = document.getElementById('qImageUrl').value;
+        
+        if(quill.getText().trim().length === 0 && !imageUrl) {
+            showToast("Question text or image is required.");
+            return;
+        }
+
+        // If there's an un-uploaded image, warn them.
+        if(selectedImageFile && !imageUrl) {
+            showToast("You have selected an image but haven't uploaded it yet.");
+            return;
+        }
+
+        let options = [];
+        if(type === 'mcq') {
+            const rows = document.querySelectorAll('.option-row');
+            if(rows.length < 2) {
+                showToast("MCQ must have at least 2 options.");
+                return;
+            }
+            
+            let hasCorrect = false;
+            rows.forEach(row => {
+                const radio = row.querySelector('input[type="radio"]');
+                const input = row.querySelector('input[type="text"]');
+                options.push({
+                    id: radio.value,
+                    text: input.value,
+                    is_correct: radio.checked
+                });
+                if(radio.checked) hasCorrect = true;
+            });
+            
+            if(!hasCorrect) {
+                showToast("Please select one correct option.");
+                return;
+            }
+        }
+
+        const question = {
+            _id: id,
+            type: type,
+            text: text,
+            image_url: imageUrl,
+            marks: marks,
+            options: options
+        };
+
+        const existingIdx = questions.findIndex(q => q._id === id);
+        if(existingIdx >= 0) {
+            questions[existingIdx] = question;
+        } else {
+            questions.push(question);
+        }
+
+        saveToStorage();
+        renderQuestions();
+        closeEditor();
+    }
+
+    function deleteQuestion(id) {
+        if(confirm("Delete this question?")) {
+            questions = questions.filter(q => q._id !== id);
+            saveToStorage();
+            renderQuestions();
+        }
+    }
+
+    function renderQuestions() {
+        const list = document.getElementById('questionsList');
+        list.innerHTML = '';
+        
+        document.getElementById('questionCount').innerText = questions.length;
+        
+        if(questions.length === 0) {
+            list.innerHTML = '<p style="color:var(--gray-500); text-align:center;">No questions added yet. Click "Add Question" above.</p>';
+            return;
+        }
+
+        questions.forEach((q, index) => {
+            const card = document.createElement('div');
+            card.className = 'question-card';
+            card.setAttribute('data-id', q._id);
+            
+            let optionsHtml = '';
+            if(q.type === 'mcq') {
+                optionsHtml = '<ul class="question-options">';
+                q.options.forEach(opt => {
+                    optionsHtml += `<li class="${opt.is_correct ? 'correct' : ''}">${opt.text} ${opt.is_correct ? '<i data-lucide="check" style="width:14px;height:14px;vertical-align:middle;"></i>' : ''}</li>`;
+                });
+                optionsHtml += '</ul>';
+            }
+
+            let imgHtml = q.image_url ? `<img src="${q.image_url}" style="max-height:100px; display:block; margin-bottom:1rem; border-radius:4px;">` : '';
+
+            card.innerHTML = `
+                <div class="drag-handle" title="Drag to reorder"><i data-lucide="grip-vertical"></i></div>
+                <div class="question-content">
+                    <div class="question-header">
+                        <div style="display:flex; align-items:center; gap:0.5rem;">
+                            <strong style="color:var(--gray-500);">Q${index + 1}.</strong>
+                            <span class="question-type-badge">${q.type === 'mcq' ? 'Multiple Choice' : 'Essay'}</span>
+                            <span style="font-size:0.875rem; color:var(--gray-500);">${q.marks} marks</span>
+                        </div>
+                        <div class="question-actions">
+                            <button class="btn-icon" onclick="openEditor('${q._id}')" title="Edit"><i data-lucide="edit-2" style="width:16px;height:16px;"></i></button>
+                            <button class="btn-icon danger" onclick="deleteQuestion('${q._id}')" title="Delete"><i data-lucide="trash-2" style="width:16px;height:16px;"></i></button>
+                        </div>
+                    </div>
+                    <div class="question-text">${q.text}</div>
+                    ${imgHtml}
+                    ${optionsHtml}
+                </div>
+            `;
+            list.appendChild(card);
+        });
+        
+        lucide.createIcons();
+    }
+
+    async function publishExam() {
+        const btn = document.getElementById('publishBtn');
+        btn.disabled = true;
+        btn.innerHTML = 'Publishing...';
+
+        try {
+            const res = await fetch(`/api/exams/${examId}/questions`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ questions: questions })
+            });
+            const data = await res.json();
+            
+            if(res.ok && data.success) {
+                showToast("Questions published successfully!", "success");
+                // Clear local storage since it's synced
+                localStorage.removeItem(storageKey);
+                setTimeout(() => {
+                    window.location.href = "{{ url_for('dashboard.exam_details', slug=exam.slug) }}";
+                }, 1000);
+            } else {
+                throw new Error(data.error || "Unknown error");
+            }
+        } catch(err) {
+            showToast("Failed to publish: " + err.message);
+            btn.disabled = false;
+            btn.innerHTML = '<i data-lucide="upload-cloud"></i> Publish Exam Updates';
+        }
+    }
+</script>
+{% endblock %}

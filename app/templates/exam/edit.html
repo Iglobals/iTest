@@ -1,0 +1,291 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Edit Exam{% endblock %}
+{% block page_title %}Edit Exam: {{ exam.title }}{% endblock %}
+{% block page_subtitle %}Update your exam configuration and audience.{% endblock %}
+
+{% block dashboard_head %}
+<style>
+    /* Reuse identical CSS from create.html */
+    .wizard-progress { 
+        display: flex; 
+        justify-content: space-between; 
+        margin-bottom: clamp(1.5rem, 3vw, 2.5rem); 
+        position: relative; 
+        max-width: 600px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    .wizard-progress::before { 
+        content: ''; position: absolute; top: 50%; left: 0; width: 100%; height: 2px; 
+        background: var(--gray-200); z-index: 1; transform: translateY(-50%); 
+    }
+    .wizard-step-marker { 
+        width: clamp(30px, 4vw, 40px); height: clamp(30px, 4vw, 40px); 
+        border-radius: 50%; background: var(--white); border: 2px solid var(--gray-300); 
+        color: var(--gray-500); display: flex; align-items: center; justify-content: center; 
+        font-weight: 600; font-size: clamp(0.875rem, 1.5vw, 1.1rem);
+        position: relative; z-index: 2; transition: all 0.3s; 
+    }
+    .wizard-step-marker.active { border-color: var(--purple); background: var(--purple); color: var(--white); }
+    .wizard-step-marker.completed { border-color: var(--success); background: var(--success); color: var(--white); }
+
+    .step-container { display: none; animation: fadeIn 0.4s; }
+    .step-container.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+    .form-section {
+        background: var(--white); border: 1px solid var(--gray-200);
+        border-radius: 1em; padding: clamp(1.25em, 3vw, 2em); margin-bottom: clamp(1rem, 3vw, 1.5rem);
+    }
+    .form-section h3 {
+        font-size: 1.1em; font-weight: 600; color: var(--gray-900);
+        margin-top: 0; margin-bottom: 1.25em; border-bottom: 1px solid var(--gray-100); padding-bottom: 0.5em;
+    }
+
+    .form-grid {
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); gap: clamp(1rem, 2vw, 1.5rem);
+    }
+    .form-group { display: flex; flex-direction: column; gap: 0.5em; }
+    .form-group label { font-size: 0.875em; font-weight: 500; color: var(--gray-700); }
+    .form-control {
+        width: 100%; max-width: 100%; box-sizing: border-box; padding: 0.625em 0.875em;
+        border: 1px solid var(--gray-300); border-radius: 0.5em; font-family: inherit;
+        font-size: 0.9375em; transition: border-color 0.2s;
+    }
+    .form-control:focus { outline: none; border-color: var(--purple); }
+
+    .form-row { display: flex; align-items: center; gap: 0.75em; margin-bottom: 0.5em; }
+    .form-row input[type="checkbox"] { width: 1.25em; height: 1.25em; accent-color: var(--purple); cursor: pointer; }
+    .form-row label { font-size: 0.9375em; color: var(--gray-800); cursor: pointer; }
+
+    .btn-action {
+        padding: 0.75em 1.5em; border-radius: 0.5em; font-weight: 600; font-size: 0.9375em;
+        cursor: pointer; display: inline-flex; align-items: center; gap: 0.5em;
+        border: none; transition: opacity 0.2s;
+    }
+    .btn-next { background: var(--purple); color: white; }
+    .btn-prev { background: var(--gray-200); color: var(--gray-700); }
+    .btn-submit { background: var(--success); color: white; }
+    .btn-action:hover { opacity: 0.85; }
+    .wizard-nav { display: flex; justify-content: space-between; margin-top: 2em; }
+</style>
+{% endblock %}
+
+{% block dashboard_content %}
+<div class="dashboard-body" style="grid-template-columns: 1fr;">
+    <div class="wizard-progress">
+        <div class="wizard-step-marker active" id="marker-1">1</div>
+        <div class="wizard-step-marker" id="marker-2">2</div>
+        <div class="wizard-step-marker" id="marker-3">3</div>
+    </div>
+
+    <form id="editExamForm" onsubmit="event.preventDefault(); submitExam();">
+        <input type="hidden" id="exam_id" value="{{ exam._id }}">
+        
+        <!-- Step 1 -->
+        <div class="step-container active" id="step-1">
+            <div class="form-section">
+                <h3>Basic Information</h3>
+                <div class="form-group" style="margin-bottom: 1.25em;">
+                    <label>Exam Title *</label>
+                    <input type="text" id="title" class="form-control" required value="{{ exam.title }}">
+                </div>
+                <div class="form-group" style="margin-bottom: 1.25em;">
+                    <label>Description</label>
+                    <textarea id="description" class="form-control" rows="3">{{ exam.description }}</textarea>
+                </div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Exam Type</label>
+                        <select id="exam_type" class="form-control" onchange="toggleVisibilityFields()">
+                            <option value="private" {% if exam.exam_type == 'private' %}selected{% endif %}>Private</option>
+                            <option value="public" {% if exam.exam_type == 'public' %}selected{% endif %}>Public</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="wizard-nav" style="justify-content: flex-end;">
+                <button type="button" class="btn-action btn-next" onclick="nextStep(1)">Next <i data-lucide="arrow-right"></i></button>
+            </div>
+        </div>
+
+        <!-- Step 2 -->
+        <div class="step-container" id="step-2">
+            <div class="form-section">
+                <h3>Exam Settings</h3>
+                <div class="form-grid" style="margin-bottom: 1.5em;">
+                    <div class="form-group">
+                        <label>Duration (minutes) *</label>
+                        <input type="number" id="duration" class="form-control" value="{{ exam.settings.duration_minutes }}" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Pass Mark (%)</label>
+                        <input type="number" id="pass_mark" class="form-control" value="{{ exam.settings.pass_mark_percent or 50 }}">
+                    </div>
+                    <div class="form-group">
+                        <label>Max Attempts</label>
+                        <input type="number" id="max_attempts" class="form-control" value="{{ exam.settings.max_attempts or 1 }}">
+                    </div>
+                </div>
+                <div class="form-grid">
+                    <div>
+                        <div class="form-row">
+                            <input type="checkbox" id="randomize_questions" {% if exam.settings.randomize_questions %}checked{% endif %}>
+                            <label for="randomize_questions">Randomize Questions</label>
+                        </div>
+                        <div class="form-row">
+                            <input type="checkbox" id="show_result_immediately" {% if exam.settings.show_result_immediately %}checked{% endif %}>
+                            <label for="show_result_immediately">Show Instant Results</label>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="form-row">
+                            <input type="checkbox" id="allow_retake" {% if exam.settings.allow_retake %}checked{% endif %}>
+                            <label for="allow_retake">Allow Retake</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="wizard-nav">
+                <button type="button" class="btn-action btn-prev" onclick="prevStep(2)"><i data-lucide="arrow-left"></i> Back</button>
+                <button type="button" class="btn-action btn-next" onclick="nextStep(2)">Next <i data-lucide="arrow-right"></i></button>
+            </div>
+        </div>
+
+        <!-- Step 3 -->
+        <div class="step-container" id="step-3">
+            <div class="form-section" id="visibility-section" {% if exam.exam_type == 'public' %}style="display:none;"{% endif %}>
+                <h3>Assign Audience</h3>
+                <div class="form-group" style="margin-bottom: 1.25em;">
+                    <label>Assign to Classes (Hold CTRL to select multiple)</label>
+                    <select id="class_ids" class="form-control" multiple style="height: auto; min-height: 80px;">
+                        <option value="class1" selected>Class A - Physics</option>
+                        <!-- Dynamic population needed -->
+                    </select>
+                </div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Include Specific Emails (comma separated)</label>
+                        <textarea id="included_emails" class="form-control" rows="2">{{ (exam.visibility.student_emails or []) | join(', ') }}</textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Exclude Specific Emails</label>
+                        <textarea id="excluded_emails" class="form-control" rows="2">{{ (exam.visibility.excluded_student_emails or []) | join(', ') }}</textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h3>Availability Schedule</h3>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Available From</label>
+                        <input type="datetime-local" id="available_from" class="form-control" value="{{ exam.schedule.available_from if exam.schedule.available_from else '' }}">
+                    </div>
+                    <div class="form-group">
+                        <label>Available Until</label>
+                        <input type="datetime-local" id="available_until" class="form-control" value="{{ exam.schedule.available_until if exam.schedule.available_until else '' }}">
+                    </div>
+                </div>
+            </div>
+
+            <div class="wizard-nav">
+                <button type="button" class="btn-action btn-prev" onclick="prevStep(3)"><i data-lucide="arrow-left"></i> Back</button>
+                <button type="submit" class="btn-action btn-submit" id="submitBtn"><i data-lucide="save"></i> Save Changes</button>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block dashboard_js %}
+<script>
+    function toggleVisibilityFields() {
+        const type = document.getElementById('exam_type').value;
+        const visSection = document.getElementById('visibility-section');
+        visSection.style.display = type === 'public' ? 'none' : 'block';
+    }
+
+    function nextStep(current) {
+        if (current === 1 && !document.getElementById('title').value) {
+            alert('Please enter an exam title.'); return;
+        }
+        document.getElementById('step-' + current).classList.remove('active');
+        document.getElementById('step-' + (current + 1)).classList.add('active');
+        document.getElementById('marker-' + current).classList.remove('active');
+        document.getElementById('marker-' + current).classList.add('completed');
+        document.getElementById('marker-' + (current + 1)).classList.add('active');
+        window.scrollTo(0,0);
+    }
+    
+    function prevStep(current) {
+        document.getElementById('step-' + current).classList.remove('active');
+        document.getElementById('step-' + (current - 1)).classList.add('active');
+        document.getElementById('marker-' + current).classList.remove('active');
+        document.getElementById('marker-' + (current - 1)).classList.remove('completed');
+        document.getElementById('marker-' + (current - 1)).classList.add('active');
+        window.scrollTo(0,0);
+    }
+
+    async function submitExam() {
+        const btn = document.getElementById('submitBtn');
+        btn.disabled = true;
+        btn.innerHTML = 'Saving...';
+        
+        const examId = document.getElementById('exam_id').value;
+        const examType = document.getElementById('exam_type').value;
+        const incEmails = document.getElementById('included_emails').value.split(',').map(e => e.trim()).filter(e => e);
+        const excEmails = document.getElementById('excluded_emails').value.split(',').map(e => e.trim()).filter(e => e);
+        const classSelect = document.getElementById('class_ids');
+        const classIds = Array.from(classSelect.selectedOptions).map(opt => opt.value);
+
+        const payload = {
+            title: document.getElementById('title').value,
+            description: document.getElementById('description').value,
+            exam_type: examType,
+            visibility: {
+                type: examType === 'public' ? 'public' : 'private',
+                class_ids: classIds,
+                student_emails: incEmails,
+                excluded_student_emails: excEmails
+            },
+            settings: {
+                duration_minutes: parseInt(document.getElementById('duration').value) || 60,
+                allow_retake: document.getElementById('allow_retake').checked,
+                max_attempts: parseInt(document.getElementById('max_attempts').value) || 1,
+                randomize_questions: document.getElementById('randomize_questions').checked,
+                show_result_immediately: document.getElementById('show_result_immediately').checked,
+                pass_mark_percent: parseInt(document.getElementById('pass_mark').value) || 50
+            },
+            schedule: {
+                available_from: document.getElementById('available_from').value || null,
+                available_until: document.getElementById('available_until').value || null
+            }
+        };
+
+        try {
+            const res = await fetch(`/api/exams/${examId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const result = await res.json();
+            
+            if (res.ok && result.success) {
+                alert('Exam updated successfully!');
+                window.location.href = '/dashboard';
+            } else {
+                alert('Failed to update exam: ' + (result.error || 'Unknown error'));
+            }
+        } catch (e) {
+            console.error(e);
+            alert('A network error occurred.');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i data-lucide="save"></i> Save Changes';
+        }
+    }
+</script>
+{% endblock %}

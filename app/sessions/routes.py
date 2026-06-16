@@ -29,14 +29,16 @@ def start_session():
     student_id = g.current_user["_id"]
     
     # Check max attempts
+    allow_retake = exam.get("settings", {}).get("allow_retake", False)
     max_attempts = exam.get("settings", {}).get("max_attempts", 1)
+    
     previous_attempts = sessions_col.count_documents({
         "exam_id": ObjectId(exam_id),
         "student_id": student_id,
         "status": {"$in": ["submitted", "timed_out"]}
     })
     
-    if previous_attempts >= max_attempts:
+    if not allow_retake and previous_attempts >= max_attempts:
         return jsonify({"error": f"Max attempts ({max_attempts}) reached"}), 403
         
     # Check if there is already an in_progress session

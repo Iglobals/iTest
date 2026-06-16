@@ -74,24 +74,26 @@
             <div class="section-header">
                 <h2>Recent Exams</h2>
                 {% if exams %}
-                <a href="#" class="view-all">View all</a>
+                <a href="{{ url_for('dashboard.manage_exams') }}" class="view-all">View all</a>
                 {% endif %}
             </div>
             {% if exams %}
             <div class="exam-list">
                 {% for exam in exams %}
-                <div class="exam-item">
-                    <div class="exam-icon">
-                        <i data-lucide="file-text"></i>
+                <a href="{{ url_for('dashboard.exam_details', slug=exam.slug or exam._id) }}" style="text-decoration: none; color: inherit;">
+                    <div class="exam-item">
+                        <div class="exam-icon">
+                            <i data-lucide="file-text"></i>
+                        </div>
+                        <div class="exam-details">
+                            <h4>{{ exam.title }}</h4>
+                            <p>Created: {{ exam.created_at.strftime('%b %d, %Y') if exam.created_at else 'N/A' }}</p>
+                        </div>
+                        <div class="exam-meta">
+                            <span class="status-badge {{ exam.status if exam.status else 'draft' }}">{{ exam.status | capitalize if exam.status else 'Draft' }}</span>
+                        </div>
                     </div>
-                    <div class="exam-details">
-                        <h4>{{ exam.title }}</h4>
-                        <p>Created: {{ exam.created_at.strftime('%b %d, %Y') if exam.created_at else 'N/A' }}</p>
-                    </div>
-                    <div class="exam-meta">
-                        <span class="status-badge {{ exam.status if exam.status else 'draft' }}">{{ exam.status | capitalize if exam.status else 'Draft' }}</span>
-                    </div>
-                </div>
+                </a>
                 {% endfor %}
             </div>
             {% else %}

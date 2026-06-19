@@ -30,7 +30,8 @@
             <div class="hero-yellow-circle"></div>
             <div class="hero-dots"></div>
             <div class="hero-person">
-                <img src="https://res.cloudinary.com/dicut7e2y/image/upload/v1781626476/dashboard1_zov2he.png" alt="Teacher">
+                <img src="https://res.cloudinary.com/dicut7e2y/image/upload/v1781626476/dashboard1_zov2he.png"
+                    alt="Teacher">
             </div>
         </div>
 
@@ -54,7 +55,8 @@
                         <p>{{ cls.students | length }} Students Enrolled</p>
                     </div>
                     <div class="exam-meta">
-                        <button class="btn-secondary" style="width:auto;height:auto;padding:0.4em 0.8em;font-size:0.75em;border:1px solid var(--gray-300);">Manage</button>
+                        <a href="{{ url_for('dashboard.manage_class', class_id=cls._id) }}" class="btn-secondary"
+                            style="width:auto;height:auto;padding:0.4em 0.8em;font-size:0.75em;border:1px solid var(--gray-300);text-decoration:none;">Manage</a>
                     </div>
                 </div>
                 {% endfor %}
@@ -64,11 +66,13 @@
                 <i data-lucide="users"></i>
                 <h3>No Classes Yet</h3>
                 <p>Create your first class to start adding students and exams.</p>
-                <button class="btn-primary" style="margin: 1em auto 0; width: auto; padding: 0.5em 1.5em; height: auto;">Create Class</button>
+                <a href="{{ url_for('dashboard.create_class_page') }}" class="btn-primary"
+                    style="margin: 1em auto 0; width: clamp(140px, 40%, 200px); padding: 0.5em 1.5em; height: auto; text-decoration: none; white-space: nowrap; font-size: clamp(0.75rem, 2.5vw, 1rem);">Create
+                    Class</a>
             </div>
             {% endif %}
         </div>
-        
+
         <!-- Recent Exams -->
         <div class="section-card">
             <div class="section-header">
@@ -80,7 +84,8 @@
             {% if exams %}
             <div class="exam-list">
                 {% for exam in exams %}
-                <a href="{{ url_for('dashboard.exam_details', slug=exam.slug or exam._id) }}" style="text-decoration: none; color: inherit;">
+                <a href="{{ url_for('dashboard.exam_details', slug=exam.slug or exam._id) }}"
+                    style="text-decoration: none; color: inherit;">
                     <div class="exam-item">
                         <div class="exam-icon">
                             <i data-lucide="file-text"></i>
@@ -90,7 +95,8 @@
                             <p>Created: {{ exam.created_at.strftime('%b %d, %Y') if exam.created_at else 'N/A' }}</p>
                         </div>
                         <div class="exam-meta">
-                            <span class="status-badge {{ exam.status if exam.status else 'draft' }}">{{ exam.status | capitalize if exam.status else 'Draft' }}</span>
+                            <span class="status-badge {{ exam.status if exam.status else 'draft' }}">{{ exam.status |
+                                capitalize if exam.status else 'Draft' }}</span>
                         </div>
                     </div>
                 </a>
@@ -113,7 +119,7 @@
         <!-- Overview Stats -->
         <div class="overview-card">
             <h3>Overview</h3>
-            
+
             <div class="overview-stat">
                 <div class="overview-stat-icon" style="background:var(--purple-bg);color:var(--purple);">
                     <i data-lucide="users"></i>
@@ -123,7 +129,7 @@
                     <p>My Classes</p>
                 </div>
             </div>
-            
+
             <div class="overview-stat">
                 <div class="overview-stat-icon" style="background:var(--success-bg);color:var(--success);">
                     <i data-lucide="file-text"></i>
@@ -133,7 +139,7 @@
                     <p>Active Exams</p>
                 </div>
             </div>
-            
+
             <div class="overview-stat">
                 <div class="overview-stat-icon" style="background:#fef3c7;color:#d97706;">
                     <i data-lucide="check-square"></i>

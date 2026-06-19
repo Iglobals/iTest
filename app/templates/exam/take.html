@@ -13,136 +13,362 @@
         --gray-800: #1e293b;
         --gray-900: #0f172a;
         --gold: #eab308;
+        --white: #ffffff;
     }
+
     /* Distraction-free baseline */
-    body { margin: 0; padding: 0; background: var(--gray-50); font-family: -apple-system, sans-serif; overflow-x: hidden; }
-    
+    body {
+        margin: 0;
+        padding: 0;
+        background: var(--gray-50);
+        font-family: -apple-system, sans-serif;
+        overflow-x: hidden;
+    }
+
     /* Prevent text selection and disable right-click where needed */
     .unselectable {
-        -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none;
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
     }
 
     /* Top Navigation bar specifically for Exam */
     .exam-header {
-        display: flex; justify-content: space-between; align-items: center;
-        background: var(--white); padding: clamp(0.75rem, 2vw, 1rem) clamp(1rem, 3vw, 2rem);
-        border-bottom: 1px solid var(--gray-200); position: sticky; top: 0; z-index: 100;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: var(--white);
+        padding: clamp(0.75rem, 2vw, 1rem) clamp(1rem, 3vw, 2rem);
+        border-bottom: 1px solid var(--gray-200);
+        position: sticky;
+        top: 0;
+        z-index: 100;
     }
 
-    .exam-title h2 { margin: 0; font-size: clamp(1.1rem, 2vw, 1.5rem); color: var(--gray-900); }
-    .exam-title p { margin: 0; font-size: 0.85rem; color: var(--gray-500); }
+    .exam-title h2 {
+        margin: 0;
+        font-size: clamp(1.1rem, 2vw, 1.5rem);
+        color: var(--gray-900);
+    }
+
+    .exam-title p {
+        margin: 0;
+        font-size: 0.85rem;
+        color: var(--gray-500);
+    }
 
     .timer-display {
-        background: var(--gray-100); border: 2px solid var(--gray-300); padding: 0.5rem 1rem;
-        border-radius: 0.5rem; font-weight: 700; font-family: monospace; font-size: clamp(1.1rem, 2vw, 1.5rem);
+        background: var(--gray-100);
+        border: 2px solid var(--gray-300);
+        padding: 0.5rem 1rem;
+        border-radius: 0.5rem;
+        font-weight: 700;
+        font-family: monospace;
+        font-size: clamp(1.1rem, 2vw, 1.5rem);
         color: var(--gray-800);
     }
-    .timer-warning { color: var(--red) !important; border-color: var(--red) !important; animation: pulse 1s infinite; }
-    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+    .timer-warning {
+        color: var(--red) !important;
+        border-color: var(--red) !important;
+        animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+
+        0%,
+        100% {
+            opacity: 1;
+        }
+
+        50% {
+            opacity: 0.5;
+        }
+    }
 
     /* Main Layout */
     .exam-layout {
-        display: flex; gap: clamp(1rem, 2vw, 1.5rem);
+        display: flex;
+        gap: clamp(1rem, 2vw, 1.5rem);
         padding: clamp(1rem, 3vw, 2rem);
-        max-width: 1400px; margin: 0 auto;
+        max-width: 1400px;
+        margin: 0 auto;
         min-height: calc(100vh - 80px);
     }
 
     .question-area {
-        flex: 1 1 min(100%, 800px); /* Responsive Trick 2 */
-        display: flex; flex-direction: column; background: var(--white);
-        border-radius: 1rem; border: 1px solid var(--gray-200); overflow: hidden;
+        flex: 1 1 min(100%, 800px);
+        /* Responsive Trick 2 */
+        display: flex;
+        flex-direction: column;
+        background: var(--white);
+        border-radius: 1rem;
+        border: 1px solid var(--gray-200);
+        overflow: hidden;
     }
 
-    .question-scroll { flex: 1; overflow-y: auto; padding: clamp(1.5rem, 4vw, 2rem); }
+    .question-scroll {
+        flex: 1;
+        overflow-y: auto;
+        padding: clamp(1.5rem, 4vw, 2rem);
+    }
 
-    .question-container { display: none; animation: fadeIn 0.3s ease-out; }
-    .question-container.active { display: block; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .question-container {
+        display: none;
+        animation: fadeIn 0.3s ease-out;
+    }
 
-    .q-text { font-size: clamp(1.1rem, 2vw, 1.25rem); font-weight: 500; line-height: 1.6; margin-bottom: 2rem; color: var(--gray-900); }
-    
-    .image-wrapper img { max-width: 100%; border-radius: 0.5rem; margin: 1rem 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .question-container.active {
+        display: block;
+    }
+
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .q-text {
+        font-size: clamp(1.1rem, 2vw, 1.25rem);
+        font-weight: 500;
+        line-height: 1.6;
+        margin-bottom: 2rem;
+        color: var(--gray-900);
+    }
+
+    .image-wrapper img {
+        max-width: 100%;
+        border-radius: 0.5rem;
+        margin: 1rem 0;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
 
     .option-row {
-        display: flex; align-items: center; gap: 1rem; padding: 1rem; margin-bottom: 0.75rem;
-        border: 2px solid var(--gray-200); border-radius: 0.75rem; cursor: pointer; transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 1rem;
+        margin-bottom: 0.75rem;
+        border: 2px solid var(--gray-200);
+        border-radius: 0.75rem;
+        cursor: pointer;
+        transition: all 0.2s;
     }
-    .option-row:hover { border-color: var(--purple); background: var(--purple-bg); }
-    .option-row.selected { border-color: var(--purple); background: var(--purple-bg); }
-    .option-row input[type="radio"] { display: none; }
-    
+
+    .option-row:hover {
+        border-color: var(--purple);
+        background: var(--purple-bg);
+    }
+
+    .option-row.selected {
+        border-color: var(--purple);
+        background: var(--purple-bg);
+    }
+
+    .option-row input[type="radio"] {
+        display: none;
+    }
+
     .opt-bubble {
-        width: 32px; height: 32px; border-radius: 50%; background: var(--gray-100);
-        display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0;
-        transition: all 0.2s; color: var(--gray-600);
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: var(--gray-100);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        flex-shrink: 0;
+        transition: all 0.2s;
+        color: var(--gray-600);
     }
-    .option-row.selected .opt-bubble { background: var(--purple); color: white; }
+
+    .option-row.selected .opt-bubble {
+        background: var(--purple);
+        color: white;
+    }
 
     .essay-textarea {
-        width: 100%; min-height: 200px; padding: 1rem; border: 2px solid var(--gray-200);
-        border-radius: 0.75rem; font-family: inherit; font-size: 1rem; resize: vertical; box-sizing: border-box;
+        width: 100%;
+        min-height: 200px;
+        padding: 1rem;
+        border: 2px solid var(--gray-200);
+        border-radius: 0.75rem;
+        font-family: inherit;
+        font-size: 1rem;
+        resize: vertical;
+        box-sizing: border-box;
     }
-    .essay-textarea:focus { outline: none; border-color: var(--purple); }
+
+    .essay-textarea:focus {
+        outline: none;
+        border-color: var(--purple);
+    }
 
     .nav-bar {
-        border-top: 1px solid var(--gray-200); padding: 1rem clamp(1rem, 3vw, 2rem);
-        display: flex; justify-content: space-between; align-items: center; background: var(--gray-50);
+        border-top: 1px solid var(--gray-200);
+        padding: 1rem clamp(1rem, 3vw, 2rem);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: var(--gray-50);
     }
 
     .btn-exam {
-        padding: 0.75rem 1.5rem; border-radius: 0.5rem; font-weight: 600; cursor: pointer; border: none; transition: opacity 0.2s;
+        padding: 0.75rem 1.5rem;
+        border-radius: 0.5rem;
+        font-weight: 600;
+        cursor: pointer;
+        border: none;
+        transition: opacity 0.2s;
     }
-    .btn-prev { background: var(--gray-200); color: var(--gray-800); }
-    .btn-next { background: var(--purple); color: white; }
-    .btn-submit { background: var(--success); color: white; }
-    .btn-leave { background: transparent; color: var(--gray-600); border: 1px solid var(--gray-300); padding: 0.5rem 1rem; border-radius: 0.5rem; cursor: pointer; font-size: 0.875rem;}
-    .btn-leave:hover { background: var(--gray-100); }
+
+    .btn-prev {
+        background: var(--gray-200);
+        color: var(--gray-800);
+    }
+
+    .btn-next {
+        background: var(--purple);
+        color: white;
+    }
+
+    .btn-submit {
+        background: var(--success);
+        color: white;
+    }
+
+    .btn-leave {
+        background: transparent;
+        color: var(--gray-600);
+        border: 1px solid var(--gray-300);
+        padding: 0.5rem 1rem;
+        border-radius: 0.5rem;
+        cursor: pointer;
+        font-size: 0.875rem;
+    }
+
+    .btn-leave:hover {
+        background: var(--gray-100);
+    }
 
     /* Palette Sidebar */
     .palette-sidebar {
         flex: 0 0 clamp(250px, 30%, 350px);
-        background: var(--white); border-radius: 1rem; border: 1px solid var(--gray-200);
-        display: flex; flex-direction: column; height: fit-content;
+        background: var(--white);
+        border-radius: 1rem;
+        border: 1px solid var(--gray-200);
+        display: flex;
+        flex-direction: column;
+        height: fit-content;
     }
 
     .palette-grid {
         /* Responsive trick 1: auto-fill for palettes */
-        display: grid; grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
-        gap: 0.5rem; padding: 1rem; overflow-y: auto; max-height: 400px;
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+        gap: 0.5rem;
+        padding: 1rem;
+        overflow-y: auto;
+        max-height: 400px;
     }
 
     .p-item {
-        aspect-ratio: 1; border-radius: 0.375rem; border: 1px solid var(--gold); background: var(--gold);
-        display: flex; align-items: center; justify-content: center; font-size: 0.85rem;
-        font-weight: bold; cursor: pointer; transition: all 0.2s; color: white;
+        aspect-ratio: 1;
+        border-radius: 0.375rem;
+        border: 1px solid var(--gold);
+        background: var(--gold);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.85rem;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.2s;
+        color: white;
     }
-    .p-item:hover { filter: brightness(0.9); }
-    .p-item.current { border: 3px solid var(--gray-900); }
-    .p-item.answered { background: var(--purple); border-color: var(--purple); }
+
+    .p-item:hover {
+        filter: brightness(0.9);
+    }
+
+    .p-item.current {
+        border: 3px solid var(--gray-900);
+    }
+
+    .p-item.answered {
+        background: var(--purple);
+        border-color: var(--purple);
+    }
 
     /* Proctoring Video Box */
     .proctor-box {
-        margin: 1rem; border-radius: 0.5rem; overflow: hidden; background: #000;
-        position: relative; aspect-ratio: 16/9; display: flex; align-items: center; justify-content: center;
+        margin: 1rem;
+        border-radius: 0.5rem;
+        overflow: hidden;
+        background: #000;
+        position: relative;
+        aspect-ratio: 16/9;
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
-    .proctor-box video { width: 100%; height: 100%; object-fit: cover; }
+
+    .proctor-box video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
     .proctor-badge {
-        position: absolute; top: 0.5rem; right: 0.5rem; background: rgba(239, 68, 68, 0.9);
-        color: white; padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem; font-weight: 600;
-        display: flex; align-items: center; gap: 0.25rem;
+        position: absolute;
+        top: 0.5rem;
+        right: 0.5rem;
+        background: rgba(239, 68, 68, 0.9);
+        color: white;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
     }
 
     /* Proctoring Alert Overlay */
     .proctor-alert {
-        display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 9999;
-        flex-direction: column; align-items: center; justify-content: center; color: white;
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.9);
+        z-index: 9999;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: white;
     }
-    .proctor-alert h1 { color: #ef4444; margin-bottom: 1rem; }
+
+    .proctor-alert h1 {
+        color: #ef4444;
+        margin-bottom: 1rem;
+    }
 
     @media (max-width: 900px) {
-        .exam-layout { flex-direction: column; }
-        .palette-sidebar { flex: 1 1 auto; order: -1; }
+        .exam-layout {
+            flex-direction: column;
+        }
+
+        .palette-sidebar {
+            flex: 1 1 auto;
+            order: -1;
+        }
     }
 </style>
 <script src="https://unpkg.com/lucide@latest"></script>
@@ -174,10 +400,11 @@
         <div class="question-scroll">
             {% for q in questions %}
             <div class="question-container" id="q-{{ loop.index0 }}" data-qid="{{ q._id }}">
-                <div style="font-size: 0.85rem; color: var(--gray-500); font-weight: 700; margin-bottom: 1rem; text-transform: uppercase;">
+                <div
+                    style="font-size: 0.85rem; color: var(--gray-500); font-weight: 700; margin-bottom: 1rem; text-transform: uppercase;">
                     Question {{ loop.index }} of {{ questions|length }}
                 </div>
-                
+
                 <div class="q-text">
                     {{ q.text }}
                     {% if q.image %}
@@ -187,7 +414,8 @@
 
                 {% if q.question_type == 'essay' %}
                 <div class="options-container">
-                    <textarea class="essay-textarea" name="question_{{ q._id }}" placeholder="Type your answer here..." oninput="handleEssayInput('{{ q._id }}', this.value, '{{ loop.index0 }}')"></textarea>
+                    <textarea class="essay-textarea" name="question_{{ q._id }}" placeholder="Type your answer here..."
+                        oninput="handleEssayInput('{{ q._id }}', this.value, '{{ loop.index0 }}')"></textarea>
                 </div>
                 {% else %}
                 <div class="options-container">
@@ -198,7 +426,8 @@
                         <div style="flex: 1;">
                             {{ opt.text }}
                             {% if opt.image %}
-                            <div class="image-wrapper"><img src="{{ opt.image }}" alt="Option Image" style="max-height: 150px;"></div>
+                            <div class="image-wrapper"><img src="{{ opt.image }}" alt="Option Image"
+                                    style="max-height: 150px;"></div>
                             {% endif %}
                         </div>
                     </label>
@@ -210,12 +439,18 @@
         </div>
 
         <div class="nav-bar">
-            <button type="button" class="btn-exam btn-prev" id="btnPrev" onclick="navigate(-1)"><i data-lucide="arrow-left" style="width:16px; height:16px; vertical-align:middle;"></i> Previous</button>
+            <button type="button" class="btn-exam btn-prev" id="btnPrev" onclick="navigate(-1)"><i
+                    data-lucide="arrow-left" style="width:16px; height:16px; vertical-align:middle;"></i>
+                Previous</button>
             <div style="font-size: 0.875rem; color: var(--gray-500); font-weight: 500;">
-                <span id="syncStatus" style="display: flex; align-items: center; gap: 4px; color: var(--success);"><i data-lucide="cloud-check" style="width:16px;height:16px;"></i> Saved</span>
+                <span id="syncStatus" style="display: flex; align-items: center; gap: 4px; color: var(--success);"><i
+                        data-lucide="cloud-check" style="width:16px;height:16px;"></i> Saved</span>
             </div>
-            <button type="button" class="btn-exam btn-next" id="btnNext" onclick="navigate(1)">Next <i data-lucide="arrow-right" style="width:16px; height:16px; vertical-align:middle;"></i></button>
-            <button type="button" class="btn-exam btn-submit" id="btnSubmit" onclick="submitExam()" style="display: none;"><i data-lucide="check-circle" style="width:16px; height:16px; vertical-align:middle;"></i> Submit Exam</button>
+            <button type="button" class="btn-exam btn-next" id="btnNext" onclick="navigate(1)">Next <i
+                    data-lucide="arrow-right" style="width:16px; height:16px; vertical-align:middle;"></i></button>
+            <button type="button" class="btn-exam btn-submit" id="btnSubmit" onclick="submitExam()"
+                style="display: none;"><i data-lucide="check-circle"
+                    style="width:16px; height:16px; vertical-align:middle;"></i> Submit Exam</button>
         </div>
     </div>
 
@@ -228,15 +463,21 @@
         </div>
         {% endif %}
 
-        <div style="padding: 1rem; border-bottom: 1px solid var(--gray-200); font-weight: 600; color: var(--gray-800);">Question Palette</div>
+        <div style="padding: 1rem; border-bottom: 1px solid var(--gray-200); font-weight: 600; color: var(--gray-800);">
+            Question Palette</div>
         <div class="palette-grid" id="palette">
             {% for q in questions %}
             <div class="p-item" id="p-{{ loop.index0 }}" onclick="goTo({{ loop.index0 }})">{{ loop.index }}</div>
             {% endfor %}
         </div>
-        <div style="padding: 1rem; border-top: 1px solid var(--gray-200); font-size: 0.8rem; color: var(--gray-500); display: flex; gap: 1rem;">
-            <div style="display: flex; align-items: center; gap: 6px;"><div style="width: 12px; height: 12px; background: var(--purple); border-radius: 2px;"></div> Answered</div>
-            <div style="display: flex; align-items: center; gap: 6px;"><div style="width: 12px; height: 12px; background: var(--gold); border-radius: 2px;"></div> Unanswered</div>
+        <div
+            style="padding: 1rem; border-top: 1px solid var(--gray-200); font-size: 0.8rem; color: var(--gray-500); display: flex; gap: 1rem;">
+            <div style="display: flex; align-items: center; gap: 6px;">
+                <div style="width: 12px; height: 12px; background: var(--purple); border-radius: 2px;"></div> Answered
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px;">
+                <div style="width: 12px; height: 12px; background: var(--gold); border-radius: 2px;"></div> Unanswered
+            </div>
         </div>
     </div>
 </div>
@@ -247,10 +488,10 @@
     lucide.createIcons();
 
     const sessionId = "{{ session_id }}";
-    const totalQ = {{ questions|length }};
+    const totalQ = {{ questions| length }};
     const isProctored = {{ 'true' if exam.settings.ai_proctoring_enabled else 'false' }};
     let currentQ = 0;
-    
+
     // Check if exam is empty
     if (totalQ === 0) {
         document.querySelector('.question-area').innerHTML = `
@@ -264,11 +505,11 @@
         if (palette) palette.innerHTML = '<div style="color:var(--gray-400); text-align:center; padding: 2rem 0;">No questions</div>';
         lucide.createIcons();
     }
-    
+
     // Build empty state
-    let answersState = {}; 
+    let answersState = {};
     const LS_KEY = `exam_${sessionId}_answers`;
-    
+
     if (totalQ > 0) {
         document.querySelectorAll('.question-container').forEach(el => {
             const qid = el.getAttribute('data-qid');
@@ -280,7 +521,7 @@
     }
 
     let timeLeft = parseInt("{{ time_remaining }}") || 3600;
-    
+
     // ── Proctoring Logic ───────────────────────────────────────────────────
     if (isProctored) {
         // 1. Camera Access
@@ -315,7 +556,7 @@
     }
 
     function leaveExam() {
-        if(confirm("Your progress is saved. You can return to complete the exam later. Leave now?")) {
+        if (confirm("Your progress is saved. You can return to complete the exam later. Leave now?")) {
             window.location.href = '/dashboard';
         }
     }
@@ -334,9 +575,9 @@
         timeLeft--;
         const display = document.getElementById('timerDisplay');
         display.innerText = formatTime(timeLeft);
-        
+
         if (timeLeft < 300) display.classList.add('timer-warning'); // 5 mins
-        
+
         if (timeLeft <= 0) {
             clearInterval(timerInterval);
             submitExam(true); // Forced timeout submit
@@ -352,7 +593,7 @@
         document.getElementById('p-' + idx).classList.add('current');
 
         document.getElementById('btnPrev').style.visibility = (idx === 0) ? 'hidden' : 'visible';
-        
+
         if (idx === totalQ - 1) {
             document.getElementById('btnNext').style.display = 'none';
             document.getElementById('btnSubmit').style.display = 'inline-flex';
@@ -369,20 +610,20 @@
     }
 
     // ── Answer Handling & LocalStorage ─────────────────────────────────────
-    
+
     // MCQ Handling
     document.querySelectorAll('input[type="radio"]').forEach(radio => {
-        radio.addEventListener('change', function() {
+        radio.addEventListener('change', function () {
             const container = this.closest('.question-container');
             const qid = container.dataset.qid;
             const pIdx = parseInt(container.id.replace('q-', ''));
-            
+
             document.getElementById('p-' + pIdx).classList.add('answered');
             document.querySelectorAll(`input[name="${this.name}"]`).forEach(r => {
                 r.closest('.option-row').classList.remove('selected');
             });
             this.closest('.option-row').classList.add('selected');
-            
+
             saveAnswerLocally(qid, this.value);
         });
     });
@@ -414,7 +655,7 @@
     function restoreState() {
         Object.keys(answersState).forEach(qid => {
             const val = answersState[qid].selected_option;
-            
+
             // Try radio
             const radio = document.querySelector(`input[name="question_${qid}"][value="${val}"]`);
             if (radio) {
@@ -445,7 +686,7 @@
         statusEl.innerHTML = '<i data-lucide="refresh-cw" style="width:16px;height:16px;animation:spin 1s linear infinite;"></i> Saving...';
         statusEl.style.color = 'var(--gray-500)';
         lucide.createIcons();
-        
+
         syncTimeout = setTimeout(async () => {
             try {
                 const response = await fetch(`/api/sessions/${sessionId}/sync`, {
@@ -478,7 +719,7 @@
                 if (!confirm('Are you sure you want to submit your exam?')) return;
             }
         }
-        
+
         try {
             const response = await fetch(`/api/sessions/${sessionId}/submit`, {
                 method: 'POST',
@@ -486,7 +727,7 @@
                 body: JSON.stringify({ answers: Object.values(answersState) })
             });
             const result = await response.json();
-            
+
             if (result.success) {
                 localStorage.removeItem(LS_KEY); // Clear cache
                 alert(`Exam Submitted successfully!`);
@@ -506,5 +747,11 @@
         setInterval(triggerSync, 30000);
     }
 </script>
-<style> @keyframes spin { 100% { transform: rotate(360deg); } } </style>
+<style>
+    @keyframes spin {
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+</style>
 {% endblock %}

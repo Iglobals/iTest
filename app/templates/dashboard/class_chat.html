@@ -1,0 +1,411 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Class Chat - {{ class_obj.name }}{% endblock %}
+
+{% block dashboard_head %}
+<style>
+    .chat-container {
+        display: flex;
+        flex-direction: column;
+        height: calc(100vh - 120px); /* Adjust based on navbar height */
+        background: var(--white);
+        border-radius: 1rem;
+        border: 1px solid var(--gray-200);
+        overflow: hidden;
+    }
+    .chat-header {
+        padding: 1.25rem 1.5rem;
+        border-bottom: 1px solid var(--gray-200);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: var(--gray-50);
+    }
+    .chat-header-info h2 {
+        margin: 0;
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: var(--gray-900);
+    }
+    .chat-header-info p {
+        margin: 0;
+        font-size: 0.85rem;
+        color: var(--gray-500);
+    }
+    
+    .chat-body {
+        flex: 1;
+        overflow-y: auto;
+        padding: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+        background: var(--white);
+    }
+    
+    .chat-message {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        max-width: 80%;
+    }
+    .chat-message.self {
+        align-self: flex-end;
+    }
+    .chat-message.other {
+        align-self: flex-start;
+    }
+    
+    .chat-message-meta {
+        font-size: 0.75rem;
+        color: var(--gray-500);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .chat-message.self .chat-message-meta {
+        flex-direction: row-reverse;
+    }
+    
+    .chat-bubble {
+        padding: 1rem 1.25rem;
+        border-radius: 1rem;
+        line-height: 1.5;
+        font-size: 0.95rem;
+    }
+    .chat-message.self .chat-bubble {
+        background: var(--purple);
+        color: var(--white);
+        border-bottom-right-radius: 0.25rem;
+    }
+    .chat-message.other .chat-bubble {
+        background: var(--gray-100);
+        color: var(--gray-900);
+        border-bottom-left-radius: 0.25rem;
+    }
+    
+    .chat-footer {
+        padding: 1.25rem 1.5rem;
+        border-top: 1px solid var(--gray-200);
+        background: var(--white);
+    }
+    
+    .chat-input-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        background: var(--gray-50);
+        border: 1px solid var(--gray-300);
+        border-radius: 2rem;
+        padding: 0.5rem 0.5rem 0.5rem 1.25rem;
+        transition: border-color 0.2s;
+    }
+    .chat-input-wrapper:focus-within {
+        border-color: var(--purple);
+        background: var(--white);
+    }
+    .chat-input-wrapper.disabled {
+        background: var(--gray-100);
+        border-color: var(--gray-200);
+        cursor: not-allowed;
+    }
+    
+    .chat-input {
+        flex: 1;
+        border: none;
+        background: transparent;
+        outline: none;
+        font-size: 0.95rem;
+        padding: 0.5rem 0;
+    }
+    .chat-input:disabled {
+        color: var(--gray-500);
+        cursor: not-allowed;
+    }
+    
+    .chat-send-btn {
+        background: var(--purple);
+        color: var(--white);
+        border: none;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: opacity 0.2s;
+    }
+    .chat-send-btn:hover {
+        opacity: 0.9;
+    }
+    .chat-send-btn:disabled {
+        background: var(--gray-300);
+        cursor: not-allowed;
+    }
+
+    .chat-lock-icon {
+        color: var(--gray-400);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+    }
+
+    .mc-reactions {
+        display: flex;
+        gap: 0.5rem;
+        margin-top: 0.25rem;
+    }
+    .chat-message.self .mc-reactions {
+        justify-content: flex-end;
+    }
+    
+    .mc-reaction-badge {
+        background: var(--white);
+        border: 1px solid var(--gray-200);
+        padding: 0.15rem 0.4rem;
+        border-radius: 1rem;
+        font-size: 0.75rem;
+        color: var(--gray-600);
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+    .chat-message.self .mc-reaction-badge {
+        background: rgba(255,255,255,0.2);
+        border-color: rgba(255,255,255,0.3);
+        color: var(--white);
+    }
+
+    .reaction-actions {
+        display: flex;
+        gap: 0.25rem;
+        opacity: 0;
+        transition: opacity 0.2s;
+    }
+    .chat-message:hover .reaction-actions {
+        opacity: 1;
+    }
+    .reaction-btn {
+        background: var(--white);
+        border: 1px solid var(--gray-200);
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        color: var(--gray-500);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    .reaction-btn:hover {
+        background: var(--gray-50);
+        color: var(--purple);
+    }
+</style>
+{% endblock %}
+
+{% block dashboard_content %}
+<div class="chat-container">
+    <div class="chat-header">
+        <div class="chat-header-info">
+            <h2>{{ class_obj.name }} Broadcasts</h2>
+            <p>{{ members_count }} member{% if members_count != 1 %}s{% endif %}{% if org_name %} &bull; Organization: {{ org_name }}{% endif %}</p>
+        </div>
+        <a href="{{ url_for('dashboard.classes') }}" class="chat-send-btn" style="background:var(--gray-200); color:var(--gray-700); text-decoration:none;" title="Back to Classes">
+            <i data-lucide="x" style="width:18px;height:18px;"></i>
+        </a>
+    </div>
+    
+    <div class="chat-body" id="chat-messages">
+        <div style="text-align:center; color:var(--gray-400); margin: 2rem 0;">
+            <i data-lucide="message-square" style="width:48px;height:48px;opacity:0.5;"></i>
+            <p style="margin-top:0.5rem;">Loading broadcasts...</p>
+        </div>
+    </div>
+    
+    <div class="chat-footer">
+        {% if is_teacher %}
+        <div class="chat-input-wrapper">
+            <input type="text" id="broadcast-msg" class="chat-input" placeholder="Type your broadcast message..." autocomplete="off">
+            <button onclick="sendBroadcast()" class="chat-send-btn" id="send-btn">
+                <i data-lucide="send" style="width:16px;height:16px;margin-left:-2px;"></i>
+            </button>
+        </div>
+        {% else %}
+        <div class="chat-input-wrapper disabled">
+            <input type="text" class="chat-input" placeholder="Students cannot send broadcasts." disabled>
+            <div class="chat-lock-icon">
+                <i data-lucide="lock" style="width:18px;height:18px;"></i>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+const classId = "{{ class_obj._id }}";
+const isTeacher = {{ 'true' if is_teacher else 'false' }};
+const canSeeReactions = {{ 'true' if can_see_reactions else 'false' }};
+const currentUserId = "{{ g.current_user._id }}";
+
+async function apiCall(endpoint, method='GET', data=null) {
+    const options = {
+        method,
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+        }
+    };
+    if(data) options.body = JSON.stringify(data);
+    
+    const res = await fetch(`/api/classes/${classId}${endpoint}`, options);
+    const json = await res.json();
+    if(res.status === 402 && json.limit_reached) {
+        alert(json.error);
+    } else if (!res.ok) {
+        console.error(json.error || 'Error');
+    }
+    return json;
+}
+
+async function loadBroadcasts() {
+    const res = await apiCall('/broadcasts');
+    if(!res.success) return;
+    
+    const container = document.getElementById('chat-messages');
+    if(res.data.length === 0) {
+        container.innerHTML = `<div style="text-align:center; color:var(--gray-400); margin: auto;">
+            <i data-lucide="radio" style="width:48px;height:48px;opacity:0.5;"></i>
+            <p style="margin-top:0.5rem;">No broadcasts yet.</p>
+        </div>`;
+        lucide.createIcons();
+        return;
+    }
+    
+    let html = '';
+    // Reverse array because API returns sorted by created_at DESC, and we want oldest at top in chat
+    const msgs = res.data.reverse();
+    
+    msgs.forEach(b => {
+        const isSelf = b.sender_id === currentUserId;
+        const msgClass = isSelf ? 'self' : 'other';
+        
+        let reactionsHtml = '';
+        if(b.reactions && b.reactions.length) {
+            reactionsHtml = '<div class="mc-reactions">';
+            let grouped = {};
+            b.reactions.forEach(r => {
+                grouped[r.icon] = (grouped[r.icon] || 0) + 1;
+            });
+            for(let [icon, count] of Object.entries(grouped)) {
+                let title = canSeeReactions ? b.reactions.filter(r => r.icon === icon).map(r => r.name).join(', ') : '';
+                reactionsHtml += `<div class="mc-reaction-badge" title="${title}">
+                    <i data-lucide="${icon}" style="width:10px;height:10px;"></i> ${count}
+                </div>`;
+            }
+            reactionsHtml += '</div>';
+        }
+        
+        let reactBtnsHtml = '';
+        if(!isSelf && !isTeacher) { // or allow anyone to react
+            reactBtnsHtml = `<div class="reaction-actions">
+                <button onclick="reactBroadcast('${b._id}', 'thumbs-up')" class="reaction-btn"><i data-lucide="thumbs-up" style="width:12px;height:12px;"></i></button>
+                <button onclick="reactBroadcast('${b._id}', 'heart')" class="reaction-btn" style="color:var(--danger);"><i data-lucide="heart" style="width:12px;height:12px;"></i></button>
+            </div>`;
+        } else if (isSelf) {
+            reactBtnsHtml = `<div class="reaction-actions" style="margin-right: 0.5rem;">
+                <button onclick="editBroadcast('${b._id}', \`${b.message.replace(/`/g, '\\`')}\`)" class="reaction-btn" title="Edit"><i data-lucide="edit-2" style="width:12px;height:12px;"></i></button>
+                <button onclick="deleteBroadcast('${b._id}')" class="reaction-btn" style="color:var(--danger);" title="Delete"><i data-lucide="trash-2" style="width:12px;height:12px;"></i></button>
+            </div>`;
+        }
+        
+        const timeStr = new Date(b.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        
+        html += `
+        <div class="chat-message ${msgClass}">
+            <div class="chat-message-meta">
+                <span style="font-weight:600;">${isSelf ? 'You' : b.sender_name}</span>
+                <span>${timeStr}</span>
+                ${reactBtnsHtml}
+            </div>
+            <div class="chat-bubble" id="msg-text-${b._id}">
+                ${b.message}
+            </div>
+            ${reactionsHtml}
+        </div>`;
+    });
+    
+    container.innerHTML = html;
+    lucide.createIcons();
+    container.scrollTop = container.scrollHeight;
+}
+
+async function sendBroadcast() {
+    const input = document.getElementById('broadcast-msg');
+    const msg = input.value.trim();
+    if(!msg) return;
+    
+    const btn = document.getElementById('send-btn');
+    btn.disabled = true;
+    
+    // Check if we are editing
+    const editingId = input.dataset.editingId;
+    if (editingId) {
+        const res = await apiCall(`/broadcast/${editingId}`, 'PUT', {message: msg});
+        if(res.success) {
+            input.value = '';
+            delete input.dataset.editingId;
+            btn.innerHTML = '<i data-lucide="send" style="width:16px;height:16px;margin-left:-2px;"></i>';
+            loadBroadcasts();
+        }
+    } else {
+        const res = await apiCall('/broadcast', 'POST', {message: msg});
+        if(res.success) {
+            input.value = '';
+            loadBroadcasts();
+        }
+    }
+    btn.disabled = false;
+    lucide.createIcons();
+}
+
+function editBroadcast(msgId, oldText) {
+    const input = document.getElementById('broadcast-msg');
+    const btn = document.getElementById('send-btn');
+    input.value = oldText;
+    input.dataset.editingId = msgId;
+    input.focus();
+    btn.innerHTML = '<i data-lucide="check" style="width:16px;height:16px;"></i>';
+    lucide.createIcons();
+}
+
+async function deleteBroadcast(msgId) {
+    if(confirm("Are you sure you want to delete this broadcast?")) {
+        const res = await apiCall(`/broadcast/${msgId}`, 'DELETE');
+        if(res.success) loadBroadcasts();
+    }
+}
+
+async function reactBroadcast(msgId, icon) {
+    const res = await apiCall(`/broadcast/${msgId}/react`, 'POST', {icon});
+    if(res.success) loadBroadcasts();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadBroadcasts();
+    
+    const input = document.getElementById('broadcast-msg');
+    if(input) {
+        input.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                sendBroadcast();
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

@@ -53,6 +53,58 @@ def index():
         
         return render_template('dashboard/student.html', classes=enrolled_classes, exams=upcoming_exams)
 
+@dashboard_bp.route('/classes')
+@require_auth()
+def classes():
+    from flask import request
+    role = g.current_user.get('role')
+    if role not in ['teacher', 'org_admin', 'student']:
+        return "Unauthorized", 403
+        
+    classes_col = get_collection('classes')
+    user_id = g.current_user['_id']
+    user_id_str = str(user_id)
+    
+    if role in ['teacher', 'org_admin']:
+        teacher_classes = list(classes_col.find({"teachers.user_id": user_id})) if classes_col is not None else []
+        active_classes = []
+        invitations = []
+        for cls in teacher_classes:
+            for t in cls.get('teachers', []):
+                if str(t.get('user_id')) == user_id_str:
+                    status = t.get('status', 'active')
+                    cls['current_user_status'] = status
+                    if status == 'pending':
+                        invitations.append(cls)
+                    elif status == 'active':
+                        active_classes.append(cls)
+                    break
+        return render_template('dashboard/classes.html', classes=active_classes, invitations=invitations)
+    else:
+        student_classes = list(classes_col.find({"students.user_id": user_id})) if classes_col is not None else []
+        active_classes = []
+        invitations = []
+        for cls in student_classes:
+            for s in cls.get('students', []):
+                if str(s.get('user_id')) == user_id_str:
+                    status = s.get('status', 'pending')
+                    cls['current_student_status'] = status
+                    cls['current_user_status'] = status
+                    if status == 'pending':
+                        invitations.append(cls)
+                    elif status == 'active':
+                        active_classes.append(cls)
+                    break
+        return render_template('dashboard/student_classes.html', classes=active_classes, invitations=invitations)
+
+@dashboard_bp.route('/classes/create', methods=['GET'])
+@require_auth()
+def create_class_page():
+    if g.current_user.get('role') not in ['teacher', 'org_admin']:
+        return "Unauthorized", 403
+        
+    return render_template('dashboard/create_class.html')
+
 @dashboard_bp.route('/exams/manage')
 @require_auth()
 def manage_exams():
@@ -320,15 +372,29 @@ def view_result(session_id):
     if not session:
         return "Session not found", 404
         
+    from flask import flash, redirect, url_for
     # Security: Only the student or a teacher/admin can view
-    is_student = session["student_id"] == str(user_id)
+    is_student = str(session.get("student_id")) == str(user_id)
     is_admin = g.current_user.get('role') in ['teacher', 'org_admin', 'platform_admin']
     if not is_student and not is_admin:
-        return "Unauthorized", 403
+        flash("Unauthorized to view this result.", "error")
+        return redirect(url_for('dashboard.index'))
         
     exam = exams_col.find_one({"_id": session["exam_id"]})
     if not exam:
-        return "Exam not found", 404
+        flash("Exam not found.", "error")
+        return redirect(url_for('dashboard.index'))
+        
+    if is_student:
+        open_results = exam.get('settings', {}).get('open_results', exam.get('settings', {}).get('show_result_immediately', True))
+        if not open_results:
+            flash("Results are not yet open for viewing.", "info")
+            return redirect(url_for('dashboard.my_exams'))
+            
+        has_essay = any(q.get('type') == 'essay' for q in exam.get('questions', []))
+        if has_essay and not session.get('is_graded'):
+            flash("Results are pending manual grading by your teacher.", "info")
+            return redirect(url_for('dashboard.my_exams'))
         
     from app.models import ExamScore
     score_record = ExamScore.query.filter_by(session_id=session_id).first()
@@ -407,3 +473,157 @@ def exam_submissions(slug):
         })
         
     return render_template('dashboard/mark_exams.html', exam=exam, submissions=submissions)
+
+@dashboard_bp.route('/classes/<class_id>/manage')
+@require_auth()
+def manage_class(class_id):
+    from bson import ObjectId
+    classes_col = get_collection('classes')
+    try:
+        class_obj = classes_col.find_one({"_id": ObjectId(class_id)})
+        if not class_obj:
+            return "Class not found", 404
+            
+        role = g.current_user.get('role', 'student')
+        user_id = str(g.current_user['_id'])
+        
+        # Determine if user is teacher for this class
+        is_teacher = False
+        if role in ['teacher', 'org_admin']:
+            for t in class_obj.get("teachers", []):
+                if str(t.get("user_id")) == user_id:
+                    is_teacher = True
+                    break
+        
+        from app.utils.plans import get_plan_limit
+        user_plan = g.current_user.get("plan", {}).get("type", "free")
+        can_message = get_plan_limit(user_plan, "can_message_1on1")
+        can_see_reactions = get_plan_limit(user_plan, "can_see_broadcast_reactions")
+                    
+        return render_template('dashboard/manage_class.html', 
+                               class_obj=class_obj, 
+                               is_teacher=is_teacher,
+                               can_message=can_message,
+                               can_see_reactions=can_see_reactions)
+    except Exception as e:
+        return str(e), 400
+
+@dashboard_bp.route('/classes/<class_id>/chat')
+@require_auth()
+def class_chat(class_id):
+    from bson import ObjectId
+    classes_col = get_collection('classes')
+    try:
+        class_obj = classes_col.find_one({"_id": ObjectId(class_id)})
+        if not class_obj:
+            return "Class not found", 404
+            
+        role = g.current_user.get('role', 'student')
+        user_id = str(g.current_user['_id'])
+        
+        is_teacher = False
+        if role in ['teacher', 'org_admin']:
+            for t in class_obj.get("teachers", []):
+                if str(t.get("user_id")) == user_id:
+                    is_teacher = True
+                    break
+        
+        from app.utils.plans import get_plan_limit
+        user_plan = g.current_user.get("plan", {}).get("type", "free")
+        can_message = get_plan_limit(user_plan, "can_message_1on1")
+        can_see_reactions = get_plan_limit(user_plan, "can_see_broadcast_reactions")
+        
+        # Calculate members count
+        total_examiners = sum(1 for t in class_obj.get("teachers", []) if t.get("status") == "active")
+        total_students = sum(1 for s in class_obj.get("students", []) if s.get("status") == "active")
+        members_count = total_examiners + total_students
+        
+        # Get organization name if any
+        org_name = None
+        if class_obj.get("organization_id") and class_obj.get("organization_status") == "active":
+            orgs_col = get_collection("organizations")
+            org = orgs_col.find_one({"_id": class_obj["organization_id"]})
+            if org:
+                org_name = org.get("name")
+                    
+        return render_template('dashboard/class_chat.html', 
+                               class_obj=class_obj, 
+                               is_teacher=is_teacher,
+                               can_message=can_message,
+                               can_see_reactions=can_see_reactions,
+                               members_count=members_count,
+                               org_name=org_name)
+    except Exception as e:
+        return str(e), 400
+
+@dashboard_bp.route('/join/<token>')
+@require_auth()
+def join_class(token):
+    from bson import ObjectId
+    from datetime import datetime
+    classes_col = get_collection('classes')
+    
+    # Find the class and role by matching the token in links
+    class_obj = classes_col.find_one({"$or": [
+        {"links.student": token},
+        {"links.teacher": token},
+        {"links.org": token} # if org links are generated
+    ]})
+    
+    if not class_obj:
+        from flask import flash, redirect, url_for
+        flash("Invalid or expired join link.", "error")
+        return redirect(url_for('dashboard.index'))
+        
+    link_type = None
+    if class_obj.get("links", {}).get("student") == token:
+        link_type = "student"
+    elif class_obj.get("links", {}).get("teacher") == token:
+        link_type = "teacher"
+    elif class_obj.get("links", {}).get("org") == token:
+        link_type = "org"
+        
+    user_role = g.current_user.get('role', 'student')
+    user_id = g.current_user['_id']
+    
+    from flask import flash, redirect, url_for
+    
+    if user_role == 'org_admin':
+        # org admin joins the class, meaning we set organization_id
+        orgs_col = get_collection('organizations')
+        org = orgs_col.find_one({"admin_user_id": str(user_id)}) if orgs_col is not None else None
+        if org:
+            classes_col.update_one(
+                {"_id": class_obj["_id"]},
+                {"$set": {"organization_id": ObjectId(org["_id"]) if isinstance(org["_id"], str) else org["_id"], "organization_status": "active"}}
+            )
+            flash("Class successfully added to your organization.", "success")
+        else:
+            flash("You do not have an active organization.", "error")
+    else:
+        # Check if already in class
+        is_existing_student = any(str(s.get("user_id")) == str(user_id) for s in class_obj.get("students", []))
+        is_existing_teacher = any(str(t.get("user_id")) == str(user_id) for t in class_obj.get("teachers", []))
+        
+        if is_existing_student or is_existing_teacher:
+            flash("You are already a member of this class.", "info")
+            return redirect(url_for('dashboard.classes'))
+            
+        target_role = link_type if link_type in ['student', 'teacher'] else user_role
+        if target_role == 'teacher' and user_role == 'student':
+            flash("Students cannot join as examiners.", "error")
+            return redirect(url_for('dashboard.index'))
+            
+        if target_role == 'teacher' or user_role in ['teacher', 'org_admin']:
+            classes_col.update_one(
+                {"_id": class_obj["_id"]}, 
+                {"$push": {"teachers": {"user_id": user_id, "role": "collaborator", "status": "active", "added_at": datetime.utcnow()}}}
+            )
+        else:
+            classes_col.update_one(
+                {"_id": class_obj["_id"]}, 
+                {"$push": {"students": {"user_id": user_id, "status": "active", "joined_at": datetime.utcnow()}}}
+            )
+        flash("You have successfully joined the class.", "success")
+        
+    return redirect(url_for('dashboard.classes'))

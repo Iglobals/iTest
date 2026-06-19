@@ -74,3 +74,17 @@ def require_plan(*plans):
             return f(*args, **kwargs)
         return decorated
     return decorator
+
+def require_feature(feature_key):
+    def decorator(f):
+        @wraps(f)
+        @require_auth()
+        def decorated(*args, **kwargs):
+            from app.utils.plans import get_plan_limit
+            user_plan = g.current_user.get("plan", {}).get("type", "free")
+            has_feature = get_plan_limit(user_plan, feature_key)
+            if not has_feature:
+                return jsonify({"error": f"This feature requires a premium plan", "limit_reached": True, "upgrade_url": "/pricing"}), 402
+            return f(*args, **kwargs)
+        return decorated
+    return decorator

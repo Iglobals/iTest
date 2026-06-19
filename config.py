@@ -13,6 +13,10 @@ class Config:
     # PostgreSQL setup (for reporting, scoring, ranking)
     SQLALCHEMY_DATABASE_URI = os.environ.get('POSTGRES_URI')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'pool_pre_ping': True,
+        'pool_recycle': 300,
+    }
     
     # ICA Integration
     ICA_BASE_URL = os.environ.get('ICA_BASE_URL')

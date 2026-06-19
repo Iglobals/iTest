@@ -13,10 +13,8 @@
 
 <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
-        <a href="/" class="logo">
-            <div class="logo-icon">
-                <i data-lucide="brain-circuit" style="color: white; width: 1.25em; height: 1.25em;"></i>
-            </div>
+        <a href="/" class="logo" style="text-decoration: none;">
+            <img src="https://res.cloudinary.com/dicut7e2y/image/upload/v1781773701/itest-favicon_yehhyy.png" alt="iTest Logo" style="width: 24px; height: 24px; object-fit: contain;">
             iTest
         </a>
         <button class="sidebar-close" id="sidebarClose">
@@ -26,22 +24,26 @@
 
     <div class="nav-section">
         <div class="nav-label">Menu</div>
-        <a href="{{ url_for('dashboard.index') }}" class="nav-item active">
+        <a href="{{ url_for('dashboard.index') }}" class="nav-item {% if request.endpoint == 'dashboard.index' %}active{% endif %}">
             <i data-lucide="layout-dashboard"></i>
             Dashboard
         </a>
         {% if g.current_user.get('role') in ['teacher', 'org_admin'] %}
-        <a href="#" class="nav-item">
+        <a href="{{ url_for('dashboard.classes') }}" class="nav-item {% if request.endpoint in ['dashboard.classes', 'dashboard.manage_class'] %}active{% endif %}">
             <i data-lucide="users"></i>
             Classes
         </a>
-        <a href="{{ url_for('dashboard.manage_exams') }}" class="nav-item">
+        <a href="{{ url_for('dashboard.manage_exams') }}" class="nav-item {% if request.endpoint == 'dashboard.manage_exams' %}active{% endif %}">
             <i data-lucide="file-text"></i>
             Manage Exams
         </a>
         {% endif %}
         {% if g.current_user.get('role') == 'student' %}
-        <a href="{{ url_for('dashboard.my_exams') }}" class="nav-item">
+        <a href="{{ url_for('dashboard.classes') }}" class="nav-item {% if request.endpoint in ['dashboard.classes', 'dashboard.manage_class'] %}active{% endif %}">
+            <i data-lucide="users"></i>
+            Classes
+        </a>
+        <a href="{{ url_for('dashboard.my_exams') }}" class="nav-item {% if request.endpoint == 'dashboard.my_exams' %}active{% endif %}">
             <i data-lucide="file-text"></i>
             My Exams
         </a>

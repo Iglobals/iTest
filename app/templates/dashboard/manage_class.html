@@ -1,0 +1,525 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Manage Class - {{ class_obj.name }}{% endblock %}
+
+{% block dashboard_head %}
+<style>
+    .mc-container {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+    .mc-header {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    .mc-header h1 {
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: var(--gray-900);
+        margin: 0;
+    }
+    .mc-header p {
+        color: var(--gray-500);
+        margin: 0;
+    }
+    
+    .mc-tabs {
+        display: flex;
+        gap: 2rem;
+        border-bottom: 1px solid var(--gray-200);
+        margin-bottom: 1.5rem;
+    }
+    
+    .mc-tab-btn {
+        background: none;
+        border: none;
+        padding: 1rem 0.5rem;
+        color: var(--gray-500);
+        font-weight: 600;
+        font-size: 0.95rem;
+        cursor: pointer;
+        border-bottom: 3px solid transparent;
+        transition: all 0.2s;
+    }
+    
+    .mc-tab-btn:hover {
+        color: var(--gray-700);
+    }
+    
+    .mc-tab-btn.active {
+        color: var(--purple);
+        border-bottom-color: var(--purple);
+    }
+    
+    .mc-card {
+        background: var(--white);
+        border-radius: 1rem;
+        border: 1px solid var(--gray-200);
+        padding: 1.5rem;
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+        margin-bottom: 1.5rem;
+    }
+    
+    .mc-card h3 {
+        font-size: 1.15rem;
+        font-weight: 600;
+        color: var(--gray-900);
+        margin: 0 0 1rem 0;
+    }
+    
+    .mc-input-group {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+    
+    .mc-input {
+        flex: 1;
+        min-width: 200px;
+        padding: 0.75rem 1rem;
+        border: 1px solid var(--gray-300);
+        border-radius: 0.5rem;
+        font-size: 0.95rem;
+        outline: none;
+        transition: border-color 0.2s;
+    }
+    .mc-input:focus {
+        border-color: var(--purple);
+        box-shadow: 0 0 0 3px rgba(91, 33, 209, 0.1);
+    }
+    
+    .mc-btn {
+        padding: 0.75rem 1.5rem;
+        background: var(--purple);
+        color: var(--white);
+        border: none;
+        border-radius: 0.5rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: opacity 0.2s;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .mc-btn:hover { opacity: 0.9; }
+    
+    .mc-btn-secondary {
+        background: var(--gray-100);
+        color: var(--gray-700);
+    }
+    .mc-btn-secondary:hover { background: var(--gray-200); }
+    
+    .mc-btn-danger {
+        background: var(--danger, #ef4444);
+        color: var(--white);
+    }
+    .mc-btn-danger:hover { background: #dc2626; }
+    
+    .mc-list-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 0;
+        border-bottom: 1px solid var(--gray-100);
+    }
+    .mc-list-item:last-child { border-bottom: none; }
+    
+    .mc-list-info p { margin: 0; }
+    .mc-list-info .name { font-weight: 600; color: var(--gray-900); margin-bottom: 0.25rem; }
+    .mc-list-info .role { font-size: 0.85rem; color: var(--gray-500); text-transform: capitalize; }
+    
+    /* Custom Dropdown Styling */
+    .dropdown-container {
+        position: relative;
+        min-width: 200px;
+    }
+    .dropdown-input {
+        width: 100%;
+        padding: 0.75rem 1rem;
+        border: 1px solid var(--gray-300);
+        border-radius: 0.5rem;
+        font-size: 0.95rem;
+        background: var(--white);
+        cursor: pointer;
+        outline: none;
+        background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 0.75rem center;
+        background-size: 1em;
+    }
+    .dropdown-list {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: white;
+        border: 1px solid var(--gray-200);
+        border-radius: 0.5em;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        z-index: 50;
+        display: none;
+        margin-top: 4px;
+        overflow: hidden;
+    }
+    .dropdown-list.show { display: block; }
+    .dropdown-item {
+        padding: 0.75rem 1rem;
+        cursor: pointer;
+        font-size: 0.95rem;
+        color: var(--gray-800);
+        transition: background 0.1s;
+    }
+    .dropdown-item:hover {
+        background: var(--purple-light, #f3e8ff);
+        color: var(--purple);
+    }
+
+    /* Badges */
+    .badge {
+        padding: 0.25rem 0.6rem;
+        border-radius: 1rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        display: inline-block;
+        text-transform: uppercase;
+    }
+    .badge-pending { background-color: #fef3c7; color: #d97706; }
+    .badge-declined { background-color: #fee2e2; color: #b91c1c; }
+    .badge-active { background-color: #d1fae5; color: #059669; }
+
+    .hidden { display: none !important; }
+
+</style>
+{% endblock %}
+
+{% block dashboard_content %}
+<div id="toast-container" style="position: fixed; bottom: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px;"></div>
+
+<div class="mc-container">
+    <div class="mc-header">
+        <h1>{{ class_obj.name }}</h1>
+        <p>{{ class_obj.description or "No description provided." }}</p>
+    </div>
+
+    <!-- Tabs Navigation -->
+    <div class="mc-tabs">
+        <button onclick="switchTab('members')" class="mc-tab-btn active">Members</button>
+        <button onclick="switchTab('invitations')" class="mc-tab-btn">Invitations</button>
+        <button onclick="switchTab('invite_share')" class="mc-tab-btn">Invite & Share</button>
+    </div>
+
+    <!-- Members Tab -->
+    <div id="tab-members" class="tab-content">
+        <div class="mc-card">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+                <h3 style="margin:0;">Active Class Members</h3>
+                {% if class_obj.organization_id and is_teacher %}
+                <button onclick="removeOrg()" class="mc-btn mc-btn-danger" style="font-size: 0.85rem; padding: 0.5rem 1rem;"><i data-lucide="building" style="width:14px;height:14px;"></i> Remove Organization</button>
+                {% endif %}
+            </div>
+            
+            <div id="members-list">
+                <!-- Loaded via JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Invitations Tab -->
+    <div id="tab-invitations" class="tab-content hidden">
+        <div class="mc-card">
+            <h3>Pending & Declined Invitations</h3>
+            <div id="invitations-list">
+                <!-- Loaded via JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Invite & Share Tab -->
+    <div id="tab-invite_share" class="tab-content hidden">
+        {% if is_teacher %}
+        <div class="mc-card">
+            <h3>Invite via Email</h3>
+            <div class="mc-input-group">
+                <input type="text" id="invite-emails" placeholder="Enter emails (comma separated)" class="mc-input">
+                
+                <!-- Custom Dropdown -->
+                <div class="dropdown-container" id="invite-role-container">
+                    <input type="text" id="invite-role-text" class="dropdown-input" value="Student" readonly>
+                    <input type="hidden" id="invite-role" value="student">
+                    <div class="dropdown-list" id="invite-role-dropdown">
+                        <div class="dropdown-item" onclick="selectInviteRole('student', 'Student')">Student</div>
+                        <div class="dropdown-item" onclick="selectInviteRole('teacher', 'Examiner')">Examiner</div>
+                    </div>
+                </div>
+
+                <button onclick="sendInvites()" class="mc-btn" id="invite-btn"><i data-lucide="send" style="width:16px;height:16px;"></i> Send Invite</button>
+            </div>
+        </div>
+
+        <div class="mc-card">
+            <h3>Shareable Links</h3>
+            <div style="display:flex; flex-direction:column; gap:1.5rem;">
+                
+                <div>
+                    <label style="font-size: 0.85rem; font-weight: 600; color: var(--gray-700); margin-bottom: 0.5rem; display: block;">Student Join Link</label>
+                    <div class="mc-input-group" style="align-items:center;">
+                        <button onclick="generateLink('student')" class="mc-btn mc-btn-secondary"><i data-lucide="link" style="width:16px;height:16px;"></i> Generate Link</button>
+                        <input type="text" readonly id="student-link" class="mc-input" style="background:var(--gray-50);" placeholder="No link generated">
+                        <button onclick="copyLink('student-link')" class="mc-btn mc-btn-secondary" title="Copy Link"><i data-lucide="copy" style="width:16px;height:16px;"></i></button>
+                    </div>
+                </div>
+
+                <div>
+                    <label style="font-size: 0.85rem; font-weight: 600; color: var(--gray-700); margin-bottom: 0.5rem; display: block;">Examiner Join Link</label>
+                    <div class="mc-input-group" style="align-items:center;">
+                        <button onclick="generateLink('teacher')" class="mc-btn mc-btn-secondary"><i data-lucide="link" style="width:16px;height:16px;"></i> Generate Link</button>
+                        <input type="text" readonly id="teacher-link" class="mc-input" style="background:var(--gray-50);" placeholder="No link generated">
+                        <button onclick="copyLink('teacher-link')" class="mc-btn mc-btn-secondary" title="Copy Link"><i data-lucide="copy" style="width:16px;height:16px;"></i></button>
+                    </div>
+                </div>
+
+                <div>
+                    <label style="font-size: 0.85rem; font-weight: 600; color: var(--gray-700); margin-bottom: 0.5rem; display: block;">Organization Join Link</label>
+                    <div class="mc-input-group" style="align-items:center;">
+                        <button onclick="generateLink('org')" class="mc-btn mc-btn-secondary"><i data-lucide="link" style="width:16px;height:16px;"></i> Generate Link</button>
+                        <input type="text" readonly id="org-link" class="mc-input" style="background:var(--gray-50);" placeholder="No link generated">
+                        <button onclick="copyLink('org-link')" class="mc-btn mc-btn-secondary" title="Copy Link"><i data-lucide="copy" style="width:16px;height:16px;"></i></button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+        {% else %}
+        <div class="mc-card">
+            <p style="color:var(--gray-500); margin: 0;">Only examiners can invite members or generate links.</p>
+        </div>
+        {% endif %}
+    </div>
+
+</div>
+
+<script>
+const classId = "{{ class_obj._id }}";
+const isTeacher = {{ 'true' if is_teacher else 'false' }};
+const currentUserId = "{{ g.current_user._id }}";
+
+function switchTab(tabId) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+    document.querySelectorAll('.mc-tab-btn').forEach(el => {
+        el.classList.remove('active');
+    });
+    
+    document.getElementById('tab-' + tabId).classList.remove('hidden');
+    event.currentTarget.classList.add('active');
+    
+    if(tabId === 'members' || tabId === 'invitations') {
+        loadMembersData();
+    }
+}
+
+async function apiCall(endpoint, method='GET', data=null) {
+    const options = {
+        method,
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+        }
+    };
+    if(data) options.body = JSON.stringify(data);
+    
+    const res = await fetch(`/api/classes/${classId}${endpoint}`, options);
+    const json = await res.json();
+    if(res.status === 402 && json.limit_reached) {
+        showToast(json.error, 'error');
+    } else if (!res.ok) {
+        showToast(json.error || 'Error', 'error');
+    }
+    return json;
+}
+
+function showToast(message, type = 'success') {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+    
+    const toast = document.createElement('div');
+    toast.style.background = type === 'error' ? 'var(--danger, #ef4444)' : 'var(--success, #22c55e)';
+    toast.style.color = 'white';
+    toast.style.padding = '12px 20px';
+    toast.style.borderRadius = '8px';
+    toast.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+    toast.style.fontSize = '0.9375em';
+    toast.style.animation = 'fadeIn 0.3s ease';
+    toast.style.display = 'flex';
+    toast.style.alignItems = 'center';
+    toast.style.gap = '8px';
+    
+    const icon = type === 'error' ? '<i data-lucide="alert-circle"></i>' : '<i data-lucide="check-circle"></i>';
+    toast.innerHTML = `${icon} <span>${message}</span>`;
+    
+    container.appendChild(toast);
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+    
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transition = 'opacity 0.3s ease';
+        setTimeout(() => toast.remove(), 300);
+    }, 4000);
+}
+
+// Members Data Logic
+async function loadMembersData() {
+    const res = await apiCall('/members');
+    if(!res.success) return;
+    
+    // Render Members
+    let membersHtml = '';
+    if(res.data.members.length === 0) {
+        membersHtml = '<p style="color:var(--gray-500);">No active members found.</p>';
+    } else {
+        const examiners = res.data.members.filter(m => m.role === 'examiner');
+        const students = res.data.members.filter(m => m.role === 'student');
+        
+        const renderGroup = (title, items) => {
+            if(!items.length) return '';
+            let html = `<h4 style="font-size:1.05rem;font-weight:600;color:var(--gray-700);margin-top:1.5rem;margin-bottom:0.5rem;border-bottom:1px solid var(--gray-200);padding-bottom:0.5rem;">${title}</h4>`;
+            items.forEach(i => {
+                let orgStr = i.organization ? ` &bull; Org: ${i.organization}` : '';
+                let removeBtn = '';
+                if(isTeacher && i.user_id !== currentUserId) {
+                    removeBtn = `<button onclick="removeMember('${i.user_id}', '${i.role}')" class="mc-btn mc-btn-danger" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; margin-left: 1rem;"><i data-lucide="trash-2" style="width:12px;height:12px;"></i></button>`;
+                }
+                
+                html += `<div class="mc-list-item">
+                    <div class="mc-list-info" style="width:100%; display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <p class="name">${i.name || i.email}</p>
+                            <p class="role" style="text-transform:none;">${i.email}</p>
+                        </div>
+                        <div style="text-align:right; display:flex; align-items:center;">
+                            <div>
+                                <span style="font-weight:600; color:var(--gray-700); font-size: 0.9rem; text-transform:capitalize;">${i.role}</span>
+                                <div style="font-size: 0.8rem; color: var(--gray-500);">${orgStr}</div>
+                            </div>
+                            ${removeBtn}
+                        </div>
+                    </div>
+                </div>`;
+            });
+            return html;
+        };
+        
+        membersHtml += renderGroup('Examiners', examiners);
+        membersHtml += renderGroup('Students', students);
+    }
+    document.getElementById('members-list').innerHTML = membersHtml;
+    
+    // Render Invitations
+    let invHtml = '';
+    if(res.data.invitations.length === 0) {
+        invHtml = '<p style="color:var(--gray-500);">No pending or declined invitations.</p>';
+    } else {
+        res.data.invitations.forEach(i => {
+            let badgeClass = i.status === 'pending' ? 'badge-pending' : 'badge-declined';
+            invHtml += `<div class="mc-list-item">
+                <div class="mc-list-info" style="width:100%; display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <p class="name">${i.name || i.email}</p>
+                        <p class="role" style="text-transform:none;">${i.email} &bull; Invited as ${i.role}</p>
+                    </div>
+                    <div>
+                        <span class="badge ${badgeClass}">${i.status}</span>
+                    </div>
+                </div>
+            </div>`;
+        });
+    }
+    document.getElementById('invitations-list').innerHTML = invHtml;
+}
+
+// Invite & Share Logic
+function selectInviteRole(value, text) {
+    document.getElementById('invite-role').value = value;
+    document.getElementById('invite-role-text').value = text;
+    document.getElementById('invite-role-dropdown').classList.remove('show');
+}
+
+// Close dropdown if clicked outside
+document.addEventListener('click', (e) => {
+    if(!e.target.closest('#invite-role-container') && document.getElementById('invite-role-dropdown')) {
+        document.getElementById('invite-role-dropdown').classList.remove('show');
+    }
+});
+
+// Toggle dropdown
+if(document.getElementById('invite-role-container')) {
+    document.getElementById('invite-role-container').addEventListener('click', () => {
+        document.getElementById('invite-role-dropdown').classList.toggle('show');
+    });
+}
+
+async function sendInvites() {
+    const emailInput = document.getElementById('invite-emails');
+    const btn = document.getElementById('invite-btn');
+    const emails = emailInput.value.split(',').map(e => e.trim()).filter(e => e);
+    const role = document.getElementById('invite-role').value;
+    
+    if(!emails.length) return;
+    
+    btn.disabled = true;
+    btn.innerHTML = 'Sending...';
+    
+    const res = await apiCall('/invite', 'POST', {emails, role});
+    if(res.success) {
+        showToast(res.message);
+        emailInput.value = '';
+        loadMembersData();
+    }
+    
+    btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="send" style="width:16px;height:16px;"></i> Send Invite';
+    lucide.createIcons();
+}
+
+async function generateLink(type) {
+    const res = await apiCall('/links/generate', 'POST', {type});
+    if(res.success) {
+        document.getElementById(`${type}-link`).value = `${window.location.origin}/join/${res.token}`;
+    }
+}
+
+function copyLink(id) {
+    const el = document.getElementById(id);
+    if(el.value) {
+        navigator.clipboard.writeText(el.value);
+        showToast('Copied to clipboard');
+    }
+}
+
+async function removeOrg() {
+    if(confirm("Are you sure you want to remove the organization from this class?")) {
+        const res = await apiCall('/remove_org', 'POST');
+        if(res.success) {
+            showToast('Organization removed');
+            setTimeout(() => window.location.reload(), 1000);
+        }
+    }
+}
+
+async function removeMember(userId, role) {
+    if(confirm("Are you sure you want to remove this member?")) {
+        const res = await apiCall('/remove_member', 'POST', {user_id: userId, role: role});
+        if(res.success) {
+            showToast('Member removed');
+            loadMembersData();
+        }
+    }
+}
+
+// Initial load
+document.addEventListener('DOMContentLoaded', () => {
+    loadMembersData();
+});
+</script>
+{% endblock %}

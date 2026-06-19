@@ -111,9 +111,15 @@
 <div class="dashboard-body" style="display:block;">
     <div class="result-container">
         
+        {% if is_admin %}
+        <a href="{{ url_for('dashboard.manage_exams') }}" class="btn-outline" style="display:inline-flex; width:auto; height:auto; padding: 0.5em 1em; margin-bottom: 2em; text-decoration: none;">
+            <i data-lucide="arrow-left" style="margin-right: 0.5em;"></i> Back to Manage Exams
+        </a>
+        {% else %}
         <a href="{{ url_for('dashboard.my_exams') }}" class="btn-outline" style="display:inline-flex; width:auto; height:auto; padding: 0.5em 1em; margin-bottom: 2em; text-decoration: none;">
             <i data-lucide="arrow-left" style="margin-right: 0.5em;"></i> Back to My Exams
         </a>
+        {% endif %}
 
         {% if score_record %}
         <div class="score-card">
@@ -121,8 +127,13 @@
                 <h2>{{ score_record.score_percent|int }}%</h2>
                 <p>Score</p>
             </div>
+            {% if is_admin %}
+            <h3>Student {% if score_record.passed %}passed!{% else %}did not pass.{% endif %}</h3>
+            <p style="color:var(--gray-500); margin-top:0.5em;">Student scored {{ score_record.score }} out of {{ score_record.total_marks }} points.</p>
+            {% else %}
             <h3>{% if score_record.passed %}Congratulations, you passed!{% else %}Unfortunately, you did not pass.{% endif %}</h3>
             <p style="color:var(--gray-500); margin-top:0.5em;">You scored {{ score_record.score }} out of {{ score_record.total_marks }} points.</p>
+            {% endif %}
         </div>
         {% else %}
         <div class="score-card">

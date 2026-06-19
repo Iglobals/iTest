@@ -1,9 +1,19 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}iTest{% endblock %}</title>
+    <link rel="icon" type="image/png"
+        href="https://res.cloudinary.com/dicut7e2y/image/upload/v1781773701/itest-favicon_yehhyy.png">
+    <meta property="og:title" content="iTest - Simple tools to create and take exams">
+    <meta property="og:description"
+        content="Build assessments, manage test sessions, and review results with an exam platform designed for schools, universities, and certification bodies.">
+    <meta property="og:image"
+        content="https://res.cloudinary.com/dicut7e2y/image/upload/v1781773701/itest-favicon_yehhyy.png">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" content="summary_large_image">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/global.css') }}">
     <style>
         /* Floating Main Header */
@@ -16,7 +26,7 @@
             backdrop-filter: blur(10px);
             border-radius: 1rem;
             padding: 0.75rem 1.5rem;
-            box-shadow: 0 0.25rem 1.875rem rgba(0,0,0,0.08);
+            box-shadow: 0 0.25rem 1.875rem rgba(0, 0, 0, 0.08);
             width: calc(100% - 2.5rem);
             max-width: 68.75rem;
             margin: 1.25rem auto;
@@ -24,6 +34,7 @@
             top: 1.25rem;
             z-index: 1000;
         }
+
         .header-logo {
             font-weight: 800;
             font-size: 1.5rem;
@@ -33,6 +44,7 @@
             gap: 0.5rem;
             text-decoration: none;
         }
+
         .header-logo i {
             color: var(--primary);
         }
@@ -40,41 +52,53 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     {% block head %}{% endblock %}
 </head>
+
 <body>
     <header class="main-floating-header">
         <a href="/" class="header-logo">
-            <i data-lucide="brain-circuit"></i>
+            <img src="https://res.cloudinary.com/dicut7e2y/image/upload/v1781773701/itest-favicon_yehhyy.png"
+                alt="iTest Logo" style="width: 24px; height: 24px; object-fit: contain;">
             iTest
         </a>
         <div style="display: flex; align-items: center; gap: 1rem;">
             {% if session.get('access_token') %}
-                <a href="{{ url_for('dashboard.index') }}" class="btn" style="background: var(--surface-2); color: var(--text-heading); border: 1px solid var(--border); padding: 0.5rem 1rem; border-radius: 0.5rem; text-decoration: none; font-weight: 600;">Dashboard</a>
-                <div style="position: relative; display: inline-block;">
-                    <button id="profileDropdownBtn" style="background: transparent; border: 1px solid var(--border); border-radius: 2rem; padding: 0.5rem 1rem; display: flex; align-items: center; gap: 0.75rem; cursor: pointer; font-weight: 600; color: var(--text-heading); transition: all 0.2s;">
-                        {% if session.get('user_info', {}).get('avatar_url') %}
-                            <img src="{{ session['user_info']['avatar_url'] }}" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover;">
-                        {% else %}
-                            <div style="width: 24px; height: 24px; border-radius: 50%; background: var(--primary); color: white; display: flex; align-items: center; justify-content: center; font-size: 0.75rem;">
-                                {{ session.get('user_info', {}).get('name', 'U')[0] | upper }}
-                            </div>
-                        {% endif %}
-                        {{ session.get('user_info', {}).get('name', 'User').split(' ')[0] }}
-                        <i data-lucide="chevron-down" style="width: 16px; height: 16px;"></i>
-                    </button>
-                    <div id="profileDropdown" style="display: none; position: absolute; right: 0; top: 120%; background: white; border: 1px solid var(--border); border-radius: 0.75rem; min-width: 150px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); overflow: hidden;">
-                        <a href="{{ url_for('auth.logout') }}" style="display: block; padding: 0.75rem 1rem; color: var(--red); text-decoration: none; font-size: 0.875rem;">Log Out</a>
+            <a href="{{ url_for('dashboard.index') }}" class="btn"
+                style="background: var(--surface-2); color: var(--text-heading); border: 1px solid var(--border); padding: 0.5rem 1rem; border-radius: 0.5rem; text-decoration: none; font-weight: 600;">Dashboard</a>
+            <div style="position: relative; display: inline-block;">
+                <button id="profileDropdownBtn"
+                    style="background: transparent; border: 1px solid var(--border); border-radius: 2rem; padding: 0.5rem 1rem; display: flex; align-items: center; gap: 0.75rem; cursor: pointer; font-weight: 600; color: var(--text-heading); transition: all 0.2s;">
+                    {% if session.get('user_info', {}).get('avatar_url') %}
+                    <img src="{{ session['user_info']['avatar_url'] }}"
+                        style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover;">
+                    {% else %}
+                    <div
+                        style="width: 24px; height: 24px; border-radius: 50%; background: var(--primary); color: white; display: flex; align-items: center; justify-content: center; font-size: 0.75rem;">
+                        {{ session.get('user_info', {}).get('name', 'U')[0] | upper }}
                     </div>
+                    {% endif %}
+                    {{ session.get('user_info', {}).get('name', 'User').split(' ')[0] }}
+                    <i data-lucide="chevron-down" style="width: 16px; height: 16px;"></i>
+                </button>
+                <div id="profileDropdown"
+                    style="display: none; position: absolute; right: 0; top: 120%; background: white; border: 1px solid var(--border); border-radius: 0.75rem; min-width: 150px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); overflow: hidden;">
+                    <a href="{{ url_for('auth.logout') }}"
+                        style="display: block; padding: 0.75rem 1rem; color: var(--red); text-decoration: none; font-size: 0.875rem;">Log
+                        Out</a>
                 </div>
+            </div>
             {% else %}
-                <a href="{{ url_for('auth.login') }}" style="color: var(--text-heading); text-decoration: none; font-weight: 600;">Log In</a>
-                <a href="{{ url_for('auth.login') }}" style="background: var(--primary); color: white; padding: 0.6rem 1.25rem; border-radius: 0.5rem; text-decoration: none; font-weight: 600;">Sign Up</a>
+            <a href="{{ url_for('auth.login') }}"
+                style="color: var(--text-heading); text-decoration: none; font-weight: 600;">Log In</a>
+            <a href="{{ url_for('auth.login') }}"
+                style="background: var(--primary); color: white; padding: 0.6rem 1.25rem; border-radius: 0.5rem; text-decoration: none; font-weight: 600;">Sign
+                Up</a>
             {% endif %}
         </div>
     </header>
 
     {% block content %}{% endblock %}
 
-<section class="footer-subscribe">
+    <section class="footer-subscribe">
         <div class="footer-subscribe-inner">
             <h2>Subscribe to exam updates</h2>
             <form class="subscribe-form" onsubmit="event.preventDefault();">
@@ -89,26 +113,23 @@
             <div class="footer-brand">
                 <div class="logo">
                     <div class="logo-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                            <polyline points="14 2 14 8 20 8"/>
-                            <line x1="16" y1="13" x2="8" y2="13"/>
-                            <line x1="16" y1="17" x2="8" y2="17"/>
-                            <polyline points="10 9 9 9 8 9"/>
-                        </svg>
+                        <img src="https://res.cloudinary.com/dicut7e2y/image/upload/v1781773701/itest-favicon_yehhyy.png"
+                            alt="iTest Logo" style="width: 24px; height: 24px; object-fit: contain;">
                     </div>
-                    iTest
+                    <span style="color: #eab308;">iTest</span>
                 </div>
-                <p>iTest provides the best tools for creating, managing, and taking examinations. Trusted by schools and institutions across the nation.</p>
+                <p>iTest provides the best tools for creating, managing, and taking examinations. Trusted by schools and
+                    institutions across the nation.</p>
                 <div class="footer-social">
                     <a href="#" aria-label="Facebook">
                         <svg viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>
+                            <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
                         </svg>
                     </a>
                     <a href="#" aria-label="Twitter">
                         <svg viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M23 3a10.9 10.9 0 0 1-3.14 1.53 4.48 4.48 0 0 0-7.86 3v1A10.66 10.66 0 0 1 3 4s-4 9 5 13a11.64 11.64 0 0 1-7 2c9 5 20 0 20-11.5a4.5 4.5 0 0 0-.08-.83A7.72 7.72 0 0 0 23 3z"/>
+                            <path
+                                d="M23 3a10.9 10.9 0 0 1-3.14 1.53 4.48 4.48 0 0 0-7.86 3v1A10.66 10.66 0 0 1 3 4s-4 9 5 13a11.64 11.64 0 0 1-7 2c9 5 20 0 20-11.5a4.5 4.5 0 0 0-.08-.83A7.72 7.72 0 0 0 23 3z" />
                         </svg>
                     </a>
                 </div>
@@ -146,4 +167,5 @@
     </script>
     {% block extra_js %}{% endblock %}
 </body>
+
 </html>

@@ -1,0 +1,245 @@
+{% extends "dashboard/base.html" %}
+
+{% block page_title %}My Classes{% endblock %}
+{% block page_subtitle %}Manage your classes and students.{% endblock %}
+
+{% block dashboard_head %}
+<style>
+    .manage-controls {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1em;
+        margin-bottom: 2em;
+        background: var(--white);
+        padding: 1em 1.5em;
+        border-radius: 1em;
+        border: 1px solid var(--gray-200);
+    }
+    
+    .class-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 1.5rem;
+    }
+
+    .class-card {
+        background: var(--white);
+        border: 1px solid var(--gray-200);
+        border-radius: 1rem;
+        padding: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        transition: transform 0.2s, box-shadow 0.2s;
+        text-decoration: none;
+        color: inherit;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .class-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 24px rgba(0,0,0,0.06);
+        border-color: rgba(91, 33, 209, 0.3);
+    }
+    
+    .class-card::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 4px;
+        background: linear-gradient(90deg, var(--purple), var(--gold));
+        opacity: 0;
+        transition: opacity 0.3s;
+    }
+    
+    .class-card:hover::before {
+        opacity: 1;
+    }
+
+    .class-header {
+        display: flex;
+        align-items: flex-start;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .class-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 0.75rem;
+        background: var(--purple-bg);
+        color: var(--purple);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .class-title {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .class-title h3 {
+        margin: 0 0 0.25rem 0;
+        font-size: 1.15rem;
+        font-weight: 700;
+        color: var(--gray-900);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .class-title p {
+        margin: 0;
+        font-size: 0.85rem;
+        color: var(--gray-500);
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+    }
+
+    .class-desc {
+        font-size: 0.9rem;
+        color: var(--gray-600);
+        line-height: 1.5;
+        margin-bottom: 1.5rem;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        flex-grow: 1;
+    }
+
+    .class-meta {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        padding-top: 1rem;
+        border-top: 1px solid var(--gray-100);
+        margin-top: auto;
+    }
+    
+    .btn-manage {
+        background: var(--purple-bg);
+        color: var(--purple);
+        padding: 0.5rem 1rem;
+        border-radius: 0.5rem;
+        font-size: 0.85rem;
+        font-weight: 600;
+        text-decoration: none;
+        transition: all 0.2s;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+    }
+    
+    .btn-manage:hover {
+        background: var(--purple);
+        color: var(--white);
+    }
+</style>
+{% endblock %}
+
+{% block dashboard_content %}
+<div class="dashboard-body" style="grid-template-columns: 1fr; display: block;">
+    <div class="manage-controls">
+        <h2 style="margin:0; font-size:1.25rem; font-weight:700; color:var(--gray-900);">All Classes</h2>
+        <a href="{{ url_for('dashboard.create_class_page') }}" class="btn-primary" style="padding: 0.6em 1.2em; font-size: 0.9em; width: auto; height: auto;">
+            <i data-lucide="plus-circle" style="width: 1em; height: 1em; margin-right: 0.5em;"></i> Create Class
+        </a>
+    </div>
+
+    {% if invitations %}
+    <h3 style="margin-top: 2rem; margin-bottom: 1rem; color: var(--gray-800); font-size: 1.15rem;">Pending Invitations</h3>
+    <div class="class-grid" style="margin-bottom: 2rem;">
+        {% for inv in invitations %}
+        <div class="class-card">
+            <div class="class-header">
+                <div class="class-icon" style="background: #fef3c7; color: #d97706;">
+                    <i data-lucide="mail" style="width:24px; height:24px;"></i>
+                </div>
+                <div class="class-title">
+                    <h3>{{ inv.name }}</h3>
+                    <p style="color: #d97706; font-weight: 600;">Pending Invitation</p>
+                </div>
+            </div>
+            
+            <div class="class-desc">
+                You have been invited to join this class as an Examiner.
+            </div>
+            
+            <div class="class-meta" style="justify-content: flex-start; gap: 0.5rem;">
+                <button onclick="respondInvite('{{ inv._id }}', 'accept')" class="btn-primary" style="padding: 0.5rem 1rem; font-size: 0.85rem; width: auto; height: auto;">Accept</button>
+                <button onclick="respondInvite('{{ inv._id }}', 'decline')" class="btn-manage" style="background: var(--danger-bg, #fee2e2); color: var(--danger, #dc2626); border: none;">Decline</button>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if classes %}
+    <div class="class-grid">
+        {% for cls in classes %}
+        <div class="class-card" onclick="if(!event.target.closest('a') && !event.target.closest('button')) window.location.href='{{ url_for('dashboard.class_chat', class_id=cls._id) }}'" style="cursor: pointer;">
+            <div class="class-header">
+                <div class="class-icon">
+                    <i data-lucide="users" style="width:24px; height:24px;"></i>
+                </div>
+                <div class="class-title">
+                    <h3>{{ cls.name }}</h3>
+                    <p><i data-lucide="users" style="width:14px; height:14px;"></i> {{ cls.students | length }} Students Enrolled</p>
+                </div>
+            </div>
+            
+            {% if cls.description %}
+            <div class="class-desc">
+                {{ cls.description }}
+            </div>
+            {% else %}
+            <div class="class-desc" style="color: var(--gray-400); font-style: italic;">
+                No description provided.
+            </div>
+            {% endif %}
+            
+            <div class="class-meta">
+                <a href="{{ url_for('dashboard.manage_class', class_id=cls._id) }}" class="btn-manage" onclick="event.stopPropagation();">
+                    Manage Class <i data-lucide="settings" style="width:14px; height:14px;"></i>
+                </a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% elif not invitations %}
+    <div class="empty-state" style="margin-top: 2rem;">
+        <i data-lucide="users" style="width: 48px; height: 48px; color: var(--gray-400); margin-bottom: 1rem;"></i>
+        <h3>No Classes Found</h3>
+        <p>You haven't created any classes yet.</p>
+        <a href="{{ url_for('dashboard.create_class_page') }}" class="btn-primary" style="margin-top: 1rem; text-decoration:none; display:inline-flex;">Create Your First Class</a>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+async function respondInvite(classId, action) {
+    const res = await fetch(`/api/classes/${classId}/respond_invite`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+        },
+        body: JSON.stringify({ action })
+    });
+    const data = await res.json();
+    if(data.success) {
+        window.location.reload();
+    } else {
+        alert(data.error || 'Failed to process invitation');
+    }
+}
+</script>
+{% endblock %}

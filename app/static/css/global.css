@@ -43,7 +43,7 @@ body {
 }
 
 .hero {
-    background: #ffffff;
+    background: linear-gradient(rgba(23, 10, 40, 0.85), rgba(23, 10, 40, 0.85)), url('https://res.cloudinary.com/dicut7e2y/image/upload/v1781626485/auth_illustration_ttbtpa.jpg') no-repeat center center / cover;
     min-height: 90vh;
     padding: 3rem 5rem 11.25rem 6.5rem;
     position: relative;
@@ -58,12 +58,12 @@ body {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    background: rgba(240, 239, 237, 0.991);
+    background: #e4bf38e8;
     backdrop-filter: blur(10px);
     border: 1px solid rgba(255, 255, 255, 0.15);
     padding: 0.5rem 1.125rem;
     border-radius: 1.875rem;
-    color: #e4bf38e8;
+    color: #290f31e8;
     font-size: 0.975rem;
     font-weight: 500;
     margin-bottom: 1.875rem;
@@ -72,7 +72,7 @@ body {
 .badge svg {
     width: 1rem;
     height: 1rem;
-    color: #c9962f;
+    color: #290f31e8;
 }
 
 .hero-content {
@@ -80,7 +80,7 @@ body {
 }
 
 .hero h1 {
-    color: #000000;
+    color: #e4a238;
     font-size: 3.9rem;
     font-weight: 700;
     line-height: 1.15;
@@ -976,7 +976,7 @@ body {
 
     .hero h1 {
         font-size: 2.2rem;
-        color: white;
+        color: #fbbf24;
     }
 
     .hero h1 span {
@@ -1007,7 +1007,7 @@ body {
     }
 
     .badge svg {
-        color: #fbbf24;
+        color: #290f31e8;
     }
 
     .cta-btn {

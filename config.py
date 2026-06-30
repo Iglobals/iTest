@@ -16,6 +16,9 @@ class Config:
     SQLALCHEMY_ENGINE_OPTIONS = {
         'pool_pre_ping': True,
         'pool_recycle': 300,
+        'connect_args': {
+            'sslmode': 'prefer'  # Options: disable, allow, prefer, require, verify-ca, verify-full
+        } if os.environ.get('POSTGRES_URI') and 'postgres' in os.environ.get('POSTGRES_URI', '') else {}
     }
     
     # ICA Integration

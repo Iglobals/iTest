@@ -87,6 +87,53 @@ def start_session():
     return jsonify({"success": True, "data": new_session}), 201
 
 
+@sessions_bp.route('/<session_id>/flag', methods=['POST'])
+@require_auth()
+def flag_violation(session_id):
+    """Log proctoring violations like tab switches."""
+    data = request.json
+    sessions_col = get_collection('exam_sessions')
+    
+    try:
+        session_obj_id = ObjectId(session_id)
+        session = sessions_col.find_one({"_id": session_obj_id})
+        
+        if not session or session["student_id"] != g.current_user["_id"]:
+            return jsonify({"error": "Session not found or unauthorized"}), 404
+            
+        if session["status"] != "in_progress":
+            return jsonify({"error": "Session is already closed"}), 400
+            
+        flag_entry = {
+            "type": data.get("type", "tab_switch"),
+            "timestamp": data.get("timestamp", datetime.utcnow().isoformat()),
+            "logged_at": datetime.utcnow()
+        }
+        
+        sessions_col.update_one(
+            {"_id": session_obj_id},
+            {"$push": {"proctoring_flags": flag_entry}}
+        )
+        
+        # Get updated flag count
+        updated_session = sessions_col.find_one({"_id": session_obj_id})
+        flag_count = len(updated_session.get("proctoring_flags", []))
+        
+        # If 3 or more flags, auto-submit
+        max_flags = 3
+        force_submit = flag_count >= max_flags
+        
+        return jsonify({
+            "success": True,
+            "flag_count": flag_count,
+            "max_flags": max_flags,
+            "force_submit": force_submit
+        }), 200
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
 @sessions_bp.route('/<session_id>/sync', methods=['PUT'])
 @require_auth()
 def sync_session(session_id):

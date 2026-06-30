@@ -347,17 +347,115 @@
         display: none;
         position: fixed;
         inset: 0;
-        background: rgba(0, 0, 0, 0.9);
+        background: rgba(0, 0, 0, 0.95);
         z-index: 9999;
         flex-direction: column;
         align-items: center;
         justify-content: center;
         color: white;
+        padding: 2rem;
+        text-align: center;
+    }
+
+    .proctor-alert.show {
+        display: flex;
+    }
+
+    .proctor-alert-icon {
+        width: 80px;
+        height: 80px;
+        color: #ef4444;
+        margin-bottom: 1.5rem;
     }
 
     .proctor-alert h1 {
         color: #ef4444;
-        margin-bottom: 1rem;
+        margin: 0 0 1rem 0;
+        font-size: 2rem;
+    }
+
+    .proctor-alert p {
+        font-size: 1.1rem;
+        margin: 0.5rem 0;
+        max-width: 600px;
+    }
+
+    .proctor-alert .flag-count {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #fbbf24;
+        margin: 1rem 0;
+    }
+
+    .proctor-alert .subtext {
+        font-size: 0.95rem;
+        color: #94a3b8;
+        margin-top: 0.5rem;
+    }
+
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.75);
+        z-index: 9998;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+    }
+
+    .modal-overlay.show {
+        display: flex;
+    }
+
+    .modal-content {
+        background: white;
+        border-radius: 1rem;
+        padding: 2rem;
+        max-width: 500px;
+        width: 100%;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        text-align: center;
+    }
+
+    .modal-content h2 {
+        margin: 0 0 1rem 0;
+        color: var(--gray-900);
+    }
+
+    .modal-content p {
+        margin: 0 0 1.5rem 0;
+        color: var(--gray-600);
+        line-height: 1.6;
+    }
+
+    .modal-actions {
+        display: flex;
+        gap: 1rem;
+        justify-content: center;
+    }
+
+    .modal-btn {
+        padding: 0.75rem 1.5rem;
+        border-radius: 0.5rem;
+        border: none;
+        font-weight: 600;
+        cursor: pointer;
+        transition: opacity 0.2s;
+    }
+
+    .modal-btn-primary {
+        background: var(--purple);
+        color: white;
+    }
+
+    .modal-btn-secondary {
+        background: var(--gray-200);
+        color: var(--gray-700);
+    }
+
+    .modal-btn:hover {
+        opacity: 0.9;
     }
 
     @media (max-width: 900px) {
@@ -377,10 +475,59 @@
 {% block content %}
 <!-- Proctoring Violation Alert -->
 <div class="proctor-alert" id="proctorAlert">
-    <i data-lucide="alert-triangle" style="width: 64px; height: 64px; color: #ef4444;"></i>
-    <h1>Violation Detected!</h1>
-    <p>You have left the examination tab. This action has been recorded.</p>
-    <button class="btn-exam btn-next" onclick="dismissProctorAlert()" style="margin-top: 2rem;">Return to Exam</button>
+    <i data-lucide="alert-triangle" class="proctor-alert-icon"></i>
+    <h1>⚠️ Violation Detected!</h1>
+    <p>You have left the examination screen. This action has been recorded.</p>
+    <div class="flag-count" id="flagCountDisplay">Flag <span id="flagCountNumber">1</span> of 3</div>
+    <p class="subtext" id="flagSubtext">You have 2 more chances remaining. After 3 flags, your exam will be auto-submitted.</p>
+    <button class="btn-exam btn-next" onclick="dismissProctorAlert()" style="margin-top: 2rem; font-size: 1.1rem; padding: 1rem 2rem;">
+        <i data-lucide="arrow-left" style="width:18px; height:18px; vertical-align:middle;"></i>
+        Return to Exam
+    </button>
+</div>
+
+<!-- Time's Up Modal -->
+<div class="modal-overlay" id="timeUpModal">
+    <div class="modal-content">
+        <i data-lucide="clock" style="width:64px; height:64px; color: #ef4444; margin: 0 auto 1rem;"></i>
+        <h2>⏰ Time's Up!</h2>
+        <p>The exam timer has reached 00:00. Your answers are being submitted automatically...</p>
+        <div style="margin-top: 1rem;">
+            <div style="display: inline-block; width: 40px; height: 40px; border: 4px solid var(--purple-bg); border-top: 4px solid var(--purple); border-radius: 50%; animation: spin 1s linear infinite;"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Exam Flagged Modal -->
+<div class="modal-overlay" id="flaggedModal">
+    <div class="modal-content">
+        <i data-lucide="x-circle" style="width:64px; height:64px; color: #ef4444; margin: 0 auto 1rem;"></i>
+        <h2>🚫 Exam Terminated</h2>
+        <p>You were flagged 3 times for leaving the exam screen. Your current progress has been submitted, but you won't be able to continue with this exam.</p>
+        <p style="font-weight: 600; color: var(--purple);">Please reach out to your examiner for further assistance.</p>
+        <div class="modal-actions" style="margin-top: 2rem;">
+            <button class="modal-btn modal-btn-primary" onclick="goToDashboard()">
+                <i data-lucide="arrow-left" style="width:16px; height:16px; vertical-align:middle;"></i>
+                Back to Dashboard
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Submit Confirmation Modal -->
+<div class="modal-overlay" id="submitModal">
+    <div class="modal-content">
+        <i data-lucide="help-circle" style="width:64px; height:64px; color: var(--purple); margin: 0 auto 1rem;"></i>
+        <h2>Submit Exam?</h2>
+        <p id="submitModalMessage">Are you sure you want to submit your exam?</p>
+        <div class="modal-actions" style="margin-top: 2rem;">
+            <button class="modal-btn modal-btn-secondary" onclick="closeSubmitModal()">Cancel</button>
+            <button class="modal-btn modal-btn-primary" onclick="confirmSubmit()">
+                <i data-lucide="check-circle" style="width:16px; height:16px; vertical-align:middle;"></i>
+                Submit Exam
+            </button>
+        </div>
+    </div>
 </div>
 
 <div class="exam-header unselectable">
@@ -491,6 +638,8 @@
     const totalQ = {{ questions| length }};
     const isProctored = {{ 'true' if exam.settings.ai_proctoring_enabled else 'false' }};
     let currentQ = 0;
+    let flagCount = 0;
+    const maxFlags = 3;
 
     // Check if exam is empty
     if (totalQ === 0) {
@@ -535,24 +684,77 @@
                 console.error("Camera error:", err);
             });
 
-        // 2. Tab Visibility Check
+        // 2. Tab Visibility Check with flag tracking
         document.addEventListener("visibilitychange", () => {
             if (document.hidden) {
-                // Tab changed or minimized!
-                document.getElementById('proctorAlert').style.display = 'flex';
-                // Note: In a real system, you would log this violation to the server via fetch immediately.
-                console.warn("PROCTORING FLAG: User left the tab at", new Date().toISOString());
+                flagCount++;
+                
+                // Show proctoring alert
+                const alertEl = document.getElementById('proctorAlert');
+                alertEl.classList.add('show');
+                
+                // Update flag count display
+                document.getElementById('flagCountNumber').textContent = flagCount;
+                
+                // Update subtext based on flag count
+                const subtextEl = document.getElementById('flagSubtext');
+                if (flagCount === 1) {
+                    subtextEl.textContent = 'You have 2 more chances remaining. After 3 flags, your exam will be auto-submitted.';
+                } else if (flagCount === 2) {
+                    subtextEl.textContent = 'This is your last warning! One more flag and your exam will be auto-submitted.';
+                } else if (flagCount >= 3) {
+                    subtextEl.textContent = 'Maximum flags reached. Your exam is being submitted...';
+                }
+                
+                // Log violation to server
                 fetch(`/api/sessions/${sessionId}/flag`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ type: 'tab_switch', timestamp: new Date().toISOString() })
-                }).catch(e => console.log('Flag logging failed:', e));
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.force_submit) {
+                        // Auto-submit after 3 flags
+                        dismissProctorAlert();
+                        setTimeout(() => {
+                            submitExamForFlags();
+                        }, 1000);
+                    }
+                })
+                .catch(e => console.log('Flag logging failed:', e));
             }
         });
     }
 
     function dismissProctorAlert() {
-        document.getElementById('proctorAlert').style.display = 'none';
+        document.getElementById('proctorAlert').classList.remove('show');
+        lucide.createIcons();
+    }
+    
+    function goToDashboard() {
+        window.location.href = '/dashboard';
+    }
+    
+    async function submitExamForFlags() {
+        // Show flagged modal
+        document.getElementById('flaggedModal').classList.add('show');
+        lucide.createIcons();
+        
+        // Submit exam in background
+        try {
+            await fetch(`/api/sessions/${sessionId}/submit`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    answers: Object.values(answersState),
+                    reason: 'flagged_violations'
+                })
+            });
+            localStorage.removeItem(LS_KEY);
+        } catch (err) {
+            console.error('Error submitting flagged exam:', err);
+        }
     }
 
     function leaveExam() {
@@ -580,7 +782,14 @@
 
         if (timeLeft <= 0) {
             clearInterval(timerInterval);
-            submitExam(true); // Forced timeout submit
+            // Show time's up modal
+            document.getElementById('timeUpModal').classList.add('show');
+            lucide.createIcons();
+            
+            // Auto-submit after 2 seconds
+            setTimeout(() => {
+                submitExam(true); // Forced timeout submit
+            }, 2000);
         }
     }, 1000);
 
@@ -710,33 +919,71 @@
     }
 
     // ── Final Submission ───────────────────────────────────────────────────
+    let pendingSubmit = false;
+    
+    function closeSubmitModal() {
+        document.getElementById('submitModal').classList.remove('show');
+        pendingSubmit = false;
+    }
+    
+    async function confirmSubmit() {
+        closeSubmitModal();
+        await performSubmit(false);
+    }
+    
     async function submitExam(isTimeout = false) {
+        if (pendingSubmit) return; // Prevent double submission
+        
         if (!isTimeout) {
-            const answeredCount = Object.keys(answersState).length;
+            const answeredCount = Object.keys(answersState).filter(k => answersState[k].selected_option).length;
+            const messageEl = document.getElementById('submitModalMessage');
+            
             if (answeredCount < totalQ) {
-                if (!confirm(`You have answered ${answeredCount} out of ${totalQ} questions. Are you sure you want to submit?`)) return;
+                messageEl.textContent = `You have answered ${answeredCount} out of ${totalQ} questions. Are you sure you want to submit?`;
             } else {
-                if (!confirm('Are you sure you want to submit your exam?')) return;
+                messageEl.textContent = 'Are you sure you want to submit your exam? You cannot change your answers after submission.';
             }
+            
+            document.getElementById('submitModal').classList.add('show');
+            lucide.createIcons();
+            pendingSubmit = true;
+            return; // Wait for user confirmation
+        } else {
+            await performSubmit(true);
         }
-
+    }
+    
+    async function performSubmit(isTimeout = false) {
         try {
             const response = await fetch(`/api/sessions/${sessionId}/submit`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ answers: Object.values(answersState) })
+                body: JSON.stringify({ 
+                    answers: Object.values(answersState),
+                    reason: isTimeout ? 'timeout' : 'manual'
+                })
             });
             const result = await response.json();
 
             if (result.success) {
                 localStorage.removeItem(LS_KEY); // Clear cache
-                alert(`Exam Submitted successfully!`);
-                window.location.href = '/dashboard';
+                
+                if (isTimeout) {
+                    // Give time for modal to show
+                    setTimeout(() => {
+                        window.location.href = '/dashboard';
+                    }, 2000);
+                } else {
+                    window.location.href = '/dashboard';
+                }
             } else {
+                closeSubmitModal();
                 alert('Error submitting exam: ' + result.error);
             }
         } catch (err) {
-            alert('Network error submitting exam. Answers are safely cached. Try submitting again when online.');
+            closeSubmitModal();
+            alert('Network error submitting exam. Your answers are safely cached. Please try submitting again when you have a stable connection.');
+            console.error('Submit error:', err);
         }
     }
 

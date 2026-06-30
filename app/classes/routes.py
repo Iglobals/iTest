@@ -140,6 +140,8 @@ def invite(class_id):
                 return jsonify({"error": f"Plan limit reached: Max {max_students} students allowed.", "limit_reached": True}), 403
         
         invited_users = []
+        skipped_users = []
+        
         for email in emails:
             user = users_col.find_one({"email": email})
             if user:
@@ -150,6 +152,7 @@ def invite(class_id):
                 is_existing_teacher = any(str(t.get("user_id")) == str(user_id) for t in class_obj.get("teachers", []))
                 
                 if is_existing_student or is_existing_teacher:
+                    skipped_users.append({"email": email, "reason": "already_member"})
                     continue # Skip already invited or existing members
                 
                 if role == 'student':
@@ -163,13 +166,92 @@ def invite(class_id):
                     "type": "class_invite",
                     "title": f"Class Invitation: {class_obj.get('name')}",
                     "body": f"You have been invited to join {class_obj.get('name')} as an examiner." if role == 'teacher' else f"You have been invited to join {class_obj.get('name')} as a student.",
-                    "metadata": {"class_id": class_id},
+                    "metadata": {"class_id": class_id, "role": role},
                     "is_read": False,
                     "created_at": datetime.utcnow()
                 })
                 invited_users.append(email)
+            else:
+                skipped_users.append({"email": email, "reason": "user_not_found"})
                 
-        return jsonify({"success": True, "message": f"Invited {len(invited_users)} new users. (Existing members were skipped)."}), 200
+        message = f"Invited {len(invited_users)} new users."
+        if skipped_users:
+            message += f" Skipped {len(skipped_users)} users (already members or not found)."
+            
+        return jsonify({"success": True, "message": message, "invited": invited_users, "skipped": skipped_users}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@classes_bp.route('/<class_id>/uninvite', methods=['POST'])
+@require_role('teacher', 'org_admin')
+def uninvite(class_id):
+    """Uninvite a user (remove pending invitation) and optionally reinvite with correct role."""
+    data = request.json
+    user_id = data.get("user_id")
+    reinvite_as = data.get("reinvite_as")  # Optional: 'student' or 'teacher'
+    
+    classes_col = get_collection('classes')
+    users_col = get_collection('users')
+    notif_col = get_collection('notifications')
+    
+    try:
+        class_obj = classes_col.find_one({"_id": ObjectId(class_id)})
+        if not class_obj:
+            return jsonify({"error": "Class not found"}), 404
+            
+        user_obj_id = ObjectId(user_id)
+        user = users_col.find_one({"_id": user_obj_id})
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        
+        # Remove from both students and teachers arrays
+        classes_col.update_one(
+            {"_id": ObjectId(class_id)},
+            {"$pull": {
+                "students": {"user_id": user_obj_id},
+                "teachers": {"user_id": user_obj_id}
+            }}
+        )
+        
+        # Delete related notification
+        notif_col.delete_many({
+            "recipient_id": user_obj_id,
+            "type": "class_invite",
+            "metadata.class_id": class_id
+        })
+        
+        message = f"Uninvited {user.get('email', 'user')} successfully."
+        
+        # Reinvite with correct role if specified
+        if reinvite_as in ['student', 'teacher']:
+            if reinvite_as == 'student':
+                classes_col.update_one(
+                    {"_id": ObjectId(class_id)},
+                    {"$push": {"students": {"user_id": user_obj_id, "status": "pending", "invited_at": datetime.utcnow(), "joined_at": None}}}
+                )
+            else:
+                classes_col.update_one(
+                    {"_id": ObjectId(class_id)},
+                    {"$push": {"teachers": {"user_id": user_obj_id, "role": "collaborator", "status": "pending", "added_at": datetime.utcnow()}}}
+                )
+            
+            # Send new notification
+            notif_col.insert_one({
+                "recipient_id": user_obj_id,
+                "sender_id": g.current_user["_id"],
+                "type": "class_invite",
+                "title": f"Class Invitation: {class_obj.get('name')}",
+                "body": f"You have been invited to join {class_obj.get('name')} as {'an examiner' if reinvite_as == 'teacher' else 'a student'}.",
+                "metadata": {"class_id": class_id, "role": reinvite_as},
+                "is_read": False,
+                "created_at": datetime.utcnow()
+            })
+            
+            message = f"Reinvited {user.get('email', 'user')} as {reinvite_as}."
+            
+        return jsonify({"success": True, "message": message}), 200
+        
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 

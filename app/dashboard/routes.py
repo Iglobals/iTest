@@ -296,6 +296,7 @@ def session_take(session_id):
                            time_remaining=session.get('time_remaining_seconds', 3600))
 
 @dashboard_bp.route('/my-exams')
+@dashboard_bp.route('/my-exams')
 @require_auth()
 def my_exams():
     if g.current_user.get('role') != 'student':
@@ -304,57 +305,86 @@ def my_exams():
     user_id = g.current_user.get('_id')
     user_email = g.current_user.get('email', '')
     
-    classes_col = get_collection('classes')
-    exams_col = get_collection('exams')
-    scores_col = get_collection('exam_scores')
-    
-    # 1. Find all exams student has taken (using postgres ExamScore model but we can't easily query it here, wait...)
-    # Oh wait! In models.py ExamScore is a PostgreSQL table!
-    from app.models import ExamScore
-    from app.extensions import db
-    
-    taken_scores = ExamScore.query.filter_by(student_id=str(user_id)).order_by(ExamScore.submitted_at.desc()).all()
-    taken_exam_ids = [score.exam_id for score in taken_scores]
-    
-    # Get the actual exam documents for taken exams
-    from bson import ObjectId
-    taken_exams_cursor = exams_col.find({"_id": {"$in": [ObjectId(eid) for eid in set(taken_exam_ids) if ObjectId.is_valid(eid)]}}) if exams_col is not None else []
-    taken_exams_dict = {str(e['_id']): e for e in taken_exams_cursor}
-    
-    taken_exams = []
-    for score in taken_scores:
-        exam_info = taken_exams_dict.get(str(score.exam_id))
-        if exam_info:
-            taken_exams.append({
-                "score": score,
-                "exam": exam_info
-            })
+    try:
+        classes_col = get_collection('classes')
+        exams_col = get_collection('exams')
+        
+        # 1. Find all exams student has taken (using postgres ExamScore model)
+        from app.models import ExamScore
+        from app.extensions import db
+        from bson import ObjectId
+        
+        taken_scores = ExamScore.query.filter_by(student_id=str(user_id)).order_by(ExamScore.submitted_at.desc()).all()
+        taken_exam_ids = [score.exam_id for score in taken_scores if score.exam_id]
+        
+        # Get the actual exam documents for taken exams
+        taken_exams_cursor = []
+        if taken_exam_ids and exams_col is not None:
+            valid_exam_ids = [ObjectId(eid) for eid in set(taken_exam_ids) if eid and ObjectId.is_valid(eid)]
+            if valid_exam_ids:
+                taken_exams_cursor = exams_col.find({"_id": {"$in": valid_exam_ids}})
+        
+        taken_exams_dict = {str(e['_id']): e for e in taken_exams_cursor}
+        
+        taken_exams = []
+        for score in taken_scores:
+            exam_info = taken_exams_dict.get(str(score.exam_id))
+            if exam_info:
+                # Ensure _id is string for template
+                exam_info['_id'] = str(exam_info['_id'])
+                taken_exams.append({
+                    "score": score,
+                    "exam": exam_info
+                })
+                
+        # 2. Find all available exams
+        enrolled_classes = []
+        if classes_col is not None:
+            enrolled_classes = list(classes_col.find({"students.user_id": user_id, "students.status": "active"}))
+        
+        class_ids = [c['_id'] for c in enrolled_classes]
+        
+        available_exams = []
+        if exams_col is not None:
+            query = {
+                "status": "published",
+                "visibility.excluded_student_ids": {"$ne": user_email}
+            }
             
-    # 2. Find all available exams
-    enrolled_classes = list(classes_col.find({"students.user_id": user_id, "students.status": "active"})) if classes_col is not None else []
-    class_ids = [c['_id'] for c in enrolled_classes]
-    
-    available_exams = list(exams_col.find({
-        "status": "published",
-        "visibility.excluded_student_ids": {"$ne": user_email},
-        "$or": [
-            {"exam_type": {"$in": ["public", "platform_standard"]}},
-            {"visibility.class_ids": {"$in": class_ids}},
-            {"visibility.student_ids": user_email}
-        ]
-    }).sort("schedule.available_from", 1)) if exams_col is not None else []
-    
-    # Filter out exams where max attempts have been reached
-    filtered_available = []
-    for exam in available_exams:
-        exam_id_str = str(exam['_id'])
-        attempts = sum(1 for sid in taken_exam_ids if sid == exam_id_str)
-        max_attempts = exam.get('settings', {}).get('max_attempts', 1)
-        if attempts < max_attempts:
-            exam['attempts_made'] = attempts
-            filtered_available.append(exam)
+            # Build OR condition if there are class_ids or student can access public exams
+            or_conditions = [
+                {"exam_type": {"$in": ["public", "platform_standard"]}}
+            ]
             
-    return render_template('dashboard/my_exams.html', available_exams=filtered_available, taken_exams=taken_exams)
+            if class_ids:
+                or_conditions.append({"visibility.class_ids": {"$in": class_ids}})
+            
+            if user_email:
+                or_conditions.append({"visibility.student_ids": user_email})
+            
+            query["$or"] = or_conditions
+            
+            available_exams = list(exams_col.find(query).sort("created_at", -1))
+        
+        # Filter out exams where max attempts have been reached
+        filtered_available = []
+        for exam in available_exams:
+            exam_id_str = str(exam['_id'])
+            exam['_id'] = exam_id_str  # Ensure _id is string for template
+            
+            attempts = sum(1 for sid in taken_exam_ids if sid == exam_id_str)
+            max_attempts = exam.get('settings', {}).get('max_attempts', 1)
+            
+            if attempts < max_attempts:
+                exam['attempts_made'] = attempts
+                filtered_available.append(exam)
+                
+        return render_template('dashboard/my_exams.html', available_exams=filtered_available, taken_exams=taken_exams)
+        
+    except Exception as e:
+        # Log the error and show user-friendly message
+        print(f"Error in my_exams route: {str(e)}")
+        return render_template('dashboard/my_exams.html', available_exams=[], taken_exams=[], error=str(e))
 
 @dashboard_bp.route('/sessions/<session_id>/result')
 @require_auth()

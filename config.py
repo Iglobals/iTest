@@ -7,19 +7,32 @@ load_dotenv(os.path.join(basedir, '.env'))
 class Config:
     SECRET_KEY = os.environ.get('FLASK_SECRET_KEY') or 'hard to guess string'
     
+    # Session configuration for OAuth flow
+    SESSION_TYPE = 'filesystem'  # or 'redis' in production
+    SESSION_COOKIE_SECURE = False  # Set True in production with HTTPS
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Lax'
+    PERMANENT_SESSION_LIFETIME = 3600
+    
     # MongoDB setup (primary data storage)
     MONGO_URI = os.environ.get('MONGODB_URI')
     
     # PostgreSQL setup (for reporting, scoring, ranking)
     SQLALCHEMY_DATABASE_URI = os.environ.get('POSTGRES_URI')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    SQLALCHEMY_ENGINE_OPTIONS = {
+    
+    # Parse sslmode from URI if present, otherwise use default settings
+    postgres_uri = os.environ.get('POSTGRES_URI', '')
+    engine_options = {
         'pool_pre_ping': True,
         'pool_recycle': 300,
-        'connect_args': {
-            'sslmode': 'prefer'  # Options: disable, allow, prefer, require, verify-ca, verify-full
-        } if os.environ.get('POSTGRES_URI') and 'postgres' in os.environ.get('POSTGRES_URI', '') else {}
     }
+    
+    # Only add connect_args if sslmode is NOT already in the URI
+    if postgres_uri and 'sslmode=' not in postgres_uri:
+        engine_options['connect_args'] = {'sslmode': 'prefer'}
+    
+    SQLALCHEMY_ENGINE_OPTIONS = engine_options
     
     # ICA Integration
     ICA_BASE_URL = os.environ.get('ICA_BASE_URL')

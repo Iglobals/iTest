@@ -305,6 +305,10 @@ def my_exams():
     user_id = g.current_user.get('_id')
     user_email = g.current_user.get('email', '')
     
+    print(f"\n[MY_EXAMS DEBUG] User ID: {user_id}")
+    print(f"[MY_EXAMS DEBUG] User Email: {user_email}")
+    print(f"[MY_EXAMS DEBUG] User Role: {g.current_user.get('role')}")
+    
     try:
         classes_col = get_collection('classes')
         exams_col = get_collection('exams')
@@ -314,17 +318,23 @@ def my_exams():
         from app.extensions import db
         from bson import ObjectId
         
+        print(f"[MY_EXAMS DEBUG] Querying ExamScore table...")
         taken_scores = ExamScore.query.filter_by(student_id=str(user_id)).order_by(ExamScore.submitted_at.desc()).all()
+        print(f"[MY_EXAMS DEBUG] Found {len(taken_scores)} taken exams")
+        
         taken_exam_ids = [score.exam_id for score in taken_scores if score.exam_id]
+        print(f"[MY_EXAMS DEBUG] Taken exam IDs: {taken_exam_ids}")
         
         # Get the actual exam documents for taken exams
         taken_exams_cursor = []
         if taken_exam_ids and exams_col is not None:
             valid_exam_ids = [ObjectId(eid) for eid in set(taken_exam_ids) if eid and ObjectId.is_valid(eid)]
+            print(f"[MY_EXAMS DEBUG] Valid ObjectIds: {len(valid_exam_ids)}")
             if valid_exam_ids:
                 taken_exams_cursor = exams_col.find({"_id": {"$in": valid_exam_ids}})
         
         taken_exams_dict = {str(e['_id']): e for e in taken_exams_cursor}
+        print(f"[MY_EXAMS DEBUG] Found {len(taken_exams_dict)} exam documents")
         
         taken_exams = []
         for score in taken_scores:
@@ -336,13 +346,18 @@ def my_exams():
                     "score": score,
                     "exam": exam_info
                 })
+        
+        print(f"[MY_EXAMS DEBUG] Taken exams with data: {len(taken_exams)}")
                 
         # 2. Find all available exams
         enrolled_classes = []
         if classes_col is not None:
             enrolled_classes = list(classes_col.find({"students.user_id": user_id, "students.status": "active"}))
         
+        print(f"[MY_EXAMS DEBUG] Enrolled in {len(enrolled_classes)} classes")
+        
         class_ids = [c['_id'] for c in enrolled_classes]
+        print(f"[MY_EXAMS DEBUG] Class IDs: {class_ids}")
         
         available_exams = []
         if exams_col is not None:
@@ -364,7 +379,9 @@ def my_exams():
             
             query["$or"] = or_conditions
             
+            print(f"[MY_EXAMS DEBUG] Query: {query}")
             available_exams = list(exams_col.find(query).sort("created_at", -1))
+            print(f"[MY_EXAMS DEBUG] Found {len(available_exams)} available exams")
         
         # Filter out exams where max attempts have been reached
         filtered_available = []
@@ -374,16 +391,27 @@ def my_exams():
             
             attempts = sum(1 for sid in taken_exam_ids if sid == exam_id_str)
             max_attempts = exam.get('settings', {}).get('max_attempts', 1)
+            allow_retake = exam.get('settings', {}).get('allow_retake', False)
             
-            if attempts < max_attempts:
+            print(f"[MY_EXAMS DEBUG] Exam {exam.get('title')}: {attempts}/{max_attempts} attempts, allow_retake={allow_retake}")
+            
+            # Show exam if:
+            # 1. Student hasn't taken it yet (attempts == 0), OR
+            # 2. Retakes are allowed AND attempts < max_attempts
+            if attempts == 0 or (allow_retake and attempts < max_attempts):
                 exam['attempts_made'] = attempts
                 filtered_available.append(exam)
+        
+        print(f"[MY_EXAMS DEBUG] Final available exams: {len(filtered_available)}")
+        print(f"[MY_EXAMS DEBUG] Final taken exams: {len(taken_exams)}\n")
                 
         return render_template('dashboard/my_exams.html', available_exams=filtered_available, taken_exams=taken_exams)
         
     except Exception as e:
         # Log the error and show user-friendly message
-        print(f"Error in my_exams route: {str(e)}")
+        import traceback
+        print(f"[MY_EXAMS ERROR] Exception occurred:")
+        print(traceback.format_exc())
         return render_template('dashboard/my_exams.html', available_exams=[], taken_exams=[], error=str(e))
 
 @dashboard_bp.route('/sessions/<session_id>/result')
@@ -416,12 +444,12 @@ def view_result(session_id):
         return redirect(url_for('dashboard.index'))
         
     if is_student:
-        open_results = exam.get('settings', {}).get('open_results', exam.get('settings', {}).get('show_result_immediately', True))
+        open_results = exam.get('settings', {}).get('show_result_immediately', True)
         if not open_results:
             flash("Results are not yet open for viewing.", "info")
             return redirect(url_for('dashboard.my_exams'))
             
-        has_essay = any(q.get('type') == 'essay' for q in exam.get('questions', []))
+        has_essay = any(q.get('question_type') == 'essay' or q.get('type') == 'essay' for q in exam.get('questions', []))
         if has_essay and not session.get('is_graded'):
             flash("Results are pending manual grading by your teacher.", "info")
             return redirect(url_for('dashboard.my_exams'))
@@ -429,37 +457,47 @@ def view_result(session_id):
     from app.models import ExamScore
     score_record = ExamScore.query.filter_by(session_id=session_id).first()
     
-    # Map questions to answers
-    questions = exam.get('questions', [])
-    answers = session.get('answers', [])
-    answer_dict = {ans.get('question_id'): ans for ans in answers}
+    # Map questions to answers for detailed review
+    questions_dict = {str(q.get('_id')): q for q in exam.get('questions', [])}
+    answers_dict = {ans.get('question_id'): ans for ans in session.get('answers', [])}
     
     review_data = []
-    for q in questions:
-        q_id = q.get('_id')
-        ans = answer_dict.get(q_id, {})
-        student_response = ans.get('selected_option', ans.get('essay_answer', ''))
+    for q_id in session.get('question_order', []):
+        question = questions_dict.get(q_id)
+        if not question:
+            continue
+            
+        answer = answers_dict.get(q_id, {})
+        student_answer = answer.get('selected_option', '')
         
-        is_correct = False
-        correct_response = ""
+        correct_answer = question.get('correct_answer', '')
+        question_type = question.get('question_type', question.get('type', 'mcq'))
         
-        if q.get('type') == 'multiple_choice':
-            correct_opt = next((opt for opt in q.get('options', []) if opt.get('is_correct')), None)
-            if correct_opt:
-                correct_response = correct_opt.get('text')
-                is_correct = (student_response == correct_response)
-        else:
-            correct_response = "Pending Manual Grading"
-            is_correct = None
+        # Determine if correct
+        is_correct = None
+        if question_type in ['mcq', 'true_false', 'short_answer', 'numerical']:
+            is_correct = str(student_answer).strip().upper() == str(correct_answer).strip().upper()
+        elif question_type == 'essay':
+            is_correct = None  # Requires manual grading
             
         review_data.append({
-            "question": q,
-            "student_response": student_response,
+            "question_id": q_id,
+            "question_text": question.get('text', ''),
+            "question_type": question_type,
+            "options": question.get('options', []),
+            "student_answer": student_answer,
+            "correct_answer": correct_answer if question_type != 'essay' else 'Manual grading required',
             "is_correct": is_correct,
-            "correct_response": correct_response
+            "explanation": question.get('explanation', ''),
+            "marks": question.get('marks', 1)
         })
         
-    return render_template('exam/result.html', session=session, exam=exam, score_record=score_record, review_data=review_data, is_admin=is_admin)
+    return render_template('exam/result.html', 
+                         session=session, 
+                         exam=exam, 
+                         score_record=score_record, 
+                         review_data=review_data, 
+                         is_admin=is_admin)
 
 @dashboard_bp.route('/exams/<slug>/submissions')
 @require_auth()

@@ -200,20 +200,57 @@ def submit_session(session_id):
         # Final answer sync
         final_answers = data.get("answers", session.get("answers", []))
         
-        # Grading Logic (Mock implementation assuming we have correct_answer in question bank)
-        # Note: True grading requires fetching full questions from `question_banks`
-        # For MVP: we simulate parsing
+        # Build answers lookup
+        answers_dict = {ans.get("question_id"): ans.get("selected_option") for ans in final_answers if ans.get("question_id")}
+        
+        # Real grading logic - compare with actual correct answers
         correct_count = 0
         incorrect_count = 0
-        unanswered_count = len(session["question_order"]) - len(final_answers)
+        unanswered_count = 0
         
-        # In a real scenario, fetch actual questions by ID and compare correct_answer
-        # Here we randomly mock the grading for demonstration purposes
-        total_questions = len(session["question_order"]) or 1
-        correct_count = min(len(final_answers), int(total_questions * 0.8)) # Mock 80% correct of answered
-        incorrect_count = len(final_answers) - correct_count
+        # Get all questions from exam
+        questions_dict = {str(q.get("_id")): q for q in exam.get("questions", [])}
         
-        score_percent = (correct_count / total_questions) * 100
+        total_questions = len(session.get("question_order", []))
+        
+        for q_id in session.get("question_order", []):
+            student_answer = answers_dict.get(q_id)
+            question = questions_dict.get(q_id)
+            
+            if not student_answer:
+                unanswered_count += 1
+                continue
+                
+            if not question:
+                # Question not found, skip
+                continue
+                
+            # Get correct answer
+            correct_answer = question.get("correct_answer")
+            
+            # Compare based on question type
+            question_type = question.get("question_type", question.get("type", "mcq"))
+            
+            if question_type in ["mcq", "true_false"]:
+                # Exact match for MCQ and True/False
+                if str(student_answer).strip().upper() == str(correct_answer).strip().upper():
+                    correct_count += 1
+                else:
+                    incorrect_count += 1
+            elif question_type in ["short_answer", "numerical"]:
+                # Case-insensitive trim match for short answer
+                if str(student_answer).strip().lower() == str(correct_answer).strip().lower():
+                    correct_count += 1
+                else:
+                    incorrect_count += 1
+            elif question_type == "essay":
+                # Essay questions need manual grading - count as unanswered for now
+                unanswered_count += 1
+            else:
+                # Unknown type - treat as incorrect
+                incorrect_count += 1
+        
+        score_percent = (correct_count / total_questions * 100) if total_questions > 0 else 0
         pass_mark = exam.get("settings", {}).get("pass_mark_percent", 50)
         passed = score_percent >= pass_mark
         

@@ -1,3 +1,3 @@
 # iTest
-Exam creation, taking and proctoring app :)
+Exam creation, taking & proctoring app :)
 Will get back

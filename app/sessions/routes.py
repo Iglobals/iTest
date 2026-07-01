@@ -61,6 +61,21 @@ def start_session():
     questions = exam.get("questions", [])
     if exam.get("settings", {}).get("randomize_questions", False):
         random.shuffle(questions)
+    
+    # CRITICAL: Create a deep copy/snapshot of questions at the time of taking
+    # This ensures results can be viewed even if exam questions change later
+    question_snapshot = []
+    for q in questions:
+        question_snapshot.append({
+            "_id": str(q.get("_id")),
+            "text": q.get("text"),
+            "question_type": q.get("question_type", q.get("type", "mcq")),
+            "options": q.get("options", []),
+            "correct_answer": q.get("correct_answer"),
+            "explanation": q.get("explanation", ""),
+            "marks": q.get("marks", 1),
+            "image_url": q.get("image_url")
+        })
         
     question_order = [str(q.get("_id", i)) for i, q in enumerate(questions)]
     
@@ -75,6 +90,7 @@ def start_session():
         "answers": [],
         "proctoring_flags": [],
         "question_order": question_order,
+        "question_snapshot": question_snapshot,  # Store questions at time of taking
         "created_at": datetime.utcnow(),
         "updated_at": datetime.utcnow()
     }
@@ -203,13 +219,14 @@ def submit_session(session_id):
         # Build answers lookup
         answers_dict = {ans.get("question_id"): ans.get("selected_option") for ans in final_answers if ans.get("question_id")}
         
-        # Real grading logic - compare with actual correct answers
+        # Real grading logic - Use question_snapshot from session (not live exam questions)
         correct_count = 0
         incorrect_count = 0
         unanswered_count = 0
         
-        # Get all questions from exam
-        questions_dict = {str(q.get("_id")): q for q in exam.get("questions", [])}
+        # Use snapshot if available, otherwise fall back to current exam questions
+        questions_to_grade = session.get("question_snapshot", exam.get("questions", []))
+        questions_dict = {str(q.get("_id")): q for q in questions_to_grade}
         
         total_questions = len(session.get("question_order", []))
         

@@ -928,6 +928,17 @@
     
     async function confirmSubmit() {
         closeSubmitModal();
+        
+        // Show submitting state
+        const submitBtn = document.getElementById('btnSubmit');
+        const nextBtn = document.getElementById('btnNext');
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i data-lucide="loader" style="width:16px; height:16px; vertical-align:middle; animation: spin 1s linear infinite;"></i> Submitting...';
+            lucide.createIcons();
+        }
+        if (nextBtn) nextBtn.disabled = true;
+        
         await performSubmit(false);
     }
     
@@ -971,17 +982,33 @@
                 if (isTimeout) {
                     // Give time for modal to show
                     setTimeout(() => {
-                        window.location.href = '/dashboard';
+                        window.location.href = '/dashboard/my-exams';
                     }, 2000);
                 } else {
-                    window.location.href = '/dashboard';
+                    // Show success message
+                    alert('Exam submitted successfully! Redirecting to results...');
+                    window.location.href = '/dashboard/my-exams';
                 }
             } else {
                 closeSubmitModal();
+                // Re-enable button
+                const submitBtn = document.getElementById('btnSubmit');
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<i data-lucide="check-circle" style="width:16px; height:16px; vertical-align:middle;"></i> Submit Exam';
+                    lucide.createIcons();
+                }
                 alert('Error submitting exam: ' + result.error);
             }
         } catch (err) {
             closeSubmitModal();
+            // Re-enable button
+            const submitBtn = document.getElementById('btnSubmit');
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i data-lucide="check-circle" style="width:16px; height:16px; vertical-align:middle;"></i> Submit Exam';
+                lucide.createIcons();
+            }
             alert('Network error submitting exam. Your answers are safely cached. Please try submitting again when you have a stable connection.');
             console.error('Submit error:', err);
         }

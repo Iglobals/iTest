@@ -274,14 +274,24 @@ def session_take(session_id):
     if not exam:
         return "Exam not found", 404
         
-    # Map questions based on session order
-    questions_dict = {str(q.get('_id', i)): q for i, q in enumerate(exam.get('questions', []))}
-    ordered_questions = []
-    for qid in session.get('question_order', []):
-        if qid in questions_dict:
-            q = questions_dict[qid]
-            q['_id'] = qid
-            ordered_questions.append(q)
+    # Use question_snapshot if available (preserves exam state at time of taking)
+    # This ensures students see the same questions even if exam is updated
+    if session.get('question_snapshot'):
+        ordered_questions = []
+        questions_dict = {str(q.get('_id')): q for q in session['question_snapshot']}
+        for qid in session.get('question_order', []):
+            if qid in questions_dict:
+                ordered_questions.append(questions_dict[qid])
+    else:
+        # Fallback for old sessions without snapshot
+        # Map questions based on session order
+        questions_dict = {str(q.get('_id', i)): q for i, q in enumerate(exam.get('questions', []))}
+        ordered_questions = []
+        for qid in session.get('question_order', []):
+            if qid in questions_dict:
+                q = questions_dict[qid]
+                q['_id'] = qid
+                ordered_questions.append(q)
             
     # Default to original questions if no order found (legacy sessions)
     if not ordered_questions:
@@ -397,8 +407,18 @@ def my_exams():
             
             # Show exam if:
             # 1. Student hasn't taken it yet (attempts == 0), OR
-            # 2. Retakes are allowed AND attempts < max_attempts
-            if attempts == 0 or (allow_retake and attempts < max_attempts):
+            # 2. Retakes are allowed (allow_retake=True means unlimited, max_attempts is just a guideline)
+            # 3. If retakes NOT allowed, only show if attempts < max_attempts
+            if attempts == 0:
+                # Never taken - always show
+                exam['attempts_made'] = attempts
+                filtered_available.append(exam)
+            elif allow_retake:
+                # Retakes allowed - show regardless of max_attempts (it's just a counter)
+                exam['attempts_made'] = attempts
+                filtered_available.append(exam)
+            elif attempts < max_attempts:
+                # Retakes not allowed - only show if under limit
                 exam['attempts_made'] = attempts
                 filtered_available.append(exam)
         
@@ -458,7 +478,9 @@ def view_result(session_id):
     score_record = ExamScore.query.filter_by(session_id=session_id).first()
     
     # Map questions to answers for detailed review
-    questions_dict = {str(q.get('_id')): q for q in exam.get('questions', [])}
+    # Use question_snapshot from session if available (preserves questions at time of taking)
+    questions_to_display = session.get('question_snapshot', exam.get('questions', []))
+    questions_dict = {str(q.get('_id')): q for q in questions_to_display}
     answers_dict = {ans.get('question_id'): ans for ans in session.get('answers', [])}
     
     review_data = []
@@ -481,12 +503,13 @@ def view_result(session_id):
             is_correct = None  # Requires manual grading
             
         review_data.append({
-            "question_id": q_id,
-            "question_text": question.get('text', ''),
-            "question_type": question_type,
-            "options": question.get('options', []),
-            "student_answer": student_answer,
-            "correct_answer": correct_answer if question_type != 'essay' else 'Manual grading required',
+            "question": {
+                "text": question.get('text', ''),
+                "type": question_type,
+                "options": question.get('options', [])
+            },
+            "student_response": student_answer,
+            "correct_response": correct_answer if question_type != 'essay' else 'Manual grading required',
             "is_correct": is_correct,
             "explanation": question.get('explanation', ''),
             "marks": question.get('marks', 1)

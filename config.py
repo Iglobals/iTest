@@ -8,11 +8,14 @@ class Config:
     SECRET_KEY = os.environ.get('FLASK_SECRET_KEY') or 'hard to guess string'
     
     # Session configuration for OAuth flow
-    SESSION_TYPE = 'filesystem'  # or 'redis' in production
+    # Using cookie-based sessions (Flask default) for simplicity
+    # For production with high traffic, consider Flask-Session with Redis
     SESSION_COOKIE_SECURE = False  # Set True in production with HTTPS
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = 'Lax'
-    PERMANENT_SESSION_LIFETIME = 3600
+    SESSION_COOKIE_NAME = 'itest_session'
+    PERMANENT_SESSION_LIFETIME = 3600  # 1 hour
+    SESSION_REFRESH_EACH_REQUEST = True
     
     # MongoDB setup (primary data storage)
     MONGO_URI = os.environ.get('MONGODB_URI')

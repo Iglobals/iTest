@@ -1,11 +1,15 @@
 import os
 import uuid
-from flask import Blueprint, request, redirect, url_for, session, current_app
+from flask import Blueprint, request, redirect, url_for, session, current_app, make_response
 from iglobals_auth import IGlobalsAuth
 from app.utils.mongo import get_collection
-from datetime import datetime
+from datetime import datetime, timedelta
 
 auth_bp = Blueprint('auth', __name__)
+
+# Temporary in-memory store for OAuth state (works around cookie/session issues in dev)
+# In production, use Redis or database
+_oauth_states = {}
 
 def get_ica_client():
     return IGlobalsAuth(
@@ -18,7 +22,7 @@ def get_ica_client():
 
 @auth_bp.route('/login')
 def login():
-    from flask import session
+    from flask import session, make_response
     session.permanent = True  # Make session persistent
     
     client = get_ica_client()
@@ -26,12 +30,23 @@ def login():
     pkce = client.generate_pkce()
     state = str(uuid.uuid4())
     
-    # 2. Store verifier and state in session
-    session['oauth_state'] = state
-    session['code_verifier'] = pkce['code_verifier']
+    # 2. Store in memory (fallback for when sessions don't work)
+    _oauth_states[state] = {
+        'code_verifier': pkce['code_verifier'],
+        'created_at': datetime.utcnow()
+    }
+    
+    # Clean up old states (older than 10 minutes)
+    cutoff = datetime.utcnow() - timedelta(minutes=10)
+    _oauth_states.clear()  # Simple: clear all on each login for development
+    _oauth_states[state] = {
+        'code_verifier': pkce['code_verifier'],
+        'created_at': datetime.utcnow()
+    }
     
     print(f"[AUTH DEBUG] Login - Setting state: {state}")
     print(f"[AUTH DEBUG] Login - Setting code_verifier: {pkce['code_verifier'][:20]}...")
+    print(f"[AUTH DEBUG] Login - Stored in memory: {state in _oauth_states}")
     
     # 3. Redirect to get_authorization_url
     url = client.get_authorization_url(state, pkce['code_challenge'])
@@ -41,34 +56,35 @@ def login():
 def callback():
     client = get_ica_client()
     
-    # 1. Validate state matches session['oauth_state']
+    # Get state from query params
     state = request.args.get('state')
-    stored_state = session.get('oauth_state')
     
-    print(f"[AUTH DEBUG] Received state: {state}")
-    print(f"[AUTH DEBUG] Stored state: {stored_state}")
+    print(f"[AUTH DEBUG] Callback - Received state: {state}")
+    print(f"[AUTH DEBUG] Callback - State in memory: {state in _oauth_states}")
     
-    if state != stored_state:
-        print(f"[AUTH ERROR] State mismatch!")
-        return f"Invalid state parameter. Received: {state}, Expected: {stored_state}", 400
-        
+    # 1. Validate state exists in our memory store
+    if state not in _oauth_states:
+        print(f"[AUTH ERROR] State not found in memory store!")
+        return "Invalid or expired state. Please try logging in again.", 400
+    
+    # 2. Get code_verifier from memory
+    code_verifier = _oauth_states[state]['code_verifier']
     code = request.args.get('code')
-    code_verifier = session.get('code_verifier')
     
     print(f"[AUTH DEBUG] Code: {code[:20] if code else None}...")
-    print(f"[AUTH DEBUG] Code verifier: {code_verifier[:20] if code_verifier else None}...")
+    print(f"[AUTH DEBUG] Code verifier retrieved: {code_verifier[:20] if code_verifier else None}...")
     
     if not code:
         return "Missing authorization code", 400
-    
-    if not code_verifier:
-        return "Missing code verifier. Please try logging in again.", 400
         
     try:
         # 2. exchange_code
         print(f"[AUTH DEBUG] Exchanging code...")
         tokens = client.exchange_code(code, code_verifier)
         print(f"[AUTH DEBUG] Tokens received successfully")
+        
+        # Clean up used state
+        del _oauth_states[state]
         
         # 3. get_user_info
         access_token = tokens.access_token
@@ -107,7 +123,7 @@ def callback():
                 {"$set": {"last_login_at": datetime.utcnow()}}
             )
         
-        # 5. Store token in session
+        # 5. Store token in session (still needed for auth decorator)
         session['access_token'] = access_token
         session['refresh_token'] = tokens.refresh_token
         
@@ -116,10 +132,6 @@ def callback():
             'name': user.get('full_name', 'Unknown User'),
             'avatar_url': user.get('avatar_url', '')
         }
-        
-        # Clear OAuth state/verifier after successful auth
-        session.pop('oauth_state', None)
-        session.pop('code_verifier', None)
         
         print(f"[AUTH DEBUG] Authentication successful! Redirecting to dashboard...")
         

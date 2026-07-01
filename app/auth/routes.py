@@ -1,15 +1,77 @@
 import os
 import uuid
+import redis
 from flask import Blueprint, request, redirect, url_for, session, current_app, make_response
 from iglobals_auth import IGlobalsAuth
 from app.utils.mongo import get_collection
 from datetime import datetime, timedelta
+import json
 
 auth_bp = Blueprint('auth', __name__)
 
-# Temporary in-memory store for OAuth state (works around cookie/session issues in dev)
-# In production, use Redis or database
+# Redis client for OAuth state storage (works across serverless functions)
+_redis_client = None
+
+def get_redis():
+    """Get or create Redis client"""
+    global _redis_client
+    if _redis_client is None:
+        redis_url = os.environ.get('REDIS_URL')
+        if redis_url:
+            _redis_client = redis.from_url(redis_url, decode_responses=True)
+            print(f"[AUTH DEBUG] Redis connected")
+        else:
+            print(f"[AUTH WARNING] REDIS_URL not set, using in-memory fallback")
+    return _redis_client
+
+# Fallback in-memory store if Redis not available
 _oauth_states = {}
+
+def store_oauth_state(state, code_verifier):
+    """Store OAuth state in Redis (or memory as fallback)"""
+    redis_client = get_redis()
+    
+    if redis_client:
+        # Redis: Store with 10 minute expiration
+        redis_client.setex(
+            f"oauth_state:{state}",
+            timedelta(minutes=10),
+            code_verifier
+        )
+        print(f"[AUTH DEBUG] Stored state in Redis with 10min TTL")
+    else:
+        # Fallback: In-memory
+        _oauth_states[state] = {
+            'code_verifier': code_verifier,
+            'created_at': datetime.utcnow()
+        }
+        print(f"[AUTH DEBUG] Stored state in memory (fallback)")
+
+def get_oauth_state(state):
+    """Retrieve OAuth state from Redis (or memory as fallback)"""
+    redis_client = get_redis()
+    
+    if redis_client:
+        # Redis: Get code_verifier
+        code_verifier = redis_client.get(f"oauth_state:{state}")
+        if code_verifier:
+            print(f"[AUTH DEBUG] Retrieved state from Redis")
+            return {'code_verifier': code_verifier}
+        return None
+    else:
+        # Fallback: In-memory
+        return _oauth_states.get(state)
+
+def delete_oauth_state(state):
+    """Delete OAuth state after use"""
+    redis_client = get_redis()
+    
+    if redis_client:
+        redis_client.delete(f"oauth_state:{state}")
+        print(f"[AUTH DEBUG] Deleted state from Redis")
+    else:
+        _oauth_states.pop(state, None)
+        print(f"[AUTH DEBUG] Deleted state from memory")
 
 def get_ica_client():
     return IGlobalsAuth(
@@ -30,23 +92,11 @@ def login():
     pkce = client.generate_pkce()
     state = str(uuid.uuid4())
     
-    # 2. Store in memory (fallback for when sessions don't work)
-    _oauth_states[state] = {
-        'code_verifier': pkce['code_verifier'],
-        'created_at': datetime.utcnow()
-    }
+    # 2. Store state (uses MongoDB in production, memory in development)
+    store_oauth_state(state, pkce['code_verifier'])
     
-    # Clean up old states (older than 10 minutes)
-    cutoff = datetime.utcnow() - timedelta(minutes=10)
-    _oauth_states.clear()  # Simple: clear all on each login for development
-    _oauth_states[state] = {
-        'code_verifier': pkce['code_verifier'],
-        'created_at': datetime.utcnow()
-    }
-    
-    print(f"[AUTH DEBUG] Login - Setting state: {state}")
-    print(f"[AUTH DEBUG] Login - Setting code_verifier: {pkce['code_verifier'][:20]}...")
-    print(f"[AUTH DEBUG] Login - Stored in memory: {state in _oauth_states}")
+    print(f"[AUTH DEBUG] Login - Generated state: {state}")
+    print(f"[AUTH DEBUG] Login - Generated code_verifier: {pkce['code_verifier'][:20]}...")
     
     # 3. Redirect to get_authorization_url
     url = client.get_authorization_url(state, pkce['code_challenge'])
@@ -60,15 +110,18 @@ def callback():
     state = request.args.get('state')
     
     print(f"[AUTH DEBUG] Callback - Received state: {state}")
-    print(f"[AUTH DEBUG] Callback - State in memory: {state in _oauth_states}")
     
-    # 1. Validate state exists in our memory store
-    if state not in _oauth_states:
-        print(f"[AUTH ERROR] State not found in memory store!")
+    # 1. Validate state exists in our store (MongoDB or memory)
+    state_data = get_oauth_state(state)
+    
+    if not state_data:
+        print(f"[AUTH ERROR] State not found in store!")
         return "Invalid or expired state. Please try logging in again.", 400
     
-    # 2. Get code_verifier from memory
-    code_verifier = _oauth_states[state]['code_verifier']
+    print(f"[AUTH DEBUG] Callback - State found in store")
+    
+    # 2. Get code_verifier from store
+    code_verifier = state_data['code_verifier']
     code = request.args.get('code')
     
     print(f"[AUTH DEBUG] Code: {code[:20] if code else None}...")
@@ -84,7 +137,7 @@ def callback():
         print(f"[AUTH DEBUG] Tokens received successfully")
         
         # Clean up used state
-        del _oauth_states[state]
+        delete_oauth_state(state)
         
         # 3. get_user_info
         access_token = tokens.access_token

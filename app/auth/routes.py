@@ -1,6 +1,5 @@
 import os
 import uuid
-import redis
 from flask import Blueprint, request, redirect, url_for, session, current_app, make_response
 from iglobals_auth import IGlobalsAuth
 from app.utils.mongo import get_collection
@@ -18,49 +17,49 @@ def get_redis():
     if _redis_client is None:
         redis_url = os.environ.get('REDIS_URL')
         if redis_url:
-            _redis_client = redis.from_url(redis_url, decode_responses=True)
-            print(f"[AUTH DEBUG] Redis connected")
+            try:
+                import redis
+                _redis_client = redis.from_url(redis_url, decode_responses=True)
+                # Test connection
+                _redis_client.ping()
+                print(f"[AUTH DEBUG] Redis connected successfully")
+            except Exception as e:
+                print(f"[AUTH ERROR] Redis connection failed: {e}")
+                _redis_client = False  # Mark as failed
         else:
-            print(f"[AUTH WARNING] REDIS_URL not set, using in-memory fallback")
-    return _redis_client
-
-# Fallback in-memory store if Redis not available
-_oauth_states = {}
+            print(f"[AUTH ERROR] REDIS_URL not set in environment variables")
+            _redis_client = False
+    
+    return _redis_client if _redis_client else None
 
 def store_oauth_state(state, code_verifier):
-    """Store OAuth state in Redis (or memory as fallback)"""
+    """Store OAuth state in Redis"""
     redis_client = get_redis()
     
-    if redis_client:
-        # Redis: Store with 10 minute expiration
-        redis_client.setex(
-            f"oauth_state:{state}",
-            timedelta(minutes=10),
-            code_verifier
-        )
-        print(f"[AUTH DEBUG] Stored state in Redis with 10min TTL")
-    else:
-        # Fallback: In-memory
-        _oauth_states[state] = {
-            'code_verifier': code_verifier,
-            'created_at': datetime.utcnow()
-        }
-        print(f"[AUTH DEBUG] Stored state in memory (fallback)")
+    if not redis_client:
+        raise Exception("Redis not available. Please set REDIS_URL environment variable.")
+    
+    # Redis: Store with 10 minute expiration
+    redis_client.setex(
+        f"oauth_state:{state}",
+        timedelta(minutes=10),
+        code_verifier
+    )
+    print(f"[AUTH DEBUG] Stored state in Redis with 10min TTL")
 
 def get_oauth_state(state):
-    """Retrieve OAuth state from Redis (or memory as fallback)"""
+    """Retrieve OAuth state from Redis"""
     redis_client = get_redis()
     
-    if redis_client:
-        # Redis: Get code_verifier
-        code_verifier = redis_client.get(f"oauth_state:{state}")
-        if code_verifier:
-            print(f"[AUTH DEBUG] Retrieved state from Redis")
-            return {'code_verifier': code_verifier}
-        return None
-    else:
-        # Fallback: In-memory
-        return _oauth_states.get(state)
+    if not redis_client:
+        raise Exception("Redis not available. Please set REDIS_URL environment variable.")
+    
+    # Redis: Get code_verifier
+    code_verifier = redis_client.get(f"oauth_state:{state}")
+    if code_verifier:
+        print(f"[AUTH DEBUG] Retrieved state from Redis")
+        return {'code_verifier': code_verifier}
+    return None
 
 def delete_oauth_state(state):
     """Delete OAuth state after use"""
@@ -69,9 +68,6 @@ def delete_oauth_state(state):
     if redis_client:
         redis_client.delete(f"oauth_state:{state}")
         print(f"[AUTH DEBUG] Deleted state from Redis")
-    else:
-        _oauth_states.pop(state, None)
-        print(f"[AUTH DEBUG] Deleted state from memory")
 
 def get_ica_client():
     return IGlobalsAuth(

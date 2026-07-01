@@ -283,3 +283,45 @@ def delete_exam(exam_id):
         return jsonify({"success": True, "message": "Exam soft deleted"})
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+
+@exams_bp.route('/<exam_id>/publish-all-results', methods=['POST'])
+@require_role('teacher', 'org_admin', 'platform_admin')
+def publish_all_results(exam_id):
+    """Bulk publish all graded results for an exam."""
+    from app.models import ExamScore
+    from app.extensions import db
+    
+    try:
+        # Verify exam exists and user has permission
+        exams_col = get_collection('exams')
+        exam = exams_col.find_one({"_id": ObjectId(exam_id)})
+        
+        if not exam:
+            return jsonify({"error": "Exam not found"}), 404
+            
+        if str(exam.get("created_by")) != str(g.current_user["_id"]) and g.current_user.get("role") not in ["org_admin", "platform_admin"]:
+            return jsonify({"error": "Unauthorized"}), 403
+            
+        # Get all scores for this exam that are graded but not published
+        scores = ExamScore.query.filter_by(
+            exam_id=str(exam["_id"]),
+            is_graded=True,
+            results_published=False
+        ).all()
+        
+        count = 0
+        for score in scores:
+            score.results_published = True
+            count += 1
+            
+        db.session.commit()
+        
+        return jsonify({
+            "success": True,
+            "count": count,
+            "message": f"Published {count} result(s)"
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500

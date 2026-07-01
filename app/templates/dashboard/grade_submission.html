@@ -1,0 +1,471 @@
+{% extends "dashboard/base.html" %}
+
+{% block page_title %}Grade Submission{% endblock %}
+{% block page_subtitle %}{{ exam.title }} - {{ student_name }}{% endblock %}
+
+{% block dashboard_head %}
+<style>
+    .grading-container {
+        width: 100%;
+        max-width: 1000px;
+        margin: 0 auto;
+    }
+    
+    .grading-header {
+        background: var(--white);
+        border: 1px solid var(--gray-200);
+        border-radius: clamp(0.75rem, 2vw, 1rem);
+        padding: clamp(1rem, 3vw, 1.5rem);
+        margin-bottom: clamp(1rem, 3vw, 2rem);
+    }
+    
+    .student-banner {
+        display: flex;
+        align-items: center;
+        gap: clamp(0.75rem, 2vw, 1rem);
+        margin-bottom: clamp(1rem, 3vw, 1.5rem);
+    }
+    
+    .student-avatar-large {
+        width: clamp(56px, 12vw, 64px);
+        height: clamp(56px, 12vw, 64px);
+        border-radius: 50%;
+        background: var(--purple-bg);
+        color: var(--purple);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: clamp(1.5rem, 3.5vw, 1.75rem);
+        flex-shrink: 0;
+    }
+    
+    .score-overview {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: clamp(0.75rem, 2vw, 1rem);
+        padding: clamp(1rem, 3vw, 1.25rem);
+        background: var(--gray-50);
+        border-radius: 0.75rem;
+    }
+    
+    .score-item {
+        text-align: center;
+    }
+    
+    .score-label {
+        font-size: clamp(0.7rem, 1.8vw, 0.75rem);
+        color: var(--gray-500);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: clamp(0.25rem, 1vw, 0.5rem);
+    }
+    
+    .score-value {
+        font-size: clamp(1.2rem, 3vw, 1.5rem);
+        font-weight: 700;
+        color: var(--gray-900);
+    }
+    
+    .questions-list {
+        display: flex;
+        flex-direction: column;
+        gap: clamp(1rem, 3vw, 1.5rem);
+    }
+    
+    .question-card {
+        background: var(--white);
+        border: 1px solid var(--gray-200);
+        border-radius: clamp(0.75rem, 2vw, 1rem);
+        padding: clamp(1rem, 3vw, 1.5rem);
+    }
+    
+    .question-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: clamp(0.75rem, 2vw, 1rem);
+        padding-bottom: clamp(0.75rem, 2vw, 1rem);
+        border-bottom: 1px solid var(--gray-100);
+    }
+    
+    .question-type-badge {
+        padding: clamp(0.25rem, 1vw, 0.375rem) clamp(0.5rem, 1.5vw, 0.75rem);
+        background: var(--gray-100);
+        color: var(--gray-700);
+        border-radius: 0.375rem;
+        font-size: clamp(0.7rem, 1.8vw, 0.75rem);
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    
+    .question-text {
+        font-size: clamp(0.95rem, 2.5vw, 1.05rem);
+        color: var(--gray-900);
+        line-height: 1.6;
+        margin-bottom: clamp(1rem, 3vw, 1.25rem);
+    }
+    
+    .answer-section {
+        background: var(--gray-50);
+        border-left: 3px solid var(--purple);
+        padding: clamp(0.75rem, 2vw, 1rem);
+        border-radius: 0.5rem;
+        margin-bottom: clamp(0.75rem, 2vw, 1rem);
+    }
+    
+    .answer-label {
+        font-size: clamp(0.75rem, 2vw, 0.85rem);
+        color: var(--gray-600);
+        font-weight: 600;
+        margin-bottom: clamp(0.375rem, 1vw, 0.5rem);
+    }
+    
+    .answer-text {
+        font-size: clamp(0.9rem, 2.3vw, 1rem);
+        color: var(--gray-900);
+        white-space: pre-wrap;
+        word-wrap: break-word;
+    }
+    
+    .grading-form {
+        margin-top: clamp(1rem, 3vw, 1.25rem);
+        padding-top: clamp(1rem, 3vw, 1.25rem);
+        border-top: 2px dashed var(--gray-200);
+    }
+    
+    .form-group {
+        margin-bottom: clamp(0.75rem, 2vw, 1rem);
+    }
+    
+    .form-label {
+        display: block;
+        font-size: clamp(0.85rem, 2.2vw, 0.9rem);
+        font-weight: 600;
+        color: var(--gray-700);
+        margin-bottom: clamp(0.375rem, 1vw, 0.5rem);
+    }
+    
+    .form-input {
+        width: 100%;
+        max-width: 100%;
+        padding: clamp(0.5rem, 1.5vw, 0.75rem);
+        border: 1px solid var(--gray-300);
+        border-radius: 0.5rem;
+        font-size: clamp(0.85rem, 2.2vw, 0.9rem);
+        transition: border-color 0.2s;
+        box-sizing: border-box;
+    }
+    
+    .form-input:focus {
+        outline: none;
+        border-color: var(--purple);
+        box-shadow: 0 0 0 3px rgba(107, 33, 168, 0.1);
+    }
+    
+    .form-textarea {
+        min-height: clamp(80px, 20vw, 100px);
+        resize: vertical;
+    }
+    
+    .auto-graded {
+        background: var(--success-bg);
+        border-left-color: var(--success);
+    }
+    
+    .needs-grading {
+        background: var(--warning-bg);
+        border-left-color: var(--warning);
+    }
+    
+    .action-bar {
+        position: sticky;
+        bottom: 0;
+        background: var(--white);
+        border-top: 1px solid var(--gray-200);
+        padding: clamp(1rem, 3vw, 1.5rem);
+        margin: clamp(1.5rem, 4vw, 2rem) calc(-1 * clamp(1rem, 3vw, 1.5rem)) 0;
+        display: flex;
+        gap: clamp(0.75rem, 2vw, 1rem);
+        justify-content: flex-end;
+    }
+    
+    .btn-save {
+        padding: clamp(0.6rem, 1.8vw, 0.75rem) clamp(1rem, 3vw, 1.5rem);
+        background: var(--purple);
+        color: white;
+        border: none;
+        border-radius: 0.5rem;
+        font-size: clamp(0.85rem, 2.2vw, 0.95rem);
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+    
+    .btn-save:hover {
+        background: var(--purple-dark);
+    }
+    
+    .btn-save:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+    
+    .btn-publish {
+        padding: clamp(0.6rem, 1.8vw, 0.75rem) clamp(1rem, 3vw, 1.5rem);
+        background: var(--gold);
+        color: var(--gray-900);
+        border: none;
+        border-radius: 0.5rem;
+        font-size: clamp(0.85rem, 2.2vw, 0.95rem);
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+    
+    .btn-publish:hover {
+        background: var(--gold-dark);
+    }
+    
+    .btn-cancel {
+        padding: clamp(0.6rem, 1.8vw, 0.75rem) clamp(1rem, 3vw, 1.5rem);
+        background: var(--white);
+        color: var(--gray-700);
+        border: 1px solid var(--gray-300);
+        border-radius: 0.5rem;
+        font-size: clamp(0.85rem, 2.2vw, 0.95rem);
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+        text-decoration: none;
+    }
+    
+    .btn-cancel:hover {
+        background: var(--gray-50);
+    }
+</style>
+{% endblock %}
+
+{% block dashboard_content %}
+<div class="dashboard-body" style="display:block;">
+    <div class="grading-container">
+        
+        <a href="{{ url_for('dashboard.exam_submissions', slug=exam.slug or exam._id) }}" class="btn-outline" style="display:inline-flex; width:auto; height:auto; padding: clamp(0.4rem, 1.5vw, 0.5rem) clamp(0.75rem, 2vw, 1rem); margin-bottom: clamp(1rem, 3vw, 1.5rem); text-decoration: none;">
+            <i data-lucide="arrow-left" style="margin-right: 0.5em;"></i> Back to Submissions
+        </a>
+        
+        <div class="grading-header">
+            <div class="student-banner">
+                <div class="student-avatar-large">
+                    {{ student_name[0]|upper if student_name else 'S' }}
+                </div>
+                <div>
+                    <h2 style="margin:0 0 clamp(0.25rem, 1vw, 0.375rem) 0; font-size: clamp(1.2rem, 3vw, 1.5rem);">{{ student_name }}</h2>
+                    <p style="margin:0; color:var(--gray-500); font-size: clamp(0.8rem, 2vw, 0.9rem);">{{ student_email }}</p>
+                </div>
+            </div>
+            
+            <div class="score-overview">
+                <div class="score-item">
+                    <div class="score-label">Current Score</div>
+                    <div class="score-value">{{ score_record.score_percent|int }}%</div>
+                </div>
+                <div class="score-item">
+                    <div class="score-label">Correct</div>
+                    <div class="score-value" style="color:var(--success);">{{ score_record.correct_count }}</div>
+                </div>
+                <div class="score-item">
+                    <div class="score-label">Incorrect</div>
+                    <div class="score-value" style="color:var(--danger);">{{ score_record.incorrect_count }}</div>
+                </div>
+                <div class="score-item">
+                    <div class="score-label">Status</div>
+                    <div class="score-value" style="font-size: clamp(0.8rem, 2vw, 0.9rem);">
+                        {% if score_record.results_published %}
+                        <span style="color:var(--info);">Published</span>
+                        {% elif score_record.is_graded %}
+                        <span style="color:var(--success);">Graded</span>
+                        {% else %}
+                        <span style="color:var(--warning);">Pending</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <form id="gradingForm">
+            <div class="questions-list">
+                {% for item in review_data %}
+                <div class="question-card" data-question-id="{{ item.question._id }}">
+                    <div class="question-header">
+                        <div>
+                            <span style="font-weight:600; color:var(--gray-700); font-size: clamp(0.85rem, 2.2vw, 0.9rem);">Question {{ loop.index }}</span>
+                            <span class="question-type-badge" style="margin-left: clamp(0.5rem, 1.5vw, 0.75rem);">{{ item.question.type }}</span>
+                        </div>
+                        <div>
+                            <span style="font-size: clamp(0.85rem, 2.2vw, 0.9rem); color:var(--gray-600);">{{ item.marks }} mark(s)</span>
+                        </div>
+                    </div>
+                    
+                    <div class="question-text">{{ item.question.text | safe }}</div>
+                    
+                    {% if item.question.type in ['mcq', 'true_false', 'short_answer', 'numerical'] %}
+                    <!-- Auto-graded question -->
+                    <div class="answer-section auto-graded">
+                        <div class="answer-label">Student Answer</div>
+                        <div class="answer-text">{{ item.student_response if item.student_response else '(No answer provided)' }}</div>
+                    </div>
+                    
+                    <div class="answer-section" style="background:var(--success-bg); border-left-color:var(--success);">
+                        <div class="answer-label">Correct Answer</div>
+                        <div class="answer-text">{{ item.correct_response }}</div>
+                    </div>
+                    
+                    <div style="font-size: clamp(0.85rem, 2.2vw, 0.9rem); color:var(--gray-600); margin-top: clamp(0.75rem, 2vw, 1rem);">
+                        {% if item.is_correct %}
+                        <i data-lucide="check-circle" style="width:1em;height:1em;color:var(--success);"></i>
+                        <span style="color:var(--success); font-weight:600;">Automatically graded as correct</span>
+                        {% else %}
+                        <i data-lucide="x-circle" style="width:1em;height:1em;color:var(--danger);"></i>
+                        <span style="color:var(--danger); font-weight:600;">Automatically graded as incorrect</span>
+                        {% endif %}
+                    </div>
+                    
+                    {% elif item.question.type == 'essay' %}
+                    <!-- Essay question - needs manual grading -->
+                    <div class="answer-section needs-grading">
+                        <div class="answer-label">Student Answer</div>
+                        <div class="answer-text">{{ item.student_response if item.student_response else '(No answer provided)' }}</div>
+                    </div>
+                    
+                    <div class="grading-form">
+                        <div class="form-group">
+                            <label class="form-label">
+                                Score (out of {{ item.marks }})
+                            </label>
+                            <input 
+                                type="number" 
+                                name="score_{{ item.question._id }}" 
+                                class="form-input" 
+                                min="0" 
+                                max="{{ item.marks }}" 
+                                step="0.5"
+                                value="{{ item.awarded_marks if item.awarded_marks is not none else '' }}"
+                                placeholder="Enter score"
+                            >
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">
+                                Feedback (optional)
+                            </label>
+                            <textarea 
+                                name="feedback_{{ item.question._id }}" 
+                                class="form-input form-textarea"
+                                placeholder="Add comments or feedback for the student..."
+                            >{{ item.feedback if item.feedback else '' }}</textarea>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            
+            <div class="action-bar">
+                <a href="{{ url_for('dashboard.exam_submissions', slug=exam.slug or exam._id) }}" class="btn-cancel">Cancel</a>
+                <button type="button" class="btn-save" onclick="saveGrades(false)" id="saveBtn">
+                    <i data-lucide="save" style="width:1em;height:1em;margin-right:0.5em;"></i>
+                    Save Grades
+                </button>
+                <button type="button" class="btn-publish" onclick="saveGrades(true)" id="publishBtn">
+                    <i data-lucide="send" style="width:1em;height:1em;margin-right:0.5em;"></i>
+                    Save & Publish
+                </button>
+            </div>
+        </form>
+        
+    </div>
+</div>
+{% endblock %}
+
+{% block dashboard_js %}
+<script>
+    async function saveGrades(publish) {
+        const form = document.getElementById('gradingForm');
+        const formData = new FormData(form);
+        
+        const grades = [];
+        const inputs = form.querySelectorAll('input[name^="score_"]');
+        
+        inputs.forEach(input => {
+            const questionId = input.name.replace('score_', '');
+            const score = parseFloat(input.value) || 0;
+            const feedbackInput = form.querySelector(`textarea[name="feedback_${questionId}"]`);
+            const feedback = feedbackInput ? feedbackInput.value : '';
+            
+            grades.push({
+                question_id: questionId,
+                score: score,
+                feedback: feedback
+            });
+        });
+        
+        const saveBtn = document.getElementById('saveBtn');
+        const publishBtn = document.getElementById('publishBtn');
+        
+        saveBtn.disabled = true;
+        publishBtn.disabled = true;
+        
+        const originalText = publish ? publishBtn.innerHTML : saveBtn.innerHTML;
+        if (publish) {
+            publishBtn.innerHTML = '<i data-lucide="loader" class="spin" style="width:1em;height:1em;margin-right:0.5em;"></i> Publishing...';
+        } else {
+            saveBtn.innerHTML = '<i data-lucide="loader" class="spin" style="width:1em;height:1em;margin-right:0.5em;"></i> Saving...';
+        }
+        lucide.createIcons();
+        
+        try {
+            const res = await fetch('/api/sessions/{{ session_id }}/grade', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    grades: grades,
+                    publish: publish
+                })
+            });
+            
+            const data = await res.json();
+            
+            if (data.success) {
+                showToast(publish ? 'Grades saved and published!' : 'Grades saved successfully!', 'success');
+                setTimeout(() => {
+                    window.location.href = '{{ url_for("dashboard.exam_submissions", slug=exam.slug or exam._id) }}';
+                }, 1500);
+            } else {
+                showToast('Error: ' + data.error, 'error');
+                saveBtn.disabled = false;
+                publishBtn.disabled = false;
+                if (publish) {
+                    publishBtn.innerHTML = originalText;
+                } else {
+                    saveBtn.innerHTML = originalText;
+                }
+                lucide.createIcons();
+            }
+        } catch (err) {
+            console.error(err);
+            showToast('Failed to save grades', 'error');
+            saveBtn.disabled = false;
+            publishBtn.disabled = false;
+            if (publish) {
+                publishBtn.innerHTML = originalText;
+            } else {
+                saveBtn.innerHTML = originalText;
+            }
+            lucide.createIcons();
+        }
+    }
+</script>
+{% endblock %}

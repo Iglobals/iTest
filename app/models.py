@@ -23,6 +23,8 @@ class ExamScore(db.Model):
     correct_count = db.Column(db.Integer)
     incorrect_count = db.Column(db.Integer)
     unanswered_count = db.Column(db.Integer)
+    is_graded = db.Column(db.Boolean, default=False)
+    results_published = db.Column(db.Boolean, default=False)
     submitted_at = db.Column(db.DateTime(timezone=True), nullable=False, index=True)
     created_at = db.Column(db.DateTime(timezone=True), default=datetime.utcnow)
 

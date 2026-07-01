@@ -463,25 +463,23 @@ def view_result(session_id):
         flash("Exam not found.", "error")
         return redirect(url_for('dashboard.index'))
         
-    if is_student:
-        open_results = exam.get('settings', {}).get('show_result_immediately', True)
-        if not open_results:
-            flash("Results are not yet open for viewing.", "info")
-            return redirect(url_for('dashboard.my_exams'))
-            
-        has_essay = any(q.get('question_type') == 'essay' or q.get('type') == 'essay' for q in exam.get('questions', []))
-        if has_essay and not session.get('is_graded'):
-            flash("Results are pending manual grading by your teacher.", "info")
-            return redirect(url_for('dashboard.my_exams'))
-        
     from app.models import ExamScore
     score_record = ExamScore.query.filter_by(session_id=session_id).first()
     
+    if is_student:
+        # Check if results are published for student
+        if score_record and not score_record.results_published:
+            flash("Results are not yet published. Please check back later.", "info")
+            return redirect(url_for('dashboard.my_exams'))
+        
     # Map questions to answers for detailed review
     # Use question_snapshot from session if available (preserves questions at time of taking)
     questions_to_display = session.get('question_snapshot', exam.get('questions', []))
     questions_dict = {str(q.get('_id')): q for q in questions_to_display}
     answers_dict = {ans.get('question_id'): ans for ans in session.get('answers', [])}
+    
+    # Get manual grades if available
+    manual_grades = session.get('manual_grades', {})
     
     review_data = []
     for q_id in session.get('question_order', []):
@@ -497,13 +495,21 @@ def view_result(session_id):
         
         # Determine if correct
         is_correct = None
+        awarded_marks = None
+        feedback = None
+        
         if question_type in ['mcq', 'true_false', 'short_answer', 'numerical']:
             is_correct = str(student_answer).strip().upper() == str(correct_answer).strip().upper()
         elif question_type == 'essay':
-            is_correct = None  # Requires manual grading
+            # Check for manual grading
+            if q_id in manual_grades:
+                awarded_marks = manual_grades[q_id].get('score', 0)
+                feedback = manual_grades[q_id].get('feedback', '')
+                is_correct = None  # Essays don't have true/false
             
         review_data.append({
             "question": {
+                "_id": q_id,
                 "text": question.get('text', ''),
                 "type": question_type,
                 "options": question.get('options', [])
@@ -512,7 +518,9 @@ def view_result(session_id):
             "correct_response": correct_answer if question_type != 'essay' else 'Manual grading required',
             "is_correct": is_correct,
             "explanation": question.get('explanation', ''),
-            "marks": question.get('marks', 1)
+            "marks": question.get('marks', 1),
+            "awarded_marks": awarded_marks,
+            "feedback": feedback
         })
         
     return render_template('exam/result.html', 
@@ -521,6 +529,96 @@ def view_result(session_id):
                          score_record=score_record, 
                          review_data=review_data, 
                          is_admin=is_admin)
+
+@dashboard_bp.route('/sessions/<session_id>/grade')
+@require_auth()
+def grade_submission(session_id):
+    if g.current_user.get('role') not in ['teacher', 'org_admin', 'platform_admin']:
+        return "Unauthorized", 403
+        
+    sessions_col = get_collection('exam_sessions')
+    exams_col = get_collection('exams')
+    users_col = get_collection('users')
+    
+    from bson import ObjectId
+    try:
+        session = sessions_col.find_one({"_id": ObjectId(session_id)})
+    except:
+        return "Invalid session ID", 400
+        
+    if not session:
+        return "Session not found", 404
+        
+    exam = exams_col.find_one({"_id": session["exam_id"]})
+    if not exam:
+        return "Exam not found", 404
+        
+    # Get student info
+    student_id = session.get("student_id")
+    student = users_col.find_one({"_id": ObjectId(student_id)}) if ObjectId.is_valid(str(student_id)) else None
+    student_name = student.get("full_name", "Unknown Student") if student else "Unknown Student"
+    student_email = student.get("email", "") if student else ""
+    
+    from app.models import ExamScore
+    score_record = ExamScore.query.filter_by(session_id=session_id).first()
+    
+    # Map questions to answers for grading
+    questions_to_display = session.get('question_snapshot', exam.get('questions', []))
+    questions_dict = {str(q.get('_id')): q for q in questions_to_display}
+    answers_dict = {ans.get('question_id'): ans for ans in session.get('answers', [])}
+    
+    # Get manual grades if available
+    manual_grades = session.get('manual_grades', {})
+    
+    review_data = []
+    for q_id in session.get('question_order', []):
+        question = questions_dict.get(q_id)
+        if not question:
+            continue
+            
+        answer = answers_dict.get(q_id, {})
+        student_answer = answer.get('selected_option', '')
+        
+        correct_answer = question.get('correct_answer', '')
+        question_type = question.get('question_type', question.get('type', 'mcq'))
+        
+        # Determine if correct
+        is_correct = None
+        awarded_marks = None
+        feedback = None
+        
+        if question_type in ['mcq', 'true_false', 'short_answer', 'numerical']:
+            is_correct = str(student_answer).strip().upper() == str(correct_answer).strip().upper()
+        elif question_type == 'essay':
+            # Check for manual grading
+            if q_id in manual_grades:
+                awarded_marks = manual_grades[q_id].get('score', 0)
+                feedback = manual_grades[q_id].get('feedback', '')
+            
+        review_data.append({
+            "question": {
+                "_id": q_id,
+                "text": question.get('text', ''),
+                "type": question_type,
+                "options": question.get('options', [])
+            },
+            "student_response": student_answer,
+            "correct_response": correct_answer if question_type != 'essay' else 'Manual grading required',
+            "is_correct": is_correct,
+            "explanation": question.get('explanation', ''),
+            "marks": question.get('marks', 1),
+            "awarded_marks": awarded_marks,
+            "feedback": feedback
+        })
+        
+    return render_template('dashboard/grade_submission.html',
+                         session_id=session_id,
+                         session=session,
+                         exam=exam,
+                         student_name=student_name,
+                         student_email=student_email,
+                         score_record=score_record,
+                         review_data=review_data)
 
 @dashboard_bp.route('/exams/<slug>/submissions')
 @require_auth()

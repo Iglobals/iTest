@@ -58,7 +58,13 @@ def start_session():
     duration = exam.get("settings", {}).get("duration_minutes", 60)
     
     # Generate randomized question order
-    questions = exam.get("questions", [])
+    # CRITICAL: Only include published questions (exclude drafts)
+    all_questions = exam.get("questions", [])
+    questions = [q for q in all_questions if q.get("status") != "draft"]
+    
+    if not questions:
+        return jsonify({"error": "This exam has no published questions yet"}), 400
+    
     if exam.get("settings", {}).get("randomize_questions", False):
         random.shuffle(questions)
     
@@ -191,6 +197,150 @@ def sync_session(session_id):
         return jsonify({"error": str(e)}), 400
 
 
+@sessions_bp.route('/<session_id>/grade', methods=['POST'])
+@require_auth()
+def grade_session(session_id):
+    """Manual grading endpoint for essay/AC questions."""
+    if g.current_user.get('role') not in ['teacher', 'org_admin', 'platform_admin']:
+        return jsonify({"error": "Unauthorized"}), 403
+        
+    data = request.json
+    grades = data.get('grades', [])
+    publish = data.get('publish', False)
+    
+    sessions_col = get_collection('exam_sessions')
+    exams_col = get_collection('exams')
+    
+    try:
+        session_obj_id = ObjectId(session_id)
+        session = sessions_col.find_one({"_id": session_obj_id})
+        
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+            
+        exam = exams_col.find_one({"_id": session["exam_id"]})
+        if not exam:
+            return jsonify({"error": "Exam not found"}), 404
+            
+        # Store manual grades in session
+        manual_grades = {}
+        total_manual_score = 0
+        
+        for grade_item in grades:
+            q_id = grade_item.get('question_id')
+            score = float(grade_item.get('score', 0))
+            feedback = grade_item.get('feedback', '')
+            
+            manual_grades[q_id] = {
+                'score': score,
+                'feedback': feedback,
+                'graded_at': datetime.utcnow(),
+                'graded_by': str(g.current_user['_id'])
+            }
+            total_manual_score += score
+            
+        # Update session with manual grades
+        sessions_col.update_one(
+            {"_id": session_obj_id},
+            {"$set": {
+                "manual_grades": manual_grades,
+                "is_graded": True,
+                "graded_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow()
+            }}
+        )
+        
+        # Recalculate total score including manual grades
+        # Get auto-graded questions
+        questions_to_grade = session.get('question_snapshot', exam.get('questions', []))
+        questions_dict = {str(q.get('_id')): q for q in questions_to_grade}
+        answers_dict = {ans.get('question_id'): ans.get('selected_option') for ans in session.get('answers', [])}
+        
+        total_score = 0
+        total_marks = 0
+        correct_count = 0
+        incorrect_count = 0
+        
+        for q_id in session.get('question_order', []):
+            question = questions_dict.get(q_id)
+            if not question:
+                continue
+                
+            question_type = question.get('question_type', question.get('type', 'mcq'))
+            marks = question.get('marks', 1)
+            total_marks += marks
+            
+            if question_type == 'essay' and q_id in manual_grades:
+                # Use manual grade
+                total_score += manual_grades[q_id]['score']
+                if manual_grades[q_id]['score'] > 0:
+                    correct_count += 1
+                else:
+                    incorrect_count += 1
+            elif question_type in ['mcq', 'true_false', 'short_answer', 'numerical']:
+                # Auto-graded
+                student_answer = answers_dict.get(q_id)
+                correct_answer = question.get('correct_answer')
+                
+                if student_answer and str(student_answer).strip().upper() == str(correct_answer).strip().upper():
+                    total_score += marks
+                    correct_count += 1
+                else:
+                    incorrect_count += 1
+                    
+        score_percent = (total_score / total_marks * 100) if total_marks > 0 else 0
+        pass_mark = exam.get('settings', {}).get('pass_mark_percent', 50)
+        passed = score_percent >= pass_mark
+        
+        # Update PostgreSQL score record
+        score_record = ExamScore.query.filter_by(session_id=session_id).first()
+        if score_record:
+            score_record.score = total_score
+            score_record.total_marks = total_marks
+            score_record.score_percent = score_percent
+            score_record.passed = passed
+            score_record.correct_count = correct_count
+            score_record.incorrect_count = incorrect_count
+            score_record.is_graded = True
+            
+            if publish:
+                score_record.results_published = True
+                
+            db.session.commit()
+            
+        return jsonify({
+            "success": True,
+            "score": total_score,
+            "total_marks": total_marks,
+            "score_percent": score_percent,
+            "passed": passed
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+@sessions_bp.route('/<session_id>/publish-results', methods=['POST'])
+@require_auth()
+def publish_results(session_id):
+    """Publish results for a single session."""
+    if g.current_user.get('role') not in ['teacher', 'org_admin', 'platform_admin']:
+        return jsonify({"error": "Unauthorized"}), 403
+        
+    try:
+        score_record = ExamScore.query.filter_by(session_id=session_id).first()
+        if not score_record:
+            return jsonify({"error": "Score record not found"}), 404
+            
+        score_record.results_published = True
+        db.session.commit()
+        
+        return jsonify({"success": True}), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
 @sessions_bp.route('/<session_id>/submit', methods=['POST'])
 @require_auth()
 def submit_session(session_id):
@@ -300,6 +450,8 @@ def submit_session(session_id):
             correct_count=correct_count,
             incorrect_count=incorrect_count,
             unanswered_count=unanswered_count,
+            is_graded=False,  # Default to false, will be set to true after manual grading
+            results_published=exam.get('settings', {}).get('show_result_immediately', True),  # Auto-publish if setting enabled
             submitted_at=datetime.utcnow()
         )
         

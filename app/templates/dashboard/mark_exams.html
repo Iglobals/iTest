@@ -1,148 +1,394 @@
 {% extends "dashboard/base.html" %}
 
-{% block page_title %}Submissions{% endblock %}
-{% block page_subtitle %}Review and grade submissions for {{ exam.title }}{% endblock %}
+{% block page_title %}Exam Submissions - {{ exam.title }}{% endblock %}
+{% block page_subtitle %}Review and grade student submissions{% endblock %}
 
 {% block dashboard_head %}
 <style>
     .submissions-container {
+        width: 100%;
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+    
+    .submissions-header {
+        background: var(--white);
+        border: 1px solid var(--gray-200);
+        border-radius: clamp(0.75rem, 2vw, 1rem);
+        padding: clamp(1rem, 3vw, 1.5rem);
+        margin-bottom: clamp(1rem, 3vw, 2rem);
+    }
+    
+    .filter-bar {
         display: flex;
-        flex-direction: column;
-        gap: 1em;
-        margin-top: 1.5em;
+        justify-content: space-between;
+        align-items: center;
+        gap: clamp(0.75rem, 2vw, 1rem);
+        flex-wrap: wrap;
+        margin-bottom: clamp(1rem, 3vw, 1.5rem);
+    }
+    
+    .filter-group {
+        display: flex;
+        gap: clamp(0.5rem, 1.5vw, 0.75rem);
+        align-items: center;
+    }
+    
+    .filter-btn {
+        padding: clamp(0.5rem, 1.5vw, 0.6rem) clamp(0.75rem, 2vw, 1rem);
+        border: 1px solid var(--gray-300);
+        background: var(--white);
+        border-radius: 0.5rem;
+        font-size: clamp(0.8rem, 2vw, 0.9rem);
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    
+    .filter-btn.active {
+        background: var(--purple);
+        color: white;
+        border-color: var(--purple);
+    }
+    
+    .submissions-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: clamp(1rem, 3vw, 1.5rem);
     }
     
     .submission-card {
         background: var(--white);
         border: 1px solid var(--gray-200);
-        border-radius: 0.75em;
-        padding: 1.25em;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
+        border-radius: clamp(0.75rem, 2vw, 1rem);
+        padding: clamp(1rem, 3vw, 1.25rem);
         transition: transform 0.2s, box-shadow 0.2s;
     }
     
     .submission-card:hover {
         transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(91, 33, 209, 0.1);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
         border-color: var(--purple-light);
     }
     
-    .sub-info {
+    .student-info {
         display: flex;
         align-items: center;
-        gap: 1em;
+        gap: clamp(0.75rem, 2vw, 1rem);
+        margin-bottom: clamp(0.75rem, 2vw, 1rem);
     }
     
-    .sub-avatar {
-        width: 40px;
-        height: 40px;
+    .student-avatar {
+        width: clamp(40px, 10vw, 48px);
+        height: clamp(40px, 10vw, 48px);
+        border-radius: 50%;
         background: var(--purple-bg);
         color: var(--purple);
-        border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
         font-weight: 600;
-        font-size: 1.1em;
+        font-size: clamp(1rem, 2.5vw, 1.2rem);
+        flex-shrink: 0;
     }
     
-    .sub-details h4 {
-        margin: 0;
-        font-size: 1.05em;
+    .student-details h4 {
+        margin: 0 0 clamp(0.125rem, 0.5vw, 0.25rem) 0;
+        font-size: clamp(0.95rem, 2.5vw, 1.05rem);
         color: var(--gray-900);
     }
     
-    .sub-details p {
-        margin: 0.25em 0 0 0;
-        font-size: 0.85em;
+    .student-details p {
+        margin: 0;
+        font-size: clamp(0.75rem, 2vw, 0.85rem);
         color: var(--gray-500);
     }
     
-    .sub-stats {
-        display: flex;
-        gap: 2em;
-        text-align: right;
+    .submission-meta {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+        gap: clamp(0.5rem, 1.5vw, 0.75rem);
+        padding: clamp(0.75rem, 2vw, 1rem) 0;
+        border-top: 1px solid var(--gray-100);
+        border-bottom: 1px solid var(--gray-100);
+        margin: clamp(0.75rem, 2vw, 1rem) 0;
     }
     
-    .stat-box p {
-        margin: 0 0 0.25em 0;
-        font-size: 0.8em;
+    .meta-item {
+        text-align: center;
+    }
+    
+    .meta-label {
+        font-size: clamp(0.7rem, 1.8vw, 0.75rem);
         color: var(--gray-500);
+        margin-bottom: clamp(0.125rem, 0.5vw, 0.25rem);
         text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
     
-    .stat-box h3 {
-        margin: 0;
-        font-size: 1.2em;
+    .meta-value {
+        font-size: clamp(1rem, 2.5vw, 1.1rem);
+        font-weight: 600;
         color: var(--gray-900);
+    }
+    
+    .submission-actions {
+        display: flex;
+        gap: clamp(0.5rem, 1.5vw, 0.75rem);
+    }
+    
+    .btn-grade {
+        flex: 1;
+        padding: clamp(0.5rem, 1.5vw, 0.6rem) clamp(0.75rem, 2vw, 1rem);
+        background: var(--purple);
+        color: white;
+        border: none;
+        border-radius: 0.5rem;
+        font-size: clamp(0.8rem, 2vw, 0.9rem);
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 0.2s;
+        text-decoration: none;
+        text-align: center;
+    }
+    
+    .btn-grade:hover {
+        background: var(--purple-dark);
+    }
+    
+    .btn-view {
+        flex: 1;
+        padding: clamp(0.5rem, 1.5vw, 0.6rem) clamp(0.75rem, 2vw, 1rem);
+        background: var(--white);
+        color: var(--purple);
+        border: 1px solid var(--purple);
+        border-radius: 0.5rem;
+        font-size: clamp(0.8rem, 2vw, 0.9rem);
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+        text-decoration: none;
+        text-align: center;
+    }
+    
+    .btn-view:hover {
+        background: var(--purple-bg);
     }
     
     .status-badge {
         display: inline-block;
-        padding: 0.25em 0.75em;
-        border-radius: 1em;
-        font-size: 0.8em;
+        padding: clamp(0.25rem, 1vw, 0.375rem) clamp(0.5rem, 1.5vw, 0.75rem);
+        border-radius: 9999px;
+        font-size: clamp(0.7rem, 1.8vw, 0.75rem);
         font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
-    .status-passed { background: var(--success-bg); color: var(--success); }
-    .status-failed { background: var(--danger-bg); color: var(--danger); }
-    .status-pending { background: var(--gray-100); color: var(--gray-600); }
+    
+    .status-pending {
+        background: var(--warning-bg);
+        color: var(--warning);
+    }
+    
+    .status-graded {
+        background: var(--success-bg);
+        color: var(--success);
+    }
+    
+    .status-published {
+        background: var(--info-bg);
+        color: var(--info);
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: clamp(2rem, 5vw, 3rem);
+        background: var(--white);
+        border: 1px solid var(--gray-200);
+        border-radius: clamp(0.75rem, 2vw, 1rem);
+    }
+    
+    .empty-state i {
+        width: clamp(2.5rem, 7vw, 3rem);
+        height: clamp(2.5rem, 7vw, 3rem);
+        color: var(--gray-400);
+        margin-bottom: clamp(0.75rem, 2vw, 1rem);
+    }
+    
+    .bulk-actions {
+        display: flex;
+        gap: clamp(0.5rem, 1.5vw, 0.75rem);
+        flex-wrap: wrap;
+    }
+    
+    .btn-bulk {
+        padding: clamp(0.5rem, 1.5vw, 0.6rem) clamp(0.75rem, 2vw, 1rem);
+        background: var(--gold);
+        color: var(--gray-900);
+        border: none;
+        border-radius: 0.5rem;
+        font-size: clamp(0.8rem, 2vw, 0.9rem);
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    
+    .btn-bulk:hover {
+        background: var(--gold-dark);
+    }
+    
+    .btn-bulk:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
 </style>
 {% endblock %}
 
 {% block dashboard_content %}
-<div class="dashboard-body" style="grid-template-columns: 1fr; display: block;">
-    <a href="{{ url_for('dashboard.manage_exams') }}" class="btn-outline" style="display:inline-flex; width:auto; height:auto; padding: 0.5em 1em; margin-bottom: 1em; text-decoration: none;">
-        <i data-lucide="arrow-left" style="margin-right: 0.5em;"></i> Back to Manage Exams
-    </a>
-    
-    <div style="display:flex; justify-content:space-between; align-items:center;">
-        <h3>Student Submissions ({{ submissions|length }})</h3>
-        <!-- Bulk actions could go here -->
-    </div>
-    
-    {% if submissions %}
+<div class="dashboard-body" style="display:block;">
     <div class="submissions-container">
-        {% for sub in submissions %}
-        <div class="submission-card">
-            <div class="sub-info">
-                <div class="sub-avatar">
-                    {{ sub.student_name[0] | upper }}
+        
+        <a href="{{ url_for('dashboard.exam_details', slug=exam.slug or exam._id) }}" class="btn-outline" style="display:inline-flex; width:auto; height:auto; padding: clamp(0.4rem, 1.5vw, 0.5rem) clamp(0.75rem, 2vw, 1rem); margin-bottom: clamp(1rem, 3vw, 1.5rem); text-decoration: none;">
+            <i data-lucide="arrow-left" style="margin-right: 0.5em;"></i> Back to Exam Details
+        </a>
+        
+        <div class="submissions-header">
+            <div style="display:flex; justify-content:space-between; align-items:start; flex-wrap:wrap; gap: clamp(0.75rem, 2vw, 1rem); margin-bottom: clamp(1rem, 3vw, 1.5rem);">
+                <div>
+                    <h2 style="margin:0 0 clamp(0.25rem, 1vw, 0.5rem) 0; font-size: clamp(1.2rem, 3vw, 1.5rem);">{{ exam.title }}</h2>
+                    <p style="margin:0; color:var(--gray-500); font-size: clamp(0.8rem, 2vw, 0.9rem);">{{ submissions|length }} submission(s)</p>
                 </div>
-                <div class="sub-details">
-                    <h4>{{ sub.student_name }}</h4>
-                    <p>{{ sub.student_email }} &bull; Submitted: {{ sub.score_record.submitted_at.strftime('%b %d, %I:%M %p') }}</p>
+                <div class="bulk-actions">
+                    <button class="btn-bulk" onclick="publishAllResults()" id="publishAllBtn">
+                        <i data-lucide="send" style="width:1em;height:1em;margin-right:0.5em;"></i>
+                        Publish All Results
+                    </button>
                 </div>
             </div>
             
-            <div class="sub-stats">
-                <div class="stat-box">
-                    <p>Status</p>
-                    {% if sub.score_record.passed %}
-                    <span class="status-badge status-passed">Passed</span>
-                    {% else %}
-                    <span class="status-badge status-failed">Failed</span>
-                    {% endif %}
-                </div>
-                <div class="stat-box">
-                    <p>Score</p>
-                    <h3>{{ sub.score_record.score }} / {{ sub.score_record.total_marks }}</h3>
-                </div>
-                <div class="stat-box" style="display:flex; align-items:center;">
-                    <a href="{{ url_for('dashboard.view_result', session_id=sub.score_record.session_id) }}" class="btn-primary" style="padding:0.4em 0.8em; font-size:0.85em; border-radius:0.5em; text-decoration:none;">Review</a>
+            <div class="filter-bar">
+                <div class="filter-group">
+                    <button class="filter-btn active" data-filter="all" onclick="filterSubmissions('all')">All</button>
+                    <button class="filter-btn" data-filter="pending" onclick="filterSubmissions('pending')">Pending Grading</button>
+                    <button class="filter-btn" data-filter="graded" onclick="filterSubmissions('graded')">Graded</button>
+                    <button class="filter-btn" data-filter="published" onclick="filterSubmissions('published')">Published</button>
                 </div>
             </div>
         </div>
-        {% endfor %}
+        
+        {% if submissions %}
+        <div class="submissions-grid" id="submissionsGrid">
+            {% for item in submissions %}
+            <div class="submission-card" data-status="{{ 'published' if item.score_record.results_published else ('graded' if item.score_record.is_graded else 'pending') }}">
+                <div class="student-info">
+                    <div class="student-avatar">
+                        {{ item.student_name[0]|upper if item.student_name else 'S' }}
+                    </div>
+                    <div class="student-details">
+                        <h4>{{ item.student_name }}</h4>
+                        <p>{{ item.student_email }}</p>
+                    </div>
+                </div>
+                
+                <div class="submission-meta">
+                    <div class="meta-item">
+                        <div class="meta-label">Score</div>
+                        <div class="meta-value">{{ item.score_record.score_percent|int }}%</div>
+                    </div>
+                    <div class="meta-item">
+                        <div class="meta-label">Status</div>
+                        <div class="meta-value">
+                            {% if item.score_record.results_published %}
+                            <span class="status-badge status-published">Published</span>
+                            {% elif item.score_record.is_graded %}
+                            <span class="status-badge status-graded">Graded</span>
+                            {% else %}
+                            <span class="status-badge status-pending">Pending</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="submission-actions">
+                    <a href="{{ url_for('dashboard.grade_submission', session_id=item.score_record.session_id) }}" class="btn-grade">
+                        <i data-lucide="edit-3" style="width:1em;height:1em;margin-right:0.25em;"></i>
+                        Grade
+                    </a>
+                    <a href="{{ url_for('dashboard.view_result', session_id=item.score_record.session_id) }}" class="btn-view">
+                        <i data-lucide="eye" style="width:1em;height:1em;margin-right:0.25em;"></i>
+                        View
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <i data-lucide="inbox"></i>
+            <h3 style="margin:0 0 clamp(0.5rem, 1.5vw, 0.75rem) 0;">No Submissions Yet</h3>
+            <p style="margin:0; color:var(--gray-500); font-size: clamp(0.85rem, 2vw, 0.9rem);">Students haven't taken this exam yet.</p>
+        </div>
+        {% endif %}
+        
     </div>
-    {% else %}
-    <div class="empty-state" style="margin-top:2em;">
-        <i data-lucide="inbox"></i>
-        <h3>No Submissions Yet</h3>
-        <p>Students have not completed this exam yet.</p>
-    </div>
-    {% endif %}
 </div>
+{% endblock %}
+
+{% block dashboard_js %}
+<script>
+    function filterSubmissions(filter) {
+        const cards = document.querySelectorAll('.submission-card');
+        const buttons = document.querySelectorAll('.filter-btn');
+        
+        buttons.forEach(btn => {
+            if (btn.dataset.filter === filter) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+        
+        cards.forEach(card => {
+            if (filter === 'all') {
+                card.style.display = 'block';
+            } else {
+                if (card.dataset.status === filter) {
+                    card.style.display = 'block';
+                } else {
+                    card.style.display = 'none';
+                }
+            }
+        });
+    }
+    
+    async function publishAllResults() {
+        if (!confirm('Publish all graded results? Students will be able to view their scores.')) return;
+        
+        const btn = document.getElementById('publishAllBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<i data-lucide="loader" class="spin" style="width:1em;height:1em;margin-right:0.5em;"></i> Publishing...';
+        
+        try {
+            const res = await fetch('/api/exams/{{ exam._id }}/publish-all-results', {
+                method: 'POST'
+            });
+            const data = await res.json();
+            
+            if (data.success) {
+                showToast(`Published ${data.count} result(s)`, 'success');
+                setTimeout(() => window.location.reload(), 1500);
+            } else {
+                showToast('Error: ' + data.error, 'error');
+                btn.disabled = false;
+                btn.innerHTML = '<i data-lucide="send" style="width:1em;height:1em;margin-right:0.5em;"></i> Publish All Results';
+                lucide.createIcons();
+            }
+        } catch (err) {
+            console.error(err);
+            showToast('Failed to publish results', 'error');
+            btn.disabled = false;
+            btn.innerHTML = '<i data-lucide="send" style="width:1em;height:1em;margin-right:0.5em;"></i> Publish All Results';
+            lucide.createIcons();
+        }
+    }
+</script>
 {% endblock %}

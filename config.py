@@ -30,17 +30,12 @@ class Config:
     SQLALCHEMY_DATABASE_URI = postgres_uri
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
-    # Parse sslmode from URI if present, otherwise use default settings
-    engine_options = {
+    # Engine options - NO connect_args for pg8000
+    # pg8000 handles SSL parameters from the URI itself
+    SQLALCHEMY_ENGINE_OPTIONS = {
         'pool_pre_ping': True,
         'pool_recycle': 300,
     }
-    
-    # Only add connect_args if sslmode is NOT already in the URI
-    if postgres_uri and 'sslmode=' not in postgres_uri:
-        engine_options['connect_args'] = {'sslmode': 'prefer'}
-    
-    SQLALCHEMY_ENGINE_OPTIONS = engine_options
     
     # ICA Integration
     ICA_BASE_URL = os.environ.get('ICA_BASE_URL')

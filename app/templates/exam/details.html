@@ -515,7 +515,7 @@ For urgent academic questions, please reach out to the examiner via [e.g., inter
 
 <script>
     let quill;
-    let currentQuestions = [];
+    let currentQuestions = {{ exam.questions | tojson | safe }} || [];
     let editingIndex = -1;
     let currentImageBase64 = null;
 
@@ -832,9 +832,14 @@ For urgent academic questions, please reach out to the examiner via [e.g., inter
 
     // Dummy API call / LocalStorage load
     function loadQuestions() {
+        // Load from localStorage if exists, otherwise use server data
         const stored = localStorage.getItem('exam_questions_{{ exam._id }}');
         if (stored) {
             currentQuestions = JSON.parse(stored);
+        }
+        // If still empty after checking localStorage, ensure we have server data
+        if (currentQuestions.length === 0 && {{ exam.questions | tojson | safe }}) {
+            currentQuestions = {{ exam.questions | tojson | safe }};
         }
         renderQuestionsTable();
     }

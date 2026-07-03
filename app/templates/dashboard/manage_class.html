@@ -422,14 +422,19 @@ async function loadMembersData() {
     } else {
         res.data.invitations.forEach(i => {
             let badgeClass = i.status === 'pending' ? 'badge-pending' : 'badge-declined';
+            let uninviteBtn = '';
+            if(isTeacher && i.status === 'pending') {
+                uninviteBtn = `<button onclick="uninviteMember('${i.email}')" class="mc-btn mc-btn-danger" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; margin-left: 1rem;">Uninvite</button>`;
+            }
             invHtml += `<div class="mc-list-item">
                 <div class="mc-list-info" style="width:100%; display:flex; justify-content:space-between; align-items:center;">
                     <div>
                         <p class="name">${i.name || i.email}</p>
                         <p class="role" style="text-transform:none;">${i.email} &bull; Invited as ${i.role}</p>
                     </div>
-                    <div>
+                    <div style="display:flex; align-items:center;">
                         <span class="badge ${badgeClass}">${i.status}</span>
+                        ${uninviteBtn}
                     </div>
                 </div>
             </div>`;
@@ -485,7 +490,7 @@ async function sendInvites() {
 async function generateLink(type) {
     const res = await apiCall('/links/generate', 'POST', {type});
     if(res.success) {
-        document.getElementById(`${type}-link`).value = `${window.location.origin}/join/${res.token}`;
+        document.getElementById(`${type}-link`).value = `${window.location.origin}/dashboard/join/${res.token}`;
     }
 }
 
@@ -512,6 +517,16 @@ async function removeMember(userId, role) {
         const res = await apiCall('/remove_member', 'POST', {user_id: userId, role: role});
         if(res.success) {
             showToast('Member removed');
+            loadMembersData();
+        }
+    }
+}
+
+async function uninviteMember(email) {
+    if(confirm("Are you sure you want to uninvite this user?")) {
+        const res = await apiCall('/uninvite', 'POST', {email: email});
+        if(res.success) {
+            showToast('Invitation cancelled');
             loadMembersData();
         }
     }

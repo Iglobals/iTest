@@ -277,7 +277,7 @@ def grade_session(session_id):
                     correct_count += 1
                 else:
                     incorrect_count += 1
-            elif question_type in ['mcq', 'true_false', 'short_answer', 'numerical']:
+            elif question_type in ['mcq', 'multiple_choice', 'MULTIPLE_CHOICE', 'true_false', 'short_answer', 'numerical']:
                 # Auto-graded
                 student_answer = answers_dict.get(q_id)
                 correct_answer = question.get('correct_answer')
@@ -379,6 +379,7 @@ def submit_session(session_id):
         questions_dict = {str(q.get("_id")): q for q in questions_to_grade}
         
         total_questions = len(session.get("question_order", []))
+        has_essay = False
         
         for q_id in session.get("question_order", []):
             student_answer = answers_dict.get(q_id)
@@ -394,13 +395,20 @@ def submit_session(session_id):
                 
             # Get correct answer
             correct_answer = question.get("correct_answer")
+            correct_answer_text = str(correct_answer).strip() if correct_answer else ""
+            
+            if isinstance(question.get("options"), list):
+                for opt in question["options"]:
+                    if opt.get("key") == correct_answer or opt.get("id") == correct_answer:
+                        correct_answer_text = str(opt.get("text", correct_answer)).strip()
+                        break
             
             # Compare based on question type
             question_type = question.get("question_type", question.get("type", "mcq"))
             
-            if question_type in ["mcq", "true_false"]:
+            if question_type in ["mcq", "multiple_choice", "MULTIPLE_CHOICE", "true_false", "short_answer", "numerical"]:
                 # Exact match for MCQ and True/False
-                if str(student_answer).strip().upper() == str(correct_answer).strip().upper():
+                if str(student_answer).strip().upper() == correct_answer_text.upper():
                     correct_count += 1
                 else:
                     incorrect_count += 1
@@ -413,6 +421,7 @@ def submit_session(session_id):
             elif question_type == "essay":
                 # Essay questions need manual grading - count as unanswered for now
                 unanswered_count += 1
+                has_essay = True
             else:
                 # Unknown type - treat as incorrect
                 incorrect_count += 1
@@ -450,8 +459,8 @@ def submit_session(session_id):
             correct_count=correct_count,
             incorrect_count=incorrect_count,
             unanswered_count=unanswered_count,
-            is_graded=False,  # Default to false, will be set to true after manual grading
-            results_published=exam.get('settings', {}).get('show_result_immediately', True),  # Auto-publish if setting enabled
+            is_graded=not has_essay,  # Default to true if no essay, false if there are essays
+            results_published=exam.get('settings', {}).get('show_result_immediately', True) if not has_essay else False,
             submitted_at=datetime.utcnow()
         )
         

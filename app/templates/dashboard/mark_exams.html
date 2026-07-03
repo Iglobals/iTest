@@ -50,24 +50,49 @@
         border-color: var(--purple);
     }
     
-    .submissions-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-        gap: clamp(1rem, 3vw, 1.5rem);
-    }
-    
-    .submission-card {
+    /* Table Styles */
+    .table-container {
+        width: 100%;
+        overflow-x: auto;
         background: var(--white);
         border: 1px solid var(--gray-200);
-        border-radius: clamp(0.75rem, 2vw, 1rem);
-        padding: clamp(1rem, 3vw, 1.25rem);
-        transition: transform 0.2s, box-shadow 0.2s;
+        border-radius: 1em;
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
     }
     
-    .submission-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-        border-color: var(--purple-light);
+    .data-table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 800px;
+    }
+    
+    .data-table th, .data-table td {
+        padding: 1rem 1.5rem;
+        text-align: left;
+        border-bottom: 1px solid var(--gray-100);
+        vertical-align: middle;
+    }
+    
+    .data-table th {
+        background: var(--gray-50);
+        font-weight: 600;
+        color: var(--gray-500);
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    
+    .data-table tbody tr {
+        transition: background-color 0.2s;
+    }
+    
+    .data-table tbody tr:hover {
+        background-color: var(--purple-bg);
+        cursor: pointer;
+    }
+    
+    .data-table tbody tr:last-child td {
+        border-bottom: none;
     }
     
     .student-info {
@@ -101,73 +126,6 @@
         margin: 0;
         font-size: clamp(0.75rem, 2vw, 0.85rem);
         color: var(--gray-500);
-    }
-    
-    .submission-meta {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-        gap: clamp(0.5rem, 1.5vw, 0.75rem);
-        padding: clamp(0.75rem, 2vw, 1rem) 0;
-        border-top: 1px solid var(--gray-100);
-        border-bottom: 1px solid var(--gray-100);
-        margin: clamp(0.75rem, 2vw, 1rem) 0;
-    }
-    
-    .meta-item {
-        text-align: center;
-    }
-    
-    .meta-label {
-        font-size: clamp(0.7rem, 1.8vw, 0.75rem);
-        color: var(--gray-500);
-        margin-bottom: clamp(0.125rem, 0.5vw, 0.25rem);
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    
-    .meta-value {
-        font-size: clamp(1rem, 2.5vw, 1.1rem);
-        font-weight: 600;
-        color: var(--gray-900);
-    }
-    
-    .submission-actions {
-        display: flex;
-        gap: clamp(0.5rem, 1.5vw, 0.75rem);
-    }
-    
-    .btn-grade {
-        flex: 1;
-        padding: clamp(0.5rem, 1.5vw, 0.6rem) clamp(0.75rem, 2vw, 1rem);
-        background: var(--purple);
-        color: white;
-        border: none;
-        border-radius: 0.5rem;
-        font-size: clamp(0.8rem, 2vw, 0.9rem);
-        font-weight: 500;
-        cursor: pointer;
-        transition: background 0.2s;
-        text-decoration: none;
-        text-align: center;
-    }
-    
-    .btn-grade:hover {
-        background: var(--purple-dark);
-    }
-    
-    .btn-view {
-        flex: 1;
-        padding: clamp(0.5rem, 1.5vw, 0.6rem) clamp(0.75rem, 2vw, 1rem);
-        background: var(--white);
-        color: var(--purple);
-        border: 1px solid var(--purple);
-        border-radius: 0.5rem;
-        font-size: clamp(0.8rem, 2vw, 0.9rem);
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.2s;
-        text-decoration: none;
-        text-align: center;
     }
     
     .btn-view:hover {
@@ -276,27 +234,38 @@
         </div>
         
         {% if submissions %}
-        <div class="submissions-grid" id="submissionsGrid">
-            {% for item in submissions %}
-            <div class="submission-card" data-status="{{ 'published' if item.score_record.results_published else ('graded' if item.score_record.is_graded else 'pending') }}">
-                <div class="student-info">
-                    <div class="student-avatar">
-                        {{ item.student_name[0]|upper if item.student_name else 'S' }}
-                    </div>
-                    <div class="student-details">
-                        <h4>{{ item.student_name }}</h4>
-                        <p>{{ item.student_email }}</p>
-                    </div>
-                </div>
-                
-                <div class="submission-meta">
-                    <div class="meta-item">
-                        <div class="meta-label">Score</div>
-                        <div class="meta-value">{{ item.score_record.score_percent|int }}%</div>
-                    </div>
-                    <div class="meta-item">
-                        <div class="meta-label">Status</div>
-                        <div class="meta-value">
+        <div class="table-container">
+            <table class="data-table" id="submissionsGrid">
+                <thead>
+                    <tr>
+                        <th>Student</th>
+                        <th>Score</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in submissions %}
+                    <tr class="submission-row" data-status="{{ 'published' if item.score_record.results_published else ('graded' if item.score_record.is_graded else 'pending') }}" onclick="window.location.href='{{ url_for('dashboard.grade_submission', session_id=item.score_record.session_id) }}'">
+                        <td>
+                            <div class="student-info" style="margin-bottom:0;">
+                                <div class="student-avatar" style="width: 40px; height: 40px; font-size: 1rem;">
+                                    {{ item.student_name[0]|upper if item.student_name else 'S' }}
+                                </div>
+                                <div class="student-details">
+                                    <h4 style="font-size: 1rem;">{{ item.student_name }}</h4>
+                                    <p>{{ item.student_email }}</p>
+                                </div>
+                            </div>
+                        </td>
+                        
+                        <td>
+                            <div style="font-size: 1.1rem; font-weight: 600; color: var(--gray-900);">
+                                {{ item.score_record.score_percent|int }}%
+                            </div>
+                        </td>
+                        
+                        <td>
                             {% if item.score_record.results_published %}
                             <span class="status-badge status-published">Published</span>
                             {% elif item.score_record.is_graded %}
@@ -304,22 +273,22 @@
                             {% else %}
                             <span class="status-badge status-pending">Pending</span>
                             {% endif %}
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="submission-actions">
-                    <a href="{{ url_for('dashboard.grade_submission', session_id=item.score_record.session_id) }}" class="btn-grade">
-                        <i data-lucide="edit-3" style="width:1em;height:1em;margin-right:0.25em;"></i>
-                        Grade
-                    </a>
-                    <a href="{{ url_for('dashboard.view_result', session_id=item.score_record.session_id) }}" class="btn-view">
-                        <i data-lucide="eye" style="width:1em;height:1em;margin-right:0.25em;"></i>
-                        View
-                    </a>
-                </div>
-            </div>
-            {% endfor %}
+                        </td>
+                        
+                        <td>
+                            <div style="display:flex; gap:0.5rem;" onclick="event.stopPropagation();">
+                                <a href="{{ url_for('dashboard.grade_submission', session_id=item.score_record.session_id) }}" class="btn-primary" style="padding:0.4em 0.8em; font-size:0.85em; border-radius:0.5em; text-decoration:none;">
+                                    Grade
+                                </a>
+                                <a href="{{ url_for('dashboard.view_result', session_id=item.score_record.session_id) }}" class="btn-outline" style="padding:0.4em 0.8em; font-size:0.85em; border-radius:0.5em; text-decoration:none;">
+                                    View
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
         {% else %}
         <div class="empty-state">
@@ -336,7 +305,7 @@
 {% block dashboard_js %}
 <script>
     function filterSubmissions(filter) {
-        const cards = document.querySelectorAll('.submission-card');
+        const rows = document.querySelectorAll('.submission-row');
         const buttons = document.querySelectorAll('.filter-btn');
         
         buttons.forEach(btn => {
@@ -347,14 +316,14 @@
             }
         });
         
-        cards.forEach(card => {
+        rows.forEach(row => {
             if (filter === 'all') {
-                card.style.display = 'block';
+                row.style.display = 'table-row';
             } else {
-                if (card.dataset.status === filter) {
-                    card.style.display = 'block';
+                if (row.dataset.status === filter) {
+                    row.style.display = 'table-row';
                 } else {
-                    card.style.display = 'none';
+                    row.style.display = 'none';
                 }
             }
         });

@@ -491,6 +491,14 @@ def view_result(session_id):
         student_answer = answer.get('selected_option', '')
         
         correct_answer = question.get('correct_answer', '')
+        correct_answer_text = str(correct_answer).strip()
+        
+        if isinstance(question.get('options'), list):
+            for opt in question['options']:
+                if opt.get('key') == correct_answer or opt.get('id') == correct_answer:
+                    correct_answer_text = str(opt.get('text', correct_answer)).strip()
+                    break
+                    
         question_type = question.get('question_type', question.get('type', 'mcq'))
         
         # Determine if correct
@@ -498,8 +506,10 @@ def view_result(session_id):
         awarded_marks = None
         feedback = None
         
-        if question_type in ['mcq', 'true_false', 'short_answer', 'numerical']:
-            is_correct = str(student_answer).strip().upper() == str(correct_answer).strip().upper()
+        if question_type in ['mcq', 'multiple_choice', 'MULTIPLE_CHOICE', 'true_false', 'short_answer', 'numerical']:
+            if student_answer is None:
+                student_answer = ''
+            is_correct = str(student_answer).strip().upper() == correct_answer_text.upper()
         elif question_type == 'essay':
             # Check for manual grading
             if q_id in manual_grades:
@@ -515,7 +525,7 @@ def view_result(session_id):
                 "options": question.get('options', [])
             },
             "student_response": student_answer,
-            "correct_response": correct_answer if question_type != 'essay' else 'Manual grading required',
+            "correct_response": correct_answer_text if question_type != 'essay' else 'Manual grading required',
             "is_correct": is_correct,
             "explanation": question.get('explanation', ''),
             "marks": question.get('marks', 1),
@@ -580,6 +590,14 @@ def grade_submission(session_id):
         student_answer = answer.get('selected_option', '')
         
         correct_answer = question.get('correct_answer', '')
+        correct_answer_text = str(correct_answer).strip()
+        
+        if isinstance(question.get('options'), list):
+            for opt in question['options']:
+                if opt.get('key') == correct_answer or opt.get('id') == correct_answer:
+                    correct_answer_text = str(opt.get('text', correct_answer)).strip()
+                    break
+                    
         question_type = question.get('question_type', question.get('type', 'mcq'))
         
         # Determine if correct
@@ -587,8 +605,10 @@ def grade_submission(session_id):
         awarded_marks = None
         feedback = None
         
-        if question_type in ['mcq', 'true_false', 'short_answer', 'numerical']:
-            is_correct = str(student_answer).strip().upper() == str(correct_answer).strip().upper()
+        if question_type in ['mcq', 'multiple_choice', 'MULTIPLE_CHOICE', 'true_false', 'short_answer', 'numerical']:
+            if student_answer is None:
+                student_answer = ''
+            is_correct = str(student_answer).strip().upper() == correct_answer_text.upper()
         elif question_type == 'essay':
             # Check for manual grading
             if q_id in manual_grades:
@@ -603,7 +623,7 @@ def grade_submission(session_id):
                 "options": question.get('options', [])
             },
             "student_response": student_answer,
-            "correct_response": correct_answer if question_type != 'essay' else 'Manual grading required',
+            "correct_response": correct_answer_text if question_type != 'essay' else 'Manual grading required',
             "is_correct": is_correct,
             "explanation": question.get('explanation', ''),
             "marks": question.get('marks', 1),

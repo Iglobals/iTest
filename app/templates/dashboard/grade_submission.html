@@ -309,7 +309,7 @@
                     
                     <div class="question-text">{{ item.question.text | safe }}</div>
                     
-                    {% if item.question.type in ['mcq', 'true_false', 'short_answer', 'numerical'] %}
+                    {% if item.question.type in ['mcq', 'multiple_choice', 'MULTIPLE_CHOICE', 'true_false', 'short_answer', 'numerical'] %}
                     <!-- Auto-graded question -->
                     <div class="answer-section auto-graded">
                         <div class="answer-label">Student Answer</div>

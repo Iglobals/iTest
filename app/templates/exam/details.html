@@ -4,10 +4,6 @@
 {% block page_subtitle %}Manage settings and questions for this exam.{% endblock %}
 
 {% block dashboard_head %}
-<!-- Quill CSS -->
-<link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.css" />
-
 <style>
     .exam-section {
         background: var(--white);
@@ -323,7 +319,21 @@
                     <label>Impact (Weighting)</label>
                     <input type="number" class="form-control" id="exam_impact" value="{{ exam.impact if exam.impact else 1.0 }}" step="0.1">
                 </div>
-                
+                <div class="form-group">
+                    <label>Exam Type</label>
+                    {% if exam.total_questions %}
+                    <input type="text" class="form-control" value="{{ {'objective': 'Objective Only', 'essay': 'Essay Only', 'hybrid': 'Hybrid (Objective + Essay)'}.get(exam.grading_mode, 'Hybrid (Objective + Essay)') }}" disabled>
+                    <input type="hidden" id="exam_grading_mode" value="{{ exam.grading_mode or 'hybrid' }}">
+                    <p style="font-size: 0.8em; color: var(--gray-500); margin: 0;">Can't be changed once questions have been added.</p>
+                    {% else %}
+                    <select id="exam_grading_mode" class="form-control" onchange="toggleInstantResultsAvailability()">
+                        <option value="objective" {% if exam.grading_mode == 'objective' %}selected{% endif %}>Objective Only</option>
+                        <option value="essay" {% if exam.grading_mode == 'essay' %}selected{% endif %}>Essay Only</option>
+                        <option value="hybrid" {% if not exam.grading_mode or exam.grading_mode == 'hybrid' %}selected{% endif %}>Hybrid (Objective + Essay)</option>
+                    </select>
+                    {% endif %}
+                </div>
+
                 <!-- Audience -->
                 <div class="form-group" style="grid-column: 1 / -1;">
                     <label>Classes Assigned</label>
@@ -374,7 +384,7 @@
                     </div>
                     <div style="display:flex; align-items:center; gap:0.5em;">
                         <input type="checkbox" id="exam_show_results" {% if exam.settings and exam.settings.show_result_immediately %}checked{% endif %}>
-                        <label>Open Results</label>
+                        <label>Instant Results (objective-only exams)</label>
                     </div>
                     <div style="display:flex; align-items:center; gap:0.5em;">
                         <input type="checkbox" id="exam_allow_retake" {% if exam.settings and exam.settings.allow_retake %}checked{% endif %}>
@@ -419,133 +429,41 @@ For urgent academic questions, please reach out to the examiner via [e.g., inter
     <div class="exam-section">
         <div class="section-title">
             <span>Questions</span>
-            <button class="btn-primary" style="width:auto; height:auto; padding:0.5em 1em; font-size:0.9em;" onclick="openEditor()">
-                <i data-lucide="plus" style="width:14px; height:14px; margin-right:4px;"></i> Add Question
-            </button>
         </div>
-        
-        <div class="table-responsive">
-            <table class="questions-table">
-                <thead>
-                    <tr>
-                        <th style="width: 50px;">Order</th>
-                        <th>Question</th>
-                        <th>Type</th>
-                        <th>Points</th>
-                        <th style="text-align: right;">Actions</th>
-                    </tr>
-                </thead>
-                <tbody id="questionsTableBody">
-                    <!-- Questions will be rendered here dynamically via JS -->
-                </tbody>
-            </table>
-        </div>
-        
-        <div id="noQuestionsState" class="empty-state" style="display:none; margin-top:2em; border:1px dashed var(--gray-300);">
-            <i data-lucide="help-circle" style="width:3em; height:3em; color:var(--gray-400); margin-bottom:1em;"></i>
-            <h3>No questions yet</h3>
-            <p>Add your first question to start building the exam.</p>
-        </div>
-    </div>
-</div>
-
-<!-- Question Editor Modal -->
-<div class="editor-overlay" id="editorModal">
-    <div class="editor-modal">
-        <div class="editor-header">
-            <h3 style="margin:0;" id="editorTitle">Edit Question</h3>
-            <button class="action-btn" onclick="closeEditor()"><i data-lucide="x"></i></button>
-        </div>
-        <div class="editor-body">
-            <div class="form-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1em; margin-bottom: 1em;">
-                <div class="form-group">
-                    <label>Question Type</label>
-                    <div class="custom-dropdown" id="type_container">
-                        <input type="text" class="form-control" id="q_type_input" value="Multiple Choice" readonly style="cursor:pointer;">
-                        <input type="hidden" id="q_type" value="multiple_choice">
-                        <div class="dropdown-list" id="type_dropdown">
-                            <div class="dropdown-item" onclick="setQType('multiple_choice', 'Multiple Choice')">Multiple Choice</div>
-                            <div class="dropdown-item" onclick="setQType('essay', 'Essay / Long Answer')">Essay / Long Answer</div>
-                        </div>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label>Points</label>
-                    <input type="number" id="q_points" class="form-control" value="1" min="1">
-                </div>
-            </div>
-
-            <div class="form-group" style="margin-bottom: 1em;">
-                <label>Question Text</label>
-                <!-- Quill Editor Container -->
-                <div id="quill-editor"></div>
-            </div>
-            
-            <div class="form-group" style="margin-bottom: 1em;">
-                <label>Attach Image (limit: 50/50 remaining)</label>
-                <input type="file" id="q_image" class="form-control" accept="image/*" onchange="previewImage(event)">
-                <img id="q_image_preview" class="image-preview" style="display:none;">
-                <button id="q_image_remove" type="button" class="btn-outline" style="display:none; width:auto; padding:0.4em 0.8em; margin-top:0.5em; font-size:0.85em; color:var(--danger); border-color:var(--danger);" onclick="removeImage()">Remove Image</button>
-            </div>
-
-            <div id="optionsContainer">
-                <label style="font-size:0.875em; font-weight:500; color:var(--gray-700);">Options</label>
-                <div class="options-list" id="optionsList">
-                    <!-- Options populated here -->
-                </div>
-                <button type="button" class="btn-outline" style="width:auto; height:auto; padding:0.5em; font-size:0.85em; margin-top:1em;" onclick="addOption()">
-                    <i data-lucide="plus" style="width:14px; height:14px;"></i> Add Option
-                </button>
-            </div>
-        </div>
-        <div class="editor-footer">
-            <button class="btn-outline" style="width:auto; height:auto; padding:0.6em 1.2em;" onclick="closeEditor()">Cancel</button>
-            <button class="btn-primary" style="width:auto; height:auto; padding:0.6em 1.2em; background:var(--gray-800); color:white;" onclick="saveQuestion('draft')">Save as Draft</button>
-            <button class="btn-primary" style="width:auto; height:auto; padding:0.6em 1.2em;" onclick="saveQuestion('published')">Save & Publish</button>
-        </div>
+        <p style="color: var(--gray-500); margin-top: 0;">
+            {{ exam.total_questions or 0 }} question(s), {{ exam.total_marks or 0 }} total marks.
+            Questions are added and edited from the question builder.
+        </p>
+        <a class="btn-primary" style="width:auto; display:inline-flex; padding:0.6em 1.2em; text-decoration:none;" href="{{ url_for('dashboard.exam_builder', slug=exam.slug) }}">
+            <i data-lucide="list-checks" style="width:16px; height:16px; margin-right:6px;"></i> Manage Questions
+        </a>
     </div>
 </div>
 {% endblock %}
 
 {% block dashboard_js %}
-<!-- Katex for Math formulas -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.js"></script>
-<!-- Quill JS -->
-<script src="https://cdn.quilljs.com/1.3.6/quill.min.js"></script>
-
 <script>
-    let quill;
-    let currentQuestions = {{ exam.questions | tojson | safe }} || [];
-    let editingIndex = -1;
-    let currentImageBase64 = null;
-
     document.addEventListener('DOMContentLoaded', () => {
-        // Initialize Quill
-        quill = new Quill('#quill-editor', {
-            theme: 'snow',
-            modules: {
-                toolbar: [
-                    ['bold', 'italic', 'underline', 'strike'],        // toggled buttons
-                    ['blockquote', 'code-block'],
-                    [{ 'script': 'sub'}, { 'script': 'super' }],      // superscript/subscript
-                    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                    [{ 'header': [1, 2, 3, false] }],
-                    ['formula']                                       // math formula
-                ]
-            }
-        });
-
-        // Load existing questions (mocking data load)
-        loadQuestions();
-        
         initSubjectDropdown();
-        initTypeDropdown();
-        
+        toggleInstantResultsAvailability();
+
         fetchClasses();
         initClassesTagInput();
         initEmailTagInput('inc_email_input', 'inc_emails_wrapper', 'inc_emails_container', selectedIncEmails);
         initEmailTagInput('exc_email_input', 'exc_emails_wrapper', 'exc_emails_container', selectedExcEmails);
     });
+
+    function toggleInstantResultsAvailability() {
+        const gradingModeEl = document.getElementById('exam_grading_mode');
+        const gradingMode = gradingModeEl ? gradingModeEl.value : 'hybrid';
+        const checkbox = document.getElementById('exam_show_results');
+        if (gradingMode === 'objective') {
+            checkbox.disabled = false;
+        } else {
+            checkbox.checked = false;
+            checkbox.disabled = true;
+        }
+    }
     
     const subjectsList = [
         "General", "Mathematics", "Physics", "Chemistry", "Biology", "Computer Science",
@@ -622,23 +540,6 @@ For urgent academic questions, please reach out to the examiner via [e.g., inter
         {% endif %}
     ];
     let availableClasses = [];
-
-    function initTypeDropdown() {
-        const input = document.getElementById('q_type_input');
-        const dropdown = document.getElementById('type_dropdown');
-        
-        if (!input) return;
-        
-        input.addEventListener('click', () => {
-            dropdown.classList.toggle('show');
-        });
-        
-        document.addEventListener('click', (e) => {
-            if(!e.target.closest('#type_container')) {
-                dropdown.classList.remove('show');
-            }
-        });
-    }
 
     async function fetchClasses() {
         try {
@@ -830,277 +731,15 @@ For urgent academic questions, please reach out to the examiner via [e.g., inter
         }
     }
 
-    // Dummy API call / LocalStorage load
-    function loadQuestions() {
-        // Load from localStorage if exists, otherwise use server data
-        const stored = localStorage.getItem('exam_questions_{{ exam._id }}');
-        if (stored) {
-            currentQuestions = JSON.parse(stored);
-        }
-        // If still empty after checking localStorage, ensure we have server data
-        if (currentQuestions.length === 0 && {{ exam.questions | tojson | safe }}) {
-            currentQuestions = {{ exam.questions | tojson | safe }};
-        }
-        renderQuestionsTable();
-    }
-
-    async function saveQuestionsToStorage() {
-        localStorage.setItem('exam_questions_{{ exam._id }}', JSON.stringify(currentQuestions));
-        try {
-            await fetch('/api/exams/{{ exam._id }}/questions', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ questions: currentQuestions })
-            });
-        } catch (err) {
-            console.error('Failed to save questions to server', err);
-        }
-    }
-
-    function renderQuestionsTable() {
-        const tbody = document.getElementById('questionsTableBody');
-        const emptyState = document.getElementById('noQuestionsState');
-        const table = document.querySelector('.questions-table');
-
-        tbody.innerHTML = '';
-        if (currentQuestions.length === 0) {
-            emptyState.style.display = 'flex';
-            table.style.display = 'none';
-            return;
-        }
-
-        emptyState.style.display = 'none';
-        table.style.display = 'table';
-
-        currentQuestions.forEach((q, index) => {
-            const tr = document.createElement('tr');
-            
-            // Extract raw text from Quill delta or HTML for preview
-            const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = q.text_html || q.text || '<em>Empty</em>';
-            const previewText = tempDiv.textContent || tempDiv.innerText || '';
-
-            tr.innerHTML = `
-                <td>
-                    <div style="display:flex; flex-direction:column; gap:4px;">
-                        <button class="action-btn" onclick="moveQuestion(${index}, -1)" ${index === 0 ? 'disabled style="opacity:0.3"' : ''}><i data-lucide="chevron-up" style="width:16px; height:16px;"></i></button>
-                        <span style="text-align:center; font-weight:600; font-size:0.9em;">${index + 1}</span>
-                        <button class="action-btn" onclick="moveQuestion(${index}, 1)" ${index === currentQuestions.length - 1 ? 'disabled style="opacity:0.3"' : ''}><i data-lucide="chevron-down" style="width:16px; height:16px;"></i></button>
-                    </div>
-                </td>
-                <td class="question-cell">
-                    <div class="question-text-preview" title="${previewText}">${q.text_html || q.text}</div>
-                    ${q.image ? '<div style="font-size:0.8em; color:var(--gold); margin-top:4px;"><i data-lucide="image" style="width:12px; height:12px;"></i> Includes image</div>' : ''}
-                </td>
-                <td>
-                    <span class="status-badge" style="background:var(--gray-100); color:var(--gray-700);">${q.type === 'multiple_choice' ? 'Multiple Choice' : 'Essay'}</span>
-                </td>
-                <td>${q.points || 1} pts</td>
-                <td style="text-align: right;">
-                    <button class="action-btn" onclick="openEditor(${index})" title="Edit"><i data-lucide="edit-2" style="width:16px; height:16px;"></i></button>
-                    <button class="action-btn" onclick="deleteQuestion(${index})" title="Delete" style="color:var(--danger);"><i data-lucide="trash-2" style="width:16px; height:16px;"></i></button>
-                </td>
-            `;
-            tbody.appendChild(tr);
-        });
-        
-        lucide.createIcons();
-    }
-
-    function moveQuestion(index, dir) {
-        if (index + dir < 0 || index + dir >= currentQuestions.length) return;
-        const temp = currentQuestions[index];
-        currentQuestions[index] = currentQuestions[index + dir];
-        currentQuestions[index + dir] = temp;
-        saveQuestionsToStorage();
-        renderQuestionsTable();
-    }
-
-    function deleteQuestion(index) {
-        if (confirm("Are you sure you want to delete this question?")) {
-            currentQuestions.splice(index, 1);
-            saveQuestionsToStorage();
-            renderQuestionsTable();
-        }
-    }
-
-    function openEditor(index = -1) {
-        editingIndex = index;
-        const modal = document.getElementById('editorModal');
-        const title = document.getElementById('editorTitle');
-        
-        if (index === -1) {
-            title.textContent = "Add New Question";
-            quill.setContents([{ insert: '\n' }]); // clear
-            document.getElementById('q_type').value = 'multiple_choice';
-            document.getElementById('q_points').value = 1;
-            removeImage();
-            
-            // Default 4 options
-            const list = document.getElementById('optionsList');
-            list.innerHTML = '';
-            for(let i=0; i<4; i++) addOption();
-        } else {
-            title.textContent = "Edit Question";
-            const q = currentQuestions[index];
-            document.getElementById('q_type').value = q.type || 'multiple_choice';
-            document.getElementById('q_points').value = q.points || 1;
-            quill.clipboard.dangerouslyPasteHTML(q.text_html || q.text);
-            
-            if (q.image) {
-                currentImageBase64 = q.image;
-                document.getElementById('q_image_preview').src = q.image;
-                document.getElementById('q_image_preview').style.display = 'block';
-                document.getElementById('q_image_remove').style.display = 'inline-block';
-            } else {
-                removeImage();
-            }
-
-            const list = document.getElementById('optionsList');
-            list.innerHTML = '';
-            if (q.options && q.options.length > 0) {
-                q.options.forEach(opt => addOption(opt.text, opt.isCorrect || opt.is_correct));
-            } else {
-                for(let i=0; i<4; i++) addOption();
-            }
-        }
-        
-        toggleQuestionType();
-        modal.classList.add('active');
-        lucide.createIcons();
-    }
-
-    function closeEditor() {
-        document.getElementById('editorModal').classList.remove('active');
-    }
-
-    function toggleQuestionType() {
-        const type = document.getElementById('q_type').value;
-        const opts = document.getElementById('optionsContainer');
-        if (type === 'essay') {
-            opts.style.display = 'none';
-        } else {
-            opts.style.display = 'block';
-        }
-    }
-
-    function addOption(text = '', isCorrect = false) {
-        const list = document.getElementById('optionsList');
-        const div = document.createElement('div');
-        div.className = 'option-item';
-        div.innerHTML = `
-            <input type="radio" name="correct_option" class="correct-radio" ${isCorrect ? 'checked' : ''} title="Mark as correct answer" style="width: 18px; height: 18px; accent-color: var(--success);">
-            <input type="text" class="form-control option-input" placeholder="Option text..." value="${text}">
-            <button class="action-btn" onclick="this.parentElement.remove()" title="Remove option" style="color:var(--danger);"><i data-lucide="x" style="width:16px; height:16px;"></i></button>
-        `;
-        list.appendChild(div);
-        lucide.createIcons();
-    }
-
-    function previewImage(event) {
-        const file = event.target.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                currentImageBase64 = e.target.result;
-                const img = document.getElementById('q_image_preview');
-                img.src = currentImageBase64;
-                img.style.display = 'block';
-                document.getElementById('q_image_remove').style.display = 'inline-block';
-            }
-            reader.readAsDataURL(file);
-        }
-    }
-
-    function removeImage() {
-        currentImageBase64 = null;
-        document.getElementById('q_image').value = '';
-        document.getElementById('q_image_preview').style.display = 'none';
-        document.getElementById('q_image_preview').src = '';
-        document.getElementById('q_image_remove').style.display = 'none';
-    }
-
-    function setQType(val, label) {
-        document.getElementById('q_type').value = val;
-        document.getElementById('q_type_input').value = label;
-        document.getElementById('type_dropdown').classList.remove('show');
-        toggleQuestionType();
-    }
-
-    async function saveQuestion(statusMode = 'draft') {
-        const type = document.getElementById('q_type').value;
-        
-        let options = [];
-        if (type === 'multiple_choice') {
-            const items = document.querySelectorAll('.option-item');
-            items.forEach(item => {
-                const text = item.querySelector('.option-input').value.trim();
-                const isCorrect = item.querySelector('.correct-radio').checked;
-                if (text) {
-                    options.push({ text, isCorrect });
-                }
-            });
-            
-            if (options.length < 2) {
-                showToast("Please provide at least 2 options for multiple choice.", "error");
-                return;
-            }
-            if (!options.some(o => o.isCorrect)) {
-                showToast("Please select one correct option.", "error");
-                return;
-            }
-        }
-
-        const questionData = {
-            type: type,
-            points: parseInt(document.getElementById('q_points').value) || 1,
-            text_html: quill.root.innerHTML,
-            text: quill.getText(),
-            image: currentImageBase64,
-            options: options
-        };
-
-        if (editingIndex === -1) {
-            currentQuestions.push(questionData);
-        } else {
-            currentQuestions[editingIndex] = questionData;
-        }
-
-        await saveQuestionsToStorage();
-        
-        // Also update the exam status if "published" was clicked
-        if (statusMode === 'published') {
-            try {
-                // We'll update the status via the settings endpoint
-                const payload = {
-                    schedule: {
-                        is_published: true
-                    }
-                };
-                await fetch('/api/exams/{{ exam._id }}', {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                document.getElementById('exam_published').checked = true;
-                showToast("Question saved and Exam published!", "success");
-            } catch (err) {
-                console.error("Failed to publish exam", err);
-                showToast("Failed to publish exam.", "error");
-            }
-        }
-        
-        renderQuestionsTable();
-        closeEditor();
-    }
-
     async function saveSettings() {
+        const gradingModeEl = document.getElementById('exam_grading_mode');
         const payload = {
             title: document.getElementById('exam_title').value,
             description: document.getElementById('exam_desc').value,
             subject_tag_id: document.getElementById('exam_subject').value,
             impact: parseFloat(document.getElementById('exam_impact').value),
             instructions: document.getElementById('exam_instructions').value,
+            grading_mode: gradingModeEl ? gradingModeEl.value : undefined,
             settings: {
                 duration_minutes: parseInt(document.getElementById('exam_duration').value),
                 pass_mark_percent: parseInt(document.getElementById('exam_pass_mark').value),

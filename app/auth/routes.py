@@ -10,6 +10,7 @@ auth_bp = Blueprint('auth', __name__)
 
 # Redis client for OAuth state storage (works across serverless functions)
 _redis_client = None
+_memory_store = {}
 
 def get_redis():
     """Get or create Redis client"""
@@ -33,33 +34,40 @@ def get_redis():
     return _redis_client if _redis_client else None
 
 def store_oauth_state(state, code_verifier):
-    """Store OAuth state in Redis"""
+    """Store OAuth state in Redis or memory"""
     redis_client = get_redis()
     
-    if not redis_client:
-        raise Exception("Redis not available. Please set REDIS_URL environment variable.")
-    
-    # Redis: Store with 10 minute expiration
-    redis_client.setex(
-        f"oauth_state:{state}",
-        timedelta(minutes=10),
-        code_verifier
-    )
-    print(f"[AUTH DEBUG] Stored state in Redis with 10min TTL")
+    if redis_client:
+        # Redis: Store with 10 minute expiration
+        redis_client.setex(
+            f"oauth_state:{state}",
+            timedelta(minutes=10),
+            code_verifier
+        )
+        print(f"[AUTH DEBUG] Stored state in Redis with 10min TTL")
+    else:
+        _memory_store[state] = {
+            'code_verifier': code_verifier,
+            'expires_at': datetime.utcnow() + timedelta(minutes=10)
+        }
+        print(f"[AUTH DEBUG] Stored state in Memory with 10min TTL")
 
 def get_oauth_state(state):
-    """Retrieve OAuth state from Redis"""
+    """Retrieve OAuth state from Redis or memory"""
     redis_client = get_redis()
     
-    if not redis_client:
-        raise Exception("Redis not available. Please set REDIS_URL environment variable.")
-    
-    # Redis: Get code_verifier
-    code_verifier = redis_client.get(f"oauth_state:{state}")
-    if code_verifier:
-        print(f"[AUTH DEBUG] Retrieved state from Redis")
-        return {'code_verifier': code_verifier}
-    return None
+    if redis_client:
+        code_verifier = redis_client.get(f"oauth_state:{state}")
+        if code_verifier:
+            print(f"[AUTH DEBUG] Retrieved state from Redis")
+            return {'code_verifier': code_verifier}
+        return None
+    else:
+        data = _memory_store.get(state)
+        if data and data['expires_at'] > datetime.utcnow():
+            print(f"[AUTH DEBUG] Retrieved state from Memory")
+            return {'code_verifier': data['code_verifier']}
+        return None
 
 def delete_oauth_state(state):
     """Delete OAuth state after use"""
@@ -68,6 +76,10 @@ def delete_oauth_state(state):
     if redis_client:
         redis_client.delete(f"oauth_state:{state}")
         print(f"[AUTH DEBUG] Deleted state from Redis")
+    else:
+        if state in _memory_store:
+            del _memory_store[state]
+            print(f"[AUTH DEBUG] Deleted state from Memory")
 
 def get_ica_client():
     return IGlobalsAuth(

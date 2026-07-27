@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, g
 from app.auth.decorators import require_auth
 from app.utils.mongo import get_collection
+from app.utils.grading import is_answer_correct, resolve_correct_text
 
 dashboard_bp = Blueprint('dashboard', __name__, url_prefix='/dashboard')
 
@@ -15,7 +16,7 @@ def index():
     
     if role == 'teacher':
         # Fetch classes where teacher is the owner/collaborator
-        teacher_classes = list(classes_col.find({"teachers.user_id": user_id})) if classes_col is not None else []
+        teacher_classes = list(classes_col.find({"teachers.user_id": user_id, "is_active": {"$ne": False}})) if classes_col is not None else []
         
         # Fetch up to 3 recent exams created by this teacher
         recent_exams = list(exams_col.find({"created_by": user_id}).sort("created_at", -1).limit(3)) if exams_col is not None else []
@@ -27,13 +28,13 @@ def index():
         org = orgs_col.find_one({"admin_user_id": user_id}) if orgs_col is not None else None
         
         if org:
-            org_classes = list(classes_col.find({"organization_id": org['_id']})) if classes_col is not None else []
+            org_classes = list(classes_col.find({"organization_id": org['_id'], "is_active": {"$ne": False}})) if classes_col is not None else []
             return render_template('dashboard/org_admin.html', org=org, classes=org_classes)
         return render_template('dashboard/org_admin.html', org=None, classes=[])
         
     else:
         # Student Dashboard
-        enrolled_classes = list(classes_col.find({"students.user_id": user_id, "students.status": "active"})) if classes_col is not None else []
+        enrolled_classes = list(classes_col.find({"students.user_id": user_id, "students.status": "active", "is_active": {"$ne": False}})) if classes_col is not None else []
         class_ids = [c['_id'] for c in enrolled_classes]
         user_email = g.current_user.get('email', '')
         
@@ -66,7 +67,7 @@ def classes():
     user_id_str = str(user_id)
     
     if role in ['teacher', 'org_admin']:
-        teacher_classes = list(classes_col.find({"teachers.user_id": user_id})) if classes_col is not None else []
+        teacher_classes = list(classes_col.find({"teachers.user_id": user_id, "is_active": {"$ne": False}})) if classes_col is not None else []
         active_classes = []
         invitations = []
         for cls in teacher_classes:
@@ -81,7 +82,7 @@ def classes():
                     break
         return render_template('dashboard/classes.html', classes=active_classes, invitations=invitations)
     else:
-        student_classes = list(classes_col.find({"students.user_id": user_id})) if classes_col is not None else []
+        student_classes = list(classes_col.find({"students.user_id": user_id, "is_active": {"$ne": False}})) if classes_col is not None else []
         active_classes = []
         invitations = []
         for cls in student_classes:
@@ -171,7 +172,10 @@ def exam_details(slug):
             if val:
                 from datetime import datetime
                 if isinstance(val, datetime):
-                    exam["schedule"][date_field] = val.strftime('%Y-%m-%dT%H:%M')
+                    try:
+                        exam["schedule"][date_field] = val.strftime('%Y-%m-%dT%H:%M')
+                    except Exception:
+                        exam["schedule"][date_field] = ""
                 elif isinstance(val, str) and len(val) >= 16:
                     exam["schedule"][date_field] = val[:16]
                     
@@ -204,11 +208,14 @@ def exam_builder(slug):
             if val:
                 from datetime import datetime
                 if isinstance(val, datetime):
-                    exam["schedule"][date_field] = val.strftime('%Y-%m-%dT%H:%M')
+                    try:
+                        exam["schedule"][date_field] = val.strftime('%Y-%m-%dT%H:%M')
+                    except Exception:
+                        exam["schedule"][date_field] = ""
                 elif isinstance(val, str) and len(val) >= 16:
                     exam["schedule"][date_field] = val[:16]
                     
-    return render_template('exam/details.html', exam=exam)
+    return render_template('exam/builder.html', exam=exam)
 
 @dashboard_bp.route('/exams/create')
 @require_auth()
@@ -232,18 +239,34 @@ def edit_exam(exam_id):
 @dashboard_bp.route('/exams/<exam_id>/take')
 @require_auth()
 def take_exam(exam_id):
+    from flask import flash, redirect, url_for
+    from bson import ObjectId
+    from app.utils.access import is_exam_open_now, can_student_access_exam, get_active_class_ids_for_student
+
     if g.current_user.get('role') != 'student':
         return "Only students can take exams", 403
-    
-    from bson import ObjectId
+
     exams_col = get_collection('exams')
     exam = exams_col.find_one({"_id": ObjectId(exam_id)})
-    
+
     if not exam or exam.get('status') == 'deleted':
-        from flask import flash, redirect, url_for
         flash("This exam has been deleted and is no longer available.", "error")
         return redirect(url_for('dashboard.index'))
-        
+
+    if exam.get('status') != 'published':
+        flash("This exam is not currently available.", "error")
+        return redirect(url_for('dashboard.index'))
+
+    if not is_exam_open_now(exam):
+        flash("This exam is not open at this time.", "error")
+        return redirect(url_for('dashboard.index'))
+
+    user_email = g.current_user.get('email', '')
+    class_ids = get_active_class_ids_for_student(g.current_user['_id'])
+    if not can_student_access_exam(exam, user_email, class_ids):
+        flash("You do not have access to this exam.", "error")
+        return redirect(url_for('dashboard.index'))
+
     return render_template('exam/pre_exam.html', exam_id=exam_id, exam=exam)
 
 @dashboard_bp.route('/sessions/<session_id>/take')
@@ -264,16 +287,23 @@ def session_take(session_id):
         user_id_obj = user_id_str
 
     session = sessions_col.find_one({
-        "_id": ObjectId(session_id), 
+        "_id": ObjectId(session_id),
         "student_id": {"$in": [user_id_str, user_id_obj]}
     })
     if not session:
         return "Session not found", 404
-        
+
     exam = exams_col.find_one({"_id": ObjectId(session['exam_id'])})
     if not exam:
         return "Exam not found", 404
-        
+
+    from app.sessions.routes import ensure_session_not_expired
+    session = ensure_session_not_expired(session, exam)
+    if session.get('status') != 'in_progress':
+        from flask import flash, redirect, url_for
+        flash("This exam session has ended.", "error")
+        return redirect(url_for('dashboard.my_exams'))
+
     # Use question_snapshot if available (preserves exam state at time of taking)
     # This ensures students see the same questions even if exam is updated
     if session.get('question_snapshot'):
@@ -306,46 +336,34 @@ def session_take(session_id):
                            time_remaining=session.get('time_remaining_seconds', 3600))
 
 @dashboard_bp.route('/my-exams')
-@dashboard_bp.route('/my-exams')
 @require_auth()
 def my_exams():
     if g.current_user.get('role') != 'student':
         return "Unauthorized", 403
-        
+
     user_id = g.current_user.get('_id')
     user_email = g.current_user.get('email', '')
-    
-    print(f"\n[MY_EXAMS DEBUG] User ID: {user_id}")
-    print(f"[MY_EXAMS DEBUG] User Email: {user_email}")
-    print(f"[MY_EXAMS DEBUG] User Role: {g.current_user.get('role')}")
-    
+
     try:
         classes_col = get_collection('classes')
         exams_col = get_collection('exams')
-        
+
         # 1. Find all exams student has taken (using postgres ExamScore model)
         from app.models import ExamScore
-        from app.extensions import db
         from bson import ObjectId
-        
-        print(f"[MY_EXAMS DEBUG] Querying ExamScore table...")
+
         taken_scores = ExamScore.query.filter_by(student_id=str(user_id)).order_by(ExamScore.submitted_at.desc()).all()
-        print(f"[MY_EXAMS DEBUG] Found {len(taken_scores)} taken exams")
-        
         taken_exam_ids = [score.exam_id for score in taken_scores if score.exam_id]
-        print(f"[MY_EXAMS DEBUG] Taken exam IDs: {taken_exam_ids}")
-        
+
         # Get the actual exam documents for taken exams
         taken_exams_cursor = []
         if taken_exam_ids and exams_col is not None:
             valid_exam_ids = [ObjectId(eid) for eid in set(taken_exam_ids) if eid and ObjectId.is_valid(eid)]
-            print(f"[MY_EXAMS DEBUG] Valid ObjectIds: {len(valid_exam_ids)}")
             if valid_exam_ids:
                 taken_exams_cursor = exams_col.find({"_id": {"$in": valid_exam_ids}})
-        
+
         taken_exams_dict = {str(e['_id']): e for e in taken_exams_cursor}
-        print(f"[MY_EXAMS DEBUG] Found {len(taken_exams_dict)} exam documents")
-        
+
         taken_exams = []
         for score in taken_scores:
             exam_info = taken_exams_dict.get(str(score.exam_id))
@@ -356,55 +374,49 @@ def my_exams():
                     "score": score,
                     "exam": exam_info
                 })
-        
-        print(f"[MY_EXAMS DEBUG] Taken exams with data: {len(taken_exams)}")
-                
+
         # 2. Find all available exams
         enrolled_classes = []
         if classes_col is not None:
-            enrolled_classes = list(classes_col.find({"students.user_id": user_id, "students.status": "active"}))
-        
-        print(f"[MY_EXAMS DEBUG] Enrolled in {len(enrolled_classes)} classes")
-        
+            enrolled_classes = list(classes_col.find({
+                "students.user_id": user_id,
+                "students.status": "active",
+                "is_active": {"$ne": False}
+            }))
+
         class_ids = [c['_id'] for c in enrolled_classes]
-        print(f"[MY_EXAMS DEBUG] Class IDs: {class_ids}")
-        
+
         available_exams = []
         if exams_col is not None:
             query = {
                 "status": "published",
                 "visibility.excluded_student_ids": {"$ne": user_email}
             }
-            
+
             # Build OR condition if there are class_ids or student can access public exams
             or_conditions = [
                 {"exam_type": {"$in": ["public", "platform_standard"]}}
             ]
-            
+
             if class_ids:
                 or_conditions.append({"visibility.class_ids": {"$in": class_ids}})
-            
+
             if user_email:
                 or_conditions.append({"visibility.student_ids": user_email})
-            
+
             query["$or"] = or_conditions
-            
-            print(f"[MY_EXAMS DEBUG] Query: {query}")
             available_exams = list(exams_col.find(query).sort("created_at", -1))
-            print(f"[MY_EXAMS DEBUG] Found {len(available_exams)} available exams")
-        
+
         # Filter out exams where max attempts have been reached
         filtered_available = []
         for exam in available_exams:
             exam_id_str = str(exam['_id'])
             exam['_id'] = exam_id_str  # Ensure _id is string for template
-            
+
             attempts = sum(1 for sid in taken_exam_ids if sid == exam_id_str)
             max_attempts = exam.get('settings', {}).get('max_attempts', 1)
             allow_retake = exam.get('settings', {}).get('allow_retake', False)
-            
-            print(f"[MY_EXAMS DEBUG] Exam {exam.get('title')}: {attempts}/{max_attempts} attempts, allow_retake={allow_retake}")
-            
+
             # Show exam if:
             # 1. Student hasn't taken it yet (attempts == 0), OR
             # 2. Retakes are allowed (allow_retake=True means unlimited, max_attempts is just a guideline)
@@ -421,12 +433,9 @@ def my_exams():
                 # Retakes not allowed - only show if under limit
                 exam['attempts_made'] = attempts
                 filtered_available.append(exam)
-        
-        print(f"[MY_EXAMS DEBUG] Final available exams: {len(filtered_available)}")
-        print(f"[MY_EXAMS DEBUG] Final taken exams: {len(taken_exams)}\n")
-                
+
         return render_template('dashboard/my_exams.html', available_exams=filtered_available, taken_exams=taken_exams)
-        
+
     except Exception as e:
         # Log the error and show user-friendly message
         import traceback
@@ -489,28 +498,19 @@ def view_result(session_id):
             
         answer = answers_dict.get(q_id, {})
         student_answer = answer.get('selected_option', '')
-        
-        correct_answer = question.get('correct_answer', '')
-        correct_answer_text = str(correct_answer).strip()
-        
-        if isinstance(question.get('options'), list):
-            for opt in question['options']:
-                if opt.get('key') == correct_answer or opt.get('id') == correct_answer:
-                    correct_answer_text = str(opt.get('text', correct_answer)).strip()
-                    break
-                    
+
+        correct_answer_text = resolve_correct_text(question)
         question_type = question.get('question_type', question.get('type', 'mcq'))
-        
-        # Determine if correct
+
+        # Determine if correct - reuses the exact same resolver that computed
+        # the actual score, so this review can never disagree with it.
         is_correct = None
         awarded_marks = None
         feedback = None
-        
-        if question_type in ['mcq', 'multiple_choice', 'MULTIPLE_CHOICE', 'true_false', 'short_answer', 'numerical']:
-            if student_answer is None:
-                student_answer = ''
-            is_correct = str(student_answer).strip().upper() == correct_answer_text.upper()
-        elif question_type == 'essay':
+
+        if question_type != 'essay':
+            is_correct = is_answer_correct(question, student_answer)
+        else:
             # Check for manual grading
             if q_id in manual_grades:
                 awarded_marks = manual_grades[q_id].get('score', 0)
@@ -588,28 +588,19 @@ def grade_submission(session_id):
             
         answer = answers_dict.get(q_id, {})
         student_answer = answer.get('selected_option', '')
-        
-        correct_answer = question.get('correct_answer', '')
-        correct_answer_text = str(correct_answer).strip()
-        
-        if isinstance(question.get('options'), list):
-            for opt in question['options']:
-                if opt.get('key') == correct_answer or opt.get('id') == correct_answer:
-                    correct_answer_text = str(opt.get('text', correct_answer)).strip()
-                    break
-                    
+
+        correct_answer_text = resolve_correct_text(question)
         question_type = question.get('question_type', question.get('type', 'mcq'))
-        
-        # Determine if correct
+
+        # Determine if correct - reuses the exact same resolver that computed
+        # the actual score, so this review can never disagree with it.
         is_correct = None
         awarded_marks = None
         feedback = None
-        
-        if question_type in ['mcq', 'multiple_choice', 'MULTIPLE_CHOICE', 'true_false', 'short_answer', 'numerical']:
-            if student_answer is None:
-                student_answer = ''
-            is_correct = str(student_answer).strip().upper() == correct_answer_text.upper()
-        elif question_type == 'essay':
+
+        if question_type != 'essay':
+            is_correct = is_answer_correct(question, student_answer)
+        else:
             # Check for manual grading
             if q_id in manual_grades:
                 awarded_marks = manual_grades[q_id].get('score', 0)
@@ -800,7 +791,7 @@ def join_class(token):
     if user_role == 'org_admin':
         # org admin joins the class, meaning we set organization_id
         orgs_col = get_collection('organizations')
-        org = orgs_col.find_one({"admin_user_id": str(user_id)}) if orgs_col is not None else None
+        org = orgs_col.find_one({"admin_user_id": ObjectId(user_id)}) if orgs_col is not None else None
         if org:
             classes_col.update_one(
                 {"_id": class_obj["_id"]},

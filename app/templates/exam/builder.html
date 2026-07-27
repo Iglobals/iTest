@@ -16,6 +16,9 @@
 <!-- SortableJS for drag-and-drop -->
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
 
+<!-- PapaParse for CSV -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+
 <style>
     .builder-container {
         display: flex;
@@ -227,6 +230,80 @@
         padding-top: 1.5rem;
         border-top: 1px solid var(--gray-200);
     }
+
+    /* Modal Styles */
+    .modal-overlay {
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.5);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+    }
+
+    .modal-content {
+        background: var(--white);
+        padding: 2rem;
+        border-radius: 1rem;
+        width: 100%;
+        max-width: 500px;
+        position: relative;
+    }
+
+    .modal-close {
+        position: absolute;
+        top: 1rem; right: 1rem;
+        cursor: pointer;
+        color: var(--gray-500);
+    }
+
+    .hidden { display: none !important; }
+
+    /* .btn-outline had no rule anywhere in the app's CSS, so "Import Questions" was
+       rendering as an unstyled native button (no flex/gap/padding) next to buttons
+       that do get that layout from dashboard.css - hence the icon sitting flush left. */
+    .btn-outline {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5em;
+        background: var(--white);
+        color: var(--gray-700);
+        border: 1px solid var(--gray-300);
+        border-radius: 0.625em;
+        font-size: 0.9375em;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.2s, border-color 0.2s;
+    }
+
+    .btn-outline:hover {
+        background: var(--gray-50);
+        border-color: var(--gray-400);
+    }
+
+    /* These three buttons hold longer labels than the shared .btn-primary/.btn-secondary
+       width cap (min(100%, 13em)) comfortably allows, which was forcing the label to wrap
+       and leaving the icon vertically centered against the fixed 3em height instead of the
+       first line. Let them size to their content instead. */
+    .header-actions button,
+    .bottom-actions .btn-primary,
+    .bottom-actions .btn-secondary {
+        width: auto;
+        height: auto;
+        min-height: 2.75em;
+        padding: 0.6em 1.25em;
+        white-space: nowrap;
+    }
+
+    .header-actions button i[data-lucide],
+    .bottom-actions button i[data-lucide],
+    .bottom-actions a i[data-lucide] {
+        width: 16px;
+        height: 16px;
+        flex-shrink: 0;
+    }
 </style>
 {% endblock %}
 
@@ -240,9 +317,14 @@
             <h3 style="margin:0; font-size:1.2rem;">Questions (<span id="questionCount">0</span>)</h3>
             <p style="margin:0; font-size:0.875rem; color:var(--gray-500);">Drafts are saved locally until you publish.</p>
         </div>
-        <button class="btn-primary" onclick="openEditor()">
-            <i data-lucide="plus"></i> Add Question
-        </button>
+        <div style="display:flex; gap:0.5rem;">
+            <button class="btn-outline" onclick="openImportModal()">
+                <i data-lucide="upload"></i> Import Questions
+            </button>
+            <button class="btn-primary" onclick="openEditor()">
+                <i data-lucide="plus"></i> Add Question
+            </button>
+        </div>
     </div>
 
     <!-- Questions List (Sortable) -->
@@ -261,6 +343,7 @@
                 <option value="mcq">Multiple Choice</option>
                 <option value="essay">Essay / Free Text</option>
             </select>
+            <small id="qTypeHint" class="hidden" style="color:var(--gray-500);"></small>
         </div>
 
         <div class="form-group">
@@ -322,6 +405,42 @@
     </div>
 
 </div>
+
+<!-- Import Modal -->
+<div class="modal-overlay" id="importModal">
+    <div class="modal-content">
+        <i data-lucide="x" class="modal-close" onclick="closeImportModal()"></i>
+        <h3 style="margin-top:0;">Import Questions</h3>
+        <p style="color:var(--gray-600); font-size:0.9rem;">Upload a JSON or CSV file containing questions.</p>
+        
+        <div style="margin-bottom: 1.5rem; font-size:0.85rem;">
+            <a href="#" onclick="downloadTemplate('json')" style="color:var(--purple); text-decoration:none; margin-right:1rem;"><i data-lucide="download" style="width:14px;height:14px;"></i> JSON Template</a>
+            <a href="#" onclick="downloadTemplate('csv')" style="color:var(--purple); text-decoration:none;"><i data-lucide="download" style="width:14px;height:14px;"></i> CSV Template</a>
+        </div>
+
+        <div class="form-group">
+            <label>Select File (.json or .csv)</label>
+            <input type="file" id="importFile" class="form-control" accept=".json,.csv">
+        </div>
+
+        <div class="form-group">
+            <label>Import Mode</label>
+            <div style="display:flex; gap:1rem; align-items:center;">
+                <label style="font-weight:normal; display:flex; align-items:center; gap:0.25rem;">
+                    <input type="radio" name="importMode" value="append" checked> Append
+                </label>
+                <label style="font-weight:normal; display:flex; align-items:center; gap:0.25rem;">
+                    <input type="radio" name="importMode" value="overwrite"> Overwrite
+                </label>
+            </div>
+        </div>
+
+        <div style="display:flex; justify-content:flex-end; gap:1rem; margin-top:1.5rem;">
+            <button class="btn-secondary" onclick="closeImportModal()">Cancel</button>
+            <button class="btn-primary" onclick="processImport()">Import</button>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block dashboard_js %}
@@ -329,7 +448,8 @@
     const examId = "{{ exam._id }}";
     const dbQuestions = {{ exam.questions | tojson | safe if exam.questions else '[]' }};
     const storageKey = `exam_draft_${examId}`;
-    
+    const gradingMode = "{{ exam.grading_mode or 'hybrid' }}"; // objective | essay | hybrid - controls which question types can be added
+
     let questions = [];
     let quill;
     let selectedImageFile = null;
@@ -343,6 +463,8 @@
             },
             theme: 'snow'
         });
+
+        applyGradingModeRestrictions();
 
         // Load state
         loadQuestions();
@@ -416,10 +538,34 @@
         }, 4000);
     }
 
+    function applyGradingModeRestrictions() {
+        const select = document.getElementById('qType');
+        const hint = document.getElementById('qTypeHint');
+        const mcqOption = select.querySelector('option[value="mcq"]');
+        const essayOption = select.querySelector('option[value="essay"]');
+
+        if (gradingMode === 'objective') {
+            essayOption.disabled = true;
+            select.value = 'mcq';
+            select.disabled = true;
+            hint.textContent = 'This is an objective-only exam - only multiple choice questions can be added.';
+            hint.classList.remove('hidden');
+        } else if (gradingMode === 'essay') {
+            mcqOption.disabled = true;
+            select.value = 'essay';
+            select.disabled = true;
+            hint.textContent = 'This is an essay-only exam - only essay questions can be added.';
+            hint.classList.remove('hidden');
+        } else {
+            select.disabled = false;
+            hint.classList.add('hidden');
+        }
+    }
+
     function openEditor(qId = null) {
         document.getElementById('editorSection').classList.add('active');
         document.getElementById('editorTitle').innerText = qId ? 'Edit Question' : 'Add New Question';
-        
+
         if (qId) {
             const q = questions.find(x => x._id === qId);
             document.getElementById('editingId').value = q._id;
@@ -450,7 +596,7 @@
         } else {
             // Reset
             document.getElementById('editingId').value = '';
-            document.getElementById('qType').value = 'mcq';
+            document.getElementById('qType').value = gradingMode === 'essay' ? 'essay' : 'mcq';
             quill.root.innerHTML = '';
             document.getElementById('qMarks').value = 1;
             document.getElementById('qImageUrl').value = '';
@@ -588,14 +734,14 @@
         }
 
         let options = [];
+        let correctAnswer = null;
         if(type === 'mcq') {
             const rows = document.querySelectorAll('.option-row');
             if(rows.length < 2) {
                 showToast("MCQ must have at least 2 options.");
                 return;
             }
-            
-            let hasCorrect = false;
+
             rows.forEach(row => {
                 const radio = row.querySelector('input[type="radio"]');
                 const input = row.querySelector('input[type="text"]');
@@ -604,10 +750,10 @@
                     text: input.value,
                     is_correct: radio.checked
                 });
-                if(radio.checked) hasCorrect = true;
+                if(radio.checked) correctAnswer = radio.value;
             });
-            
-            if(!hasCorrect) {
+
+            if(!correctAnswer) {
                 showToast("Please select one correct option.");
                 return;
             }
@@ -619,7 +765,8 @@
             text: text,
             image_url: imageUrl,
             marks: marks,
-            options: options
+            options: options,
+            correct_answer: correctAnswer
         };
 
         const existingIdx = questions.findIndex(q => q._id === id);
@@ -722,6 +869,220 @@
             btn.disabled = false;
             btn.innerHTML = '<i data-lucide="upload-cloud"></i> Publish Exam Updates';
         }
+    }
+
+    // --- Import Logic --- //
+    function openImportModal() {
+        document.getElementById('importModal').style.display = 'flex';
+    }
+
+    function closeImportModal() {
+        document.getElementById('importModal').style.display = 'none';
+        document.getElementById('importFile').value = '';
+    }
+
+    function downloadTemplate(type) {
+        let content, filename, mimeType;
+        if (type === 'json') {
+            content = JSON.stringify([{
+                "type": "multiple_choice",
+                "question": "What is the capital of France?",
+                "marks": 2,
+                "image_url": "",
+                "options": [
+                    {"key": "option_a", "text": "London"},
+                    {"key": "option_b", "text": "Paris"},
+                    {"key": "option_c", "text": "Berlin"},
+                    {"key": "option_d", "text": "Madrid"}
+                ],
+                "correct_answer": "option_b"
+            }, {
+                "type": "essay",
+                "question": "Explain the theory of relativity.",
+                "marks": 5,
+                "image_url": ""
+            }], null, 2);
+            filename = 'exam_template.json';
+            mimeType = 'application/json';
+        } else {
+            content = 'type,question,marks,image_url,option_a,option_b,option_c,option_d,correct_answer\nmultiple_choice,What is the capital of France?,2,,London,Paris,Berlin,Madrid,option_b\nessay,Explain the theory of relativity.,5,,,,,';
+            filename = 'exam_template.csv';
+            mimeType = 'text/csv';
+        }
+
+        const blob = new Blob([content], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    function processImport() {
+        const fileInput = document.getElementById('importFile');
+        if (!fileInput.files.length) {
+            showToast('Please select a file to import.');
+            return;
+        }
+
+        const mode = document.querySelector('input[name="importMode"]:checked').value;
+        const file = fileInput.files[0];
+        const reader = new FileReader();
+        const errors = [];
+
+        reader.onload = function(e) {
+            const content = e.target.result;
+            try {
+                let parsedQuestions = [];
+                if (file.name.endsWith('.json')) {
+                    const jsonData = JSON.parse(content);
+                    parsedQuestions = jsonData.map(q => parseJsonQuestion(q, errors)).filter(Boolean);
+                } else if (file.name.endsWith('.csv')) {
+                    Papa.parse(content, {
+                        header: true,
+                        skipEmptyLines: true,
+                        complete: function(results) {
+                            parsedQuestions = results.data.map(row => parseCsvQuestion(row, errors)).filter(Boolean);
+                            finalizeImport(parsedQuestions, mode, errors);
+                        }
+                    });
+                    return; // async handling via callback
+                } else {
+                    throw new Error("Unsupported file type. Use .json or .csv.");
+                }
+
+                finalizeImport(parsedQuestions, mode, errors);
+            } catch(err) {
+                showToast("Import failed: " + err.message);
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    // Accepts "option_a", "Option A", "option-a", or just "a" and normalizes to a bare letter.
+    function normalizeAnswerKey(val) {
+        if (val === null || val === undefined || val === '') return null;
+        const letter = String(val).trim().toLowerCase().replace(/^option[\s_-]*/, '').replace(/[^a-z]/g, '');
+        return letter || null;
+    }
+
+    // Coerces a parsed import row's type to whatever this exam's grading_mode permits.
+    function coerceImportedType(rawType) {
+        const requested = rawType === 'essay' ? 'essay' : 'mcq';
+        if (gradingMode === 'objective') return 'mcq';
+        if (gradingMode === 'essay') return 'essay';
+        return requested;
+    }
+
+    function parseJsonQuestion(data, errors) {
+        if (!data.question) return null;
+        const type = coerceImportedType(data.type);
+        let options = [];
+        let correctAnswer = null;
+
+        if (type === 'mcq' && data.options && Array.isArray(data.options)) {
+            // Each option's key is either its explicit "key" (e.g. "option_b") or,
+            // if omitted, its position in the array (0 -> option_a, 1 -> option_b, ...).
+            options = data.options.map((o, idx) => ({
+                id: 'opt_' + generateId(),
+                text: typeof o === 'string' ? o : o.text,
+                is_correct: false,
+                _letter: normalizeAnswerKey(o && o.key) || String.fromCharCode(97 + idx)
+            }));
+
+            const answerLetter = normalizeAnswerKey(data.correct_answer);
+            const correctOpt = answerLetter ? options.find(o => o._letter === answerLetter) : null;
+            if (!correctOpt) {
+                const validKeys = options.map(o => 'option_' + o._letter).join(', ');
+                errors.push(`"${data.question}" — correct_answer "${data.correct_answer || ''}" must be one of: ${validKeys}`);
+                return null;
+            }
+            correctOpt.is_correct = true;
+            correctAnswer = correctOpt.id;
+            options.forEach(o => delete o._letter);
+        }
+
+        return {
+            _id: generateId(),
+            type: type,
+            text: data.question,
+            image_url: data.image_url || '',
+            marks: parseFloat(data.marks) || 1,
+            options: options,
+            correct_answer: correctAnswer
+        };
+    }
+
+    function parseCsvQuestion(row, errors) {
+        if (!row.question) return null;
+        const type = coerceImportedType(String(row.type).toLowerCase());
+        let options = [];
+        let correctAnswer = null;
+
+        if (type === 'mcq') {
+            const columns = [
+                { letter: 'a', text: row.option_a },
+                { letter: 'b', text: row.option_b },
+                { letter: 'c', text: row.option_c },
+                { letter: 'd', text: row.option_d },
+            ].filter(c => c.text && c.text.trim());
+
+            options = columns.map(c => ({
+                id: 'opt_' + generateId(),
+                text: c.text.trim(),
+                is_correct: false,
+                _letter: c.letter
+            }));
+
+            const answerLetter = normalizeAnswerKey(row.correct_answer);
+            const correctOpt = answerLetter ? options.find(o => o._letter === answerLetter) : null;
+            if (!correctOpt) {
+                const validKeys = columns.map(c => 'option_' + c.letter).join(', ');
+                errors.push(`"${row.question}" — correct_answer "${row.correct_answer || ''}" must be one of: ${validKeys}`);
+                return null;
+            }
+            correctOpt.is_correct = true;
+            correctAnswer = correctOpt.id;
+            options.forEach(o => delete o._letter);
+        }
+
+        return {
+            _id: generateId(),
+            type: type,
+            text: row.question,
+            image_url: row.image_url || '',
+            marks: parseFloat(row.marks) || 1,
+            options: options,
+            correct_answer: correctAnswer
+        };
+    }
+
+    function finalizeImport(newQuestions, mode, errors) {
+        if (newQuestions.length === 0) {
+            if (errors.length) {
+                showToast(`No questions imported. ${errors.length} rejected — e.g. ${errors[0]}`);
+            } else {
+                showToast('No valid questions found in file.');
+            }
+            return;
+        }
+
+        if (mode === 'overwrite') {
+            questions = newQuestions;
+        } else {
+            questions = questions.concat(newQuestions);
+        }
+
+        saveToStorage();
+        renderQuestions();
+        closeImportModal();
+
+        let msg = `Successfully imported ${newQuestions.length} question(s).`;
+        if (errors.length) {
+            msg += ` ${errors.length} skipped — e.g. ${errors[0]}`;
+        }
+        showToast(msg, errors.length ? 'error' : 'success');
     }
 </script>
 {% endblock %}

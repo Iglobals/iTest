@@ -7,12 +7,56 @@ import uuid
 
 classes_bp = Blueprint('classes', __name__, url_prefix='/api/classes')
 
+
+def _teacher_entry(class_obj, user_id):
+    user_id_str = str(user_id)
+    for t in class_obj.get("teachers", []):
+        if str(t.get("user_id")) == user_id_str:
+            return t
+    return None
+
+
+def _is_org_admin_of(class_obj, user):
+    if not class_obj.get("organization_id"):
+        return False
+    org = get_collection("organizations").find_one({"_id": class_obj["organization_id"]})
+    return bool(org and str(org.get("admin_user_id")) == str(user["_id"]))
+
+
+def _can_manage_class(class_obj, user, require_owner=False):
+    """Whether `user` may edit/delete this class or act on its join requests."""
+    if user.get("role") == "platform_admin":
+        return True
+    t = _teacher_entry(class_obj, user["_id"])
+    if t and t.get("status", "active") == "active":
+        if not require_owner or t.get("role") == "owner":
+            return True
+    if user.get("role") == "org_admin" and _is_org_admin_of(class_obj, user):
+        return True
+    return False
+
+
 @classes_bp.route('/', methods=['GET'])
 @require_auth(redirect_on_fail=False)
 def list_classes():
     classes_col = get_collection('classes')
     try:
-        classes = list(classes_col.find({}))
+        role = g.current_user.get('role')
+        query = {"is_active": {"$ne": False}}
+        if role == 'platform_admin':
+            pass
+        elif role == 'org_admin':
+            orgs_col = get_collection('organizations')
+            org = orgs_col.find_one({"admin_user_id": g.current_user["_id"]})
+            or_clauses = [{"teachers.user_id": g.current_user["_id"]}]
+            if org:
+                or_clauses.append({"organization_id": org["_id"]})
+            query["$or"] = or_clauses
+        else:
+            # Teachers (and any other authenticated role) only see classes they belong to.
+            query["teachers.user_id"] = g.current_user["_id"]
+
+        classes = list(classes_col.find(query))
         for cls in classes:
             cls["_id"] = str(cls["_id"])
             if cls.get("organization_id"):
@@ -91,6 +135,57 @@ def get_class(class_id):
     except Exception:
         return jsonify({"error": "Invalid ID"}), 400
 
+@classes_bp.route('/<class_id>', methods=['PUT'])
+@require_role('teacher', 'org_admin', 'platform_admin')
+def update_class(class_id):
+    data = request.json or {}
+    classes_col = get_collection('classes')
+    try:
+        class_obj = classes_col.find_one({"_id": ObjectId(class_id)})
+        if not class_obj:
+            return jsonify({"error": "Not found"}), 404
+        if not _can_manage_class(class_obj, g.current_user):
+            return jsonify({"error": "Forbidden"}), 403
+
+        update_data = {"updated_at": datetime.utcnow()}
+        for field in ["name", "description", "cover_image_url"]:
+            if field in data:
+                update_data[field] = data[field]
+
+        classes_col.update_one({"_id": ObjectId(class_id)}, {"$set": update_data})
+        return jsonify({"success": True, "message": "Class updated"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+@classes_bp.route('/<class_id>', methods=['DELETE'])
+@require_role('teacher', 'org_admin', 'platform_admin')
+def delete_class(class_id):
+    classes_col = get_collection('classes')
+    try:
+        class_obj_id = ObjectId(class_id)
+        class_obj = classes_col.find_one({"_id": class_obj_id})
+        if not class_obj:
+            return jsonify({"error": "Not found"}), 404
+        if not _can_manage_class(class_obj, g.current_user, require_owner=True):
+            return jsonify({"error": "Only the class owner can delete this class"}), 403
+
+        # Strip this class out of every exam's visibility - the exam itself survives.
+        get_collection('exams').update_many(
+            {"visibility.class_ids": class_obj_id},
+            {"$pull": {"visibility.class_ids": class_obj_id}}
+        )
+        get_collection('class_broadcasts').delete_many({"class_id": str(class_id)})
+        get_collection('class_messages').delete_many({"class_id": str(class_id)})
+        get_collection('notifications').delete_many({"metadata.class_id": str(class_id)})
+
+        classes_col.update_one(
+            {"_id": class_obj_id},
+            {"$set": {"is_active": False, "updated_at": datetime.utcnow()}}
+        )
+        return jsonify({"success": True, "message": "Class deleted"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
 @classes_bp.route('/<class_id>/join', methods=['POST'])
 @require_role('student')
 def request_join(class_id):
@@ -113,6 +208,55 @@ def request_join(class_id):
         return jsonify({"success": True, "message": "Join request sent"}), 200
     except Exception:
         return jsonify({"error": "Invalid ID"}), 400
+
+@classes_bp.route('/<class_id>/join_requests/<student_id>/respond', methods=['POST'])
+@require_role('teacher', 'org_admin')
+def respond_join_request(class_id, student_id):
+    data = request.json or {}
+    action = data.get("action")
+    if action not in ["approve", "reject"]:
+        return jsonify({"error": "Invalid action"}), 400
+
+    classes_col = get_collection('classes')
+    try:
+        class_obj = classes_col.find_one({"_id": ObjectId(class_id)})
+        if not class_obj:
+            return jsonify({"error": "Not found"}), 404
+        if not _can_manage_class(class_obj, g.current_user):
+            return jsonify({"error": "Forbidden"}), 403
+
+        student_obj_id = ObjectId(student_id)
+        request_entry = next(
+            (r for r in class_obj.get("join_requests", []) if str(r.get("student_id")) == str(student_obj_id)),
+            None
+        )
+        if not request_entry:
+            return jsonify({"error": "Join request not found"}), 404
+
+        classes_col.update_one(
+            {"_id": ObjectId(class_id)},
+            {"$pull": {"join_requests": {"student_id": student_obj_id}}}
+        )
+
+        if action == "approve":
+            already_member = any(str(s.get("user_id")) == str(student_obj_id) for s in class_obj.get("students", []))
+            if not already_member:
+                classes_col.update_one(
+                    {"_id": ObjectId(class_id)},
+                    {"$push": {"students": {
+                        "user_id": student_obj_id,
+                        "status": "active",
+                        "invited_at": datetime.utcnow(),
+                        "joined_at": datetime.utcnow()
+                    }}}
+                )
+            message = "Join request approved"
+        else:
+            message = "Join request rejected"
+
+        return jsonify({"success": True, "message": message}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
 
 @classes_bp.route('/<class_id>/invite', methods=['POST'])
 @require_role('teacher', 'org_admin')
@@ -310,7 +454,19 @@ def get_members(class_id):
                 else:
                     members.append(data)
                 
-        return jsonify({"success": True, "data": {"members": members, "invitations": invitations}}), 200
+        join_requests = []
+        for r in class_obj.get("join_requests", []):
+            u = users_col.find_one({"_id": r["student_id"]})
+            if u:
+                join_requests.append({
+                    "student_id": str(u["_id"]),
+                    "name": u.get("full_name"),
+                    "email": u.get("email"),
+                    "status": r.get("status", "pending"),
+                    "last_requested_at": r.get("last_requested_at").isoformat() if r.get("last_requested_at") else None
+                })
+
+        return jsonify({"success": True, "data": {"members": members, "invitations": invitations, "join_requests": join_requests}}), 200
     except Exception:
         return jsonify({"error": "Invalid ID"}), 400
 

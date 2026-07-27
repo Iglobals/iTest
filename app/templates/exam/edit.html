@@ -69,6 +69,29 @@
     .btn-submit { background: var(--success); color: white; }
     .btn-action:hover { opacity: 0.85; }
     .wizard-nav { display: flex; justify-content: space-between; margin-top: 2em; }
+    .hidden { display: none !important; }
+
+    .tags-input-container {
+        display: flex; flex-wrap: wrap; gap: 0.5em; padding: 0.375em 0.5em;
+        border: 1px solid var(--gray-300); border-radius: 0.5em; min-height: 42px;
+        align-items: center; background: var(--white); position: relative;
+    }
+    .tag-badge {
+        background: #e8f5e9; color: #2e7d32; border: 1px solid #4caf50;
+        padding: 0.25em 0.6em; border-radius: 1em; font-size: 0.875em;
+        display: inline-flex; align-items: center; gap: 0.25em;
+    }
+    .tag-badge button { background: none; border: none; color: inherit; cursor: pointer; font-size: 1.2em; line-height: 1; padding: 0 0 0 4px; opacity: 0.7; }
+    .tag-badge button:hover { opacity: 1; }
+    .tags-input-field { border: none; outline: none; flex: 1; min-width: 120px; font-size: 0.9375em; background: transparent; padding: 0.25em 0; }
+    .dropdown-list {
+        position: absolute; top: 100%; left: 0; right: 0; background: white;
+        border: 1px solid var(--gray-200); border-radius: 0.5em; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        overflow-y: auto; max-height: 200px; z-index: 50; display: none; margin-top: 4px;
+    }
+    .dropdown-list.show { display: block; }
+    .dropdown-item { padding: 0.6em 1em; cursor: pointer; font-size: 0.9375em; color: var(--gray-800); }
+    .dropdown-item:hover { background: var(--purple-light, #f3e8ff); color: var(--purple); }
 </style>
 {% endblock %}
 
@@ -95,13 +118,31 @@
                     <label>Description</label>
                     <textarea id="description" class="form-control" rows="3">{{ exam.description }}</textarea>
                 </div>
+                <div class="form-group" style="margin-bottom: 1.25em;">
+                    <label>Instructions Shown to Students Before Starting</label>
+                    <textarea id="instructions" class="form-control" rows="4">{{ exam.instructions or "" }}</textarea>
+                </div>
                 <div class="form-grid">
                     <div class="form-group">
-                        <label>Exam Type</label>
+                        <label>Access Type</label>
                         <select id="exam_type" class="form-control" onchange="toggleVisibilityFields()">
                             <option value="private" {% if exam.exam_type == 'private' %}selected{% endif %}>Private</option>
                             <option value="public" {% if exam.exam_type == 'public' %}selected{% endif %}>Public</option>
                         </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Exam Type</label>
+                        {% if exam.total_questions %}
+                        <input type="text" class="form-control" value="{{ {'objective': 'Objective Only', 'essay': 'Essay Only', 'hybrid': 'Hybrid (Objective + Essay)'}.get(exam.grading_mode, 'Hybrid (Objective + Essay)') }}" disabled>
+                        <input type="hidden" id="grading_mode" value="{{ exam.grading_mode or 'hybrid' }}">
+                        <p style="font-size: 0.8em; color: var(--gray-500); margin: 0;">Can't be changed once questions have been added.</p>
+                        {% else %}
+                        <select id="grading_mode" class="form-control">
+                            <option value="objective" {% if exam.grading_mode == 'objective' %}selected{% endif %}>Objective Only</option>
+                            <option value="essay" {% if exam.grading_mode == 'essay' %}selected{% endif %}>Essay Only</option>
+                            <option value="hybrid" {% if not exam.grading_mode or exam.grading_mode == 'hybrid' %}selected{% endif %}>Hybrid (Objective + Essay)</option>
+                        </select>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -136,8 +177,9 @@
                         </div>
                         <div class="form-row">
                             <input type="checkbox" id="show_result_immediately" {% if exam.settings.show_result_immediately %}checked{% endif %}>
-                            <label for="show_result_immediately">Open Results</label>
+                            <label for="show_result_immediately">Instant Results (objective-only exams)</label>
                         </div>
+                        <p id="instant_results_hint" class="hidden" style="font-size: 0.8em; color: var(--gray-500); margin: -0.35em 0 0.5em 2.1em;">Essay and hybrid exams always require you to grade and publish results manually.</p>
                     </div>
                     <div>
                         <div class="form-row">
@@ -159,11 +201,12 @@
             <div class="form-section" id="visibility-section" {% if exam.exam_type == 'public' %}style="display:none;"{% endif %}>
                 <h3>Assign Audience</h3>
                 <div class="form-group" style="margin-bottom: 1.25em;">
-                    <label>Assign to Classes (Hold CTRL to select multiple)</label>
-                    <select id="class_ids" class="form-control" multiple style="height: auto; min-height: 80px;">
-                        <option value="class1" selected>Class A - Physics</option>
-                        <!-- Dynamic population needed -->
-                    </select>
+                    <label>Assign to Classes</label>
+                    <div class="tags-input-container" id="classes_tag_container">
+                        <div id="tags_wrapper" style="display: contents;"></div>
+                        <input type="text" class="tags-input-field" id="class_input_text" placeholder="Type class name and press enter...">
+                        <div class="dropdown-list" id="classes_dropdown"></div>
+                    </div>
                 </div>
                 <div class="form-grid">
                     <div class="form-group">
@@ -202,6 +245,146 @@
 
 {% block dashboard_js %}
 <script>
+    let selectedClasses = [
+        {% if exam.visibility and exam.visibility.class_ids %}
+            {% for cid in exam.visibility.class_ids %}
+                { _id: "{{ cid }}", name: "{{ cid }}" },
+            {% endfor %}
+        {% endif %}
+    ];
+    let availableClasses = [];
+
+    document.addEventListener('DOMContentLoaded', () => {
+        fetchClasses();
+        initClassesTagInput();
+        toggleInstantResultsAvailability();
+        const gradingModeSelect = document.getElementById('grading_mode');
+        if (gradingModeSelect && gradingModeSelect.tagName === 'SELECT') {
+            gradingModeSelect.addEventListener('change', toggleInstantResultsAvailability);
+        }
+    });
+
+    async function fetchClasses() {
+        try {
+            const res = await fetch('/api/classes/');
+            const json = await res.json();
+            if (json.success) {
+                availableClasses = json.data;
+                selectedClasses.forEach(sc => {
+                    const found = availableClasses.find(c => c._id === sc._id);
+                    if (found) sc.name = found.name;
+                });
+                renderClassesTags();
+            }
+        } catch(e) { console.error('Failed to fetch classes', e); }
+    }
+
+    function initClassesTagInput() {
+        const input = document.getElementById('class_input_text');
+        const dropdown = document.getElementById('classes_dropdown');
+        const container = document.getElementById('classes_tag_container');
+
+        container.addEventListener('click', () => input.focus());
+
+        input.addEventListener('focus', () => {
+            dropdown.classList.add('show');
+            renderClassesDropdown(input.value);
+        });
+
+        document.addEventListener('click', (e) => {
+            if(!e.target.closest('#classes_tag_container')) {
+                dropdown.classList.remove('show');
+            }
+        });
+
+        input.addEventListener('input', () => {
+            dropdown.classList.add('show');
+            renderClassesDropdown(input.value);
+        });
+
+        input.addEventListener('keydown', (e) => {
+            if(e.key === 'Enter') {
+                e.preventDefault();
+                const filterText = input.value.toLowerCase().trim();
+                const matched = availableClasses.find(c =>
+                    !selectedClasses.find(sc => sc._id === c._id) &&
+                    c.name.toLowerCase() === filterText
+                );
+                if(matched) addClassTag(matched);
+                input.value = '';
+                dropdown.classList.remove('show');
+            } else if (e.key === 'Backspace' && input.value === '' && selectedClasses.length > 0) {
+                removeClassTag(selectedClasses[selectedClasses.length - 1]._id);
+            }
+        });
+        renderClassesTags();
+    }
+
+    function renderClassesDropdown(filterText = '') {
+        const dropdown = document.getElementById('classes_dropdown');
+        dropdown.innerHTML = '';
+        const filtered = availableClasses.filter(c =>
+            !selectedClasses.find(sc => sc._id === c._id) &&
+            c.name.toLowerCase().includes(filterText.toLowerCase())
+        );
+
+        if(filtered.length === 0) {
+            dropdown.innerHTML = '<div class="dropdown-item" style="color:var(--gray-500); cursor:default;">No matching classes found</div>';
+            return;
+        }
+
+        filtered.forEach(c => {
+            const div = document.createElement('div');
+            div.className = 'dropdown-item';
+            div.textContent = c.name;
+            div.onclick = (e) => {
+                e.stopPropagation();
+                addClassTag(c);
+                document.getElementById('class_input_text').value = '';
+                dropdown.classList.remove('show');
+            };
+            dropdown.appendChild(div);
+        });
+    }
+
+    function addClassTag(clsObj) {
+        if(!selectedClasses.find(c => c._id === clsObj._id)) {
+            selectedClasses.push(clsObj);
+            renderClassesTags();
+        }
+    }
+
+    function removeClassTag(id) {
+        selectedClasses = selectedClasses.filter(c => c._id !== id);
+        renderClassesTags();
+    }
+
+    function renderClassesTags() {
+        const container = document.getElementById('tags_wrapper');
+        container.innerHTML = '';
+        selectedClasses.forEach(c => {
+            const badge = document.createElement('div');
+            badge.className = 'tag-badge';
+            badge.innerHTML = `<span>${c.name}</span> <button type="button" onclick="removeClassTag('${c._id}')">&times;</button>`;
+            container.appendChild(badge);
+        });
+    }
+
+    function toggleInstantResultsAvailability() {
+        const gradingModeEl = document.getElementById('grading_mode');
+        const gradingMode = gradingModeEl ? gradingModeEl.value : 'hybrid';
+        const checkbox = document.getElementById('show_result_immediately');
+        const hint = document.getElementById('instant_results_hint');
+        if(gradingMode === 'objective') {
+            checkbox.disabled = false;
+            hint.classList.add('hidden');
+        } else {
+            checkbox.checked = false;
+            checkbox.disabled = true;
+            hint.classList.remove('hidden');
+        }
+    }
+
     function toggleVisibilityFields() {
         const type = document.getElementById('exam_type').value;
         const visSection = document.getElementById('visibility-section');
@@ -238,12 +421,14 @@
         const examType = document.getElementById('exam_type').value;
         const incEmails = document.getElementById('included_emails').value.split(',').map(e => e.trim()).filter(e => e);
         const excEmails = document.getElementById('excluded_emails').value.split(',').map(e => e.trim()).filter(e => e);
-        const classSelect = document.getElementById('class_ids');
-        const classIds = Array.from(classSelect.selectedOptions).map(opt => opt.value);
+        const classIds = selectedClasses.map(c => c._id);
+        const gradingModeEl = document.getElementById('grading_mode');
+        const gradingMode = gradingModeEl ? gradingModeEl.value : undefined;
 
         const payload = {
             title: document.getElementById('title').value,
             description: document.getElementById('description').value,
+            instructions: document.getElementById('instructions').value,
             exam_type: examType,
             visibility: {
                 type: examType === 'public' ? 'public' : 'private',
@@ -264,6 +449,7 @@
                 available_until: document.getElementById('available_until').value || null
             }
         };
+        if (gradingMode) payload.grading_mode = gradingMode;
 
         try {
             const res = await fetch(`/api/exams/${examId}`, {

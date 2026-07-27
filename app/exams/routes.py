@@ -27,16 +27,34 @@ def create_exam():
     data = request.json
     exams_col = get_collection('exams')
     
-    exam_type = data.get("exam_type", "private") # private, public, platform_standard
-    
+    exam_type = data.get("exam_type", "private") # private, public, platform_standard - controls WHO can access the exam
+    grading_mode = data.get("grading_mode", "hybrid") # objective, essay, hybrid - controls the exam's question composition/grading
+    if grading_mode not in ("objective", "essay", "hybrid"):
+        grading_mode = "hybrid"
+
     visibility = data.get("visibility", {})
-    # e.g. {"class_ids": [], "student_ids": [], "excluded_student_ids": []}
-    
-    # Ensure IDs are ObjectIds where applicable
+    # e.g. {"class_ids": [...ObjectId strings], "student_emails": [...raw emails], "excluded_student_emails": [...raw emails]}
+
+    # class_ids reference real Class documents, so they're coerced to ObjectId.
+    # Individually-granted students are identified by email (not every invited
+    # student necessarily has an account yet), so those are kept as raw strings -
+    # matching how update_exam and the visibility queries elsewhere already treat them.
     class_ids = [ObjectId(cid) for cid in visibility.get("class_ids", []) if cid and ObjectId.is_valid(cid)]
-    student_ids = [ObjectId(sid) for sid in visibility.get("student_ids", []) if sid and ObjectId.is_valid(sid)]
-    excluded_student_ids = [ObjectId(esid) for esid in visibility.get("excluded_student_ids", []) if esid and ObjectId.is_valid(esid)]
-    
+    student_ids = [e.strip() for e in visibility.get("student_emails", []) if isinstance(e, str) and e.strip()]
+    excluded_student_ids = [e.strip() for e in visibility.get("excluded_student_emails", []) if isinstance(e, str) and e.strip()]
+
+    settings = {
+        "duration_minutes": 60,
+        "allow_retake": True if exam_type in ['public', 'platform_standard'] else False,
+        "max_attempts": 3 if exam_type in ['public', 'platform_standard'] else 1,
+        "randomize_questions": True,
+        "pass_mark_percent": 50,
+        "show_result_immediately": grading_mode == "objective"
+    }
+    settings.update(data.get("settings", {}))
+    # Instant results only ever make sense when there's no essay component to manually grade.
+    settings["show_result_immediately"] = grading_mode == "objective" and bool(settings.get("show_result_immediately"))
+
     exam = {
         "title": data.get("title", "Untitled Exam"),
         "slug": generate_unique_slug(data.get("title", "Untitled Exam"), exams_col),
@@ -45,6 +63,7 @@ def create_exam():
         "created_by": g.current_user["_id"],
         "created_by_type": g.current_user.get("role", "teacher"),
         "exam_type": exam_type,
+        "grading_mode": grading_mode,
         "visibility": {
             "type": visibility.get("type", "class"),
             "class_ids": class_ids,
@@ -54,13 +73,7 @@ def create_exam():
         "subject_tag_id": ObjectId(data["subject_tag_id"]) if data.get("subject_tag_id") and ObjectId.is_valid(data["subject_tag_id"]) else data.get("subject_tag_id"),
         "organization_id": ObjectId(data["organization_id"]) if data.get("organization_id") and ObjectId.is_valid(data["organization_id"]) else None,
         "instructions": data.get("instructions", ""),
-        "settings": data.get("settings", {
-            "duration_minutes": 60,
-            "allow_retake": True if exam_type in ['public', 'platform_standard'] else False,
-            "max_attempts": 3 if exam_type in ['public', 'platform_standard'] else 1,
-            "randomize_questions": True,
-            "show_result_immediately": True
-        }),
+        "settings": settings,
         "schedule": data.get("schedule", {
             "available_from": None,
             "available_until": None,
@@ -152,12 +165,22 @@ def update_exam_questions(exam_id):
             return jsonify({"error": "Unauthorized"}), 403
             
         questions = data.get("questions", [])
-        
+
         # Ensure questions have IDs if missing
         for q in questions:
             if "_id" not in q or not q["_id"]:
                 q["_id"] = str(uuid.uuid4())
-                
+
+        # A question's type must match what this exam's grading_mode allows -
+        # the builder UI already restricts this, but the API is reachable directly.
+        grading_mode = existing_exam.get("grading_mode", "hybrid")
+        allowed_types = {"objective": {"mcq"}, "essay": {"essay"}, "hybrid": {"mcq", "essay"}}.get(grading_mode, {"mcq", "essay"})
+        invalid_types = sorted({q.get("type") for q in questions if q.get("type") not in allowed_types})
+        if invalid_types:
+            return jsonify({
+                "error": f"This exam is '{grading_mode}' - question type(s) {', '.join(invalid_types)} are not allowed."
+            }), 400
+
         total_questions = len(questions)
         total_marks = sum([float(q.get("marks", 1)) for q in questions])
         
@@ -216,7 +239,10 @@ def update_exam(exam_id):
             "instructions": data.get("instructions", existing_exam.get("instructions", "")),
             "updated_at": datetime.utcnow()
         }
-        
+
+        if "grading_mode" in data and data["grading_mode"] in ("objective", "essay", "hybrid"):
+            update_data["grading_mode"] = data["grading_mode"]
+
         if "subject_tag_id" in data:
             if data["subject_tag_id"] and ObjectId.is_valid(data["subject_tag_id"]):
                 update_data["subject_tag_id"] = ObjectId(data["subject_tag_id"])
@@ -226,7 +252,11 @@ def update_exam(exam_id):
         if "settings" in data:
             update_data["settings"] = existing_exam.get("settings", {})
             update_data["settings"].update(data["settings"])
-            
+            effective_grading_mode = update_data.get("grading_mode", existing_exam.get("grading_mode", "hybrid"))
+            update_data["settings"]["show_result_immediately"] = (
+                effective_grading_mode == "objective" and bool(update_data["settings"].get("show_result_immediately"))
+            )
+
         # Update visibility and schedule if provided
         if "visibility" in data:
             vis = data["visibility"]
@@ -245,8 +275,10 @@ def update_exam(exam_id):
                 update_data["schedule"]["is_published"] = sched["is_published"]
                 update_data["status"] = "published" if sched["is_published"] else "draft"
             
-        # If General Exam and is_published, notify students (basic implementation)
-        if not is_private and existing_exam.get("schedule", {}).get("is_published"):
+        # If General Exam and is_published (post-update), notify students (basic implementation)
+        new_is_published = update_data.get("schedule", existing_exam.get("schedule", {})).get("is_published")
+        was_is_published = existing_exam.get("schedule", {}).get("is_published")
+        if not is_private and new_is_published and not was_is_published:
             # Insert notification record for general exam update
             notif_col.insert_one({
                 "recipient_id": "broadcast", # In a real system, you'd target specific users

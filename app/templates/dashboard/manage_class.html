@@ -199,15 +199,43 @@
 
 <div class="mc-container">
     <div class="mc-header">
-        <h1>{{ class_obj.name }}</h1>
-        <p>{{ class_obj.description or "No description provided." }}</p>
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem;">
+            <div>
+                <h1 id="class-name-display">{{ class_obj.name }}</h1>
+                <p id="class-desc-display">{{ class_obj.description or "No description provided." }}</p>
+            </div>
+            {% if is_teacher %}
+            <div style="display:flex; gap:0.5rem; flex-shrink:0;">
+                <button onclick="openEditClass()" class="mc-btn mc-btn-secondary" style="padding:0.5rem 1rem;"><i data-lucide="pencil" style="width:14px;height:14px;"></i> Edit</button>
+                <button onclick="deleteClass()" class="mc-btn mc-btn-danger" style="padding:0.5rem 1rem;"><i data-lucide="trash-2" style="width:14px;height:14px;"></i> Delete</button>
+            </div>
+            {% endif %}
+        </div>
+
+        {% if is_teacher %}
+        <div id="edit-class-form" class="mc-card hidden" style="margin-top:1rem;">
+            <h3>Edit Class</h3>
+            <div style="margin-bottom:1rem;">
+                <label style="display:block; font-weight:500; margin-bottom:0.5rem;">Class Name</label>
+                <input type="text" id="edit-class-name" class="mc-input" value="{{ class_obj.name }}">
+            </div>
+            <div style="margin-bottom:1rem;">
+                <label style="display:block; font-weight:500; margin-bottom:0.5rem;">Description</label>
+                <textarea id="edit-class-desc" rows="3" class="mc-input" style="width:100%; box-sizing:border-box;">{{ class_obj.description or "" }}</textarea>
+            </div>
+            <div style="display:flex; gap:0.5rem; justify-content:flex-end;">
+                <button onclick="closeEditClass()" class="mc-btn mc-btn-secondary">Cancel</button>
+                <button onclick="saveEditClass()" class="mc-btn" id="save-class-btn">Save Changes</button>
+            </div>
+        </div>
+        {% endif %}
     </div>
 
     <!-- Tabs Navigation -->
     <div class="mc-tabs">
-        <button onclick="switchTab('members')" class="mc-tab-btn active">Members</button>
-        <button onclick="switchTab('invitations')" class="mc-tab-btn">Invitations</button>
-        <button onclick="switchTab('invite_share')" class="mc-tab-btn">Invite & Share</button>
+        <button onclick="switchTab('members', event)" class="mc-tab-btn active">Members</button>
+        <button onclick="switchTab('invitations', event)" class="mc-tab-btn">Invitations</button>
+        <button onclick="switchTab('invite_share', event)" class="mc-tab-btn">Invite & Share</button>
     </div>
 
     <!-- Members Tab -->
@@ -234,6 +262,14 @@
                 <!-- Loaded via JS -->
             </div>
         </div>
+        {% if is_teacher %}
+        <div class="mc-card">
+            <h3>Student Join Requests</h3>
+            <div id="join-requests-list">
+                <!-- Loaded via JS -->
+            </div>
+        </div>
+        {% endif %}
     </div>
 
     <!-- Invite & Share Tab -->
@@ -305,15 +341,15 @@ const classId = "{{ class_obj._id }}";
 const isTeacher = {{ 'true' if is_teacher else 'false' }};
 const currentUserId = "{{ g.current_user._id }}";
 
-function switchTab(tabId) {
+function switchTab(tabId, event) {
     document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
     document.querySelectorAll('.mc-tab-btn').forEach(el => {
         el.classList.remove('active');
     });
-    
+
     document.getElementById('tab-' + tabId).classList.remove('hidden');
-    event.currentTarget.classList.add('active');
-    
+    if(event && event.currentTarget) event.currentTarget.classList.add('active');
+
     if(tabId === 'members' || tabId === 'invitations') {
         loadMembersData();
     }
@@ -424,7 +460,7 @@ async function loadMembersData() {
             let badgeClass = i.status === 'pending' ? 'badge-pending' : 'badge-declined';
             let uninviteBtn = '';
             if(isTeacher && i.status === 'pending') {
-                uninviteBtn = `<button onclick="uninviteMember('${i.email}')" class="mc-btn mc-btn-danger" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; margin-left: 1rem;">Uninvite</button>`;
+                uninviteBtn = `<button onclick="uninviteMember('${i.user_id}')" class="mc-btn mc-btn-danger" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; margin-left: 1rem;">Uninvite</button>`;
             }
             invHtml += `<div class="mc-list-item">
                 <div class="mc-list-info" style="width:100%; display:flex; justify-content:space-between; align-items:center;">
@@ -441,6 +477,82 @@ async function loadMembersData() {
         });
     }
     document.getElementById('invitations-list').innerHTML = invHtml;
+
+    // Render Join Requests
+    const joinRequestsList = document.getElementById('join-requests-list');
+    if(joinRequestsList) {
+        let jrHtml = '';
+        const requests = res.data.join_requests || [];
+        if(requests.length === 0) {
+            jrHtml = '<p style="color:var(--gray-500);">No pending join requests.</p>';
+        } else {
+            requests.forEach(r => {
+                jrHtml += `<div class="mc-list-item">
+                    <div class="mc-list-info" style="width:100%; display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <p class="name">${r.name || r.email}</p>
+                            <p class="role" style="text-transform:none;">${r.email}</p>
+                        </div>
+                        <div style="display:flex; gap:0.5rem;">
+                            <button onclick="respondJoinRequest('${r.student_id}', 'approve')" class="mc-btn" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">Approve</button>
+                            <button onclick="respondJoinRequest('${r.student_id}', 'reject')" class="mc-btn mc-btn-danger" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">Reject</button>
+                        </div>
+                    </div>
+                </div>`;
+            });
+        }
+        joinRequestsList.innerHTML = jrHtml;
+    }
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+async function respondJoinRequest(studentId, action) {
+    const res = await apiCall(`/join_requests/${studentId}/respond`, 'POST', {action});
+    if(res.success) {
+        showToast(res.message);
+        loadMembersData();
+    }
+}
+
+// Edit / Delete Class
+function openEditClass() {
+    document.getElementById('edit-class-form').classList.remove('hidden');
+}
+
+function closeEditClass() {
+    document.getElementById('edit-class-form').classList.add('hidden');
+}
+
+async function saveEditClass() {
+    const btn = document.getElementById('save-class-btn');
+    const name = document.getElementById('edit-class-name').value.trim();
+    const description = document.getElementById('edit-class-desc').value.trim();
+    if(!name) {
+        showToast('Class name is required', 'error');
+        return;
+    }
+
+    btn.disabled = true;
+    const res = await apiCall('', 'PUT', {name, description});
+    btn.disabled = false;
+
+    if(res.success) {
+        showToast('Class updated');
+        document.getElementById('class-name-display').textContent = name;
+        document.getElementById('class-desc-display').textContent = description || 'No description provided.';
+        closeEditClass();
+    }
+}
+
+async function deleteClass() {
+    if(!confirm('Delete this class permanently? Students and examiners will lose access, and it will be removed from any exams it was assigned to.')) return;
+
+    const res = await apiCall('', 'DELETE');
+    if(res.success) {
+        showToast('Class deleted');
+        setTimeout(() => { window.location.href = "{{ url_for('dashboard.classes') }}"; }, 1000);
+    }
 }
 
 // Invite & Share Logic
@@ -522,9 +634,9 @@ async function removeMember(userId, role) {
     }
 }
 
-async function uninviteMember(email) {
+async function uninviteMember(userId) {
     if(confirm("Are you sure you want to uninvite this user?")) {
-        const res = await apiCall('/uninvite', 'POST', {email: email});
+        const res = await apiCall('/uninvite', 'POST', {user_id: userId});
         if(res.success) {
             showToast('Invitation cancelled');
             loadMembersData();

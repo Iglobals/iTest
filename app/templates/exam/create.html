@@ -285,7 +285,12 @@
                     <label>Description</label>
                     <textarea id="description" class="form-control" rows="3" placeholder="Brief description of the exam..."></textarea>
                 </div>
-                
+
+                <div class="form-group" style="margin-bottom: 1.25em;">
+                    <label>Instructions Shown to Students Before Starting</label>
+                    <textarea id="instructions" class="form-control" style="max-width: none;" rows="4" placeholder="e.g. Read each question carefully. You will have 60 minutes to complete this exam. No external materials allowed..."></textarea>
+                </div>
+
                 <div class="form-grid">
                     <div class="form-group">
                         <label>Subject</label>
@@ -295,7 +300,7 @@
                         </div>
                     </div>
                     <div class="form-group">
-                        <label>Exam Type</label>
+                        <label>Access Type</label>
                         <div class="tags-input-container" id="exam_type_container" style="cursor: pointer;">
                             <input type="text" id="exam_type_text" class="tags-input-field" value="Private (Class/Specific Students)" readonly style="cursor: pointer;">
                             <input type="hidden" id="exam_type" value="private">
@@ -305,9 +310,22 @@
                             </div>
                         </div>
                     </div>
+                    <div class="form-group">
+                        <label>Exam Type</label>
+                        <div class="tags-input-container" id="grading_mode_container" style="cursor: pointer;">
+                            <input type="text" id="grading_mode_text" class="tags-input-field" value="Hybrid (Objective + Essay)" readonly style="cursor: pointer;">
+                            <input type="hidden" id="grading_mode" value="hybrid">
+                            <div class="dropdown-list" id="grading_mode_dropdown">
+                                <div class="dropdown-item" onclick="selectGradingMode('objective', 'Objective Only')">Objective Only</div>
+                                <div class="dropdown-item" onclick="selectGradingMode('essay', 'Essay Only')">Essay Only</div>
+                                <div class="dropdown-item" onclick="selectGradingMode('hybrid', 'Hybrid (Objective + Essay)')">Hybrid (Objective + Essay)</div>
+                            </div>
+                        </div>
+                        <p style="font-size: 0.8em; color: var(--gray-500); margin: 0.25em 0 0 0;">Only questions matching this type can be added when building the exam.</p>
+                    </div>
                 </div>
             </div>
-            
+
             <div class="wizard-nav" style="justify-content: flex-end;">
                 <button type="button" class="btn-action btn-next" onclick="nextStep(1)">Next <i data-lucide="arrow-right"></i></button>
             </div>
@@ -342,19 +360,16 @@
                             <input type="checkbox" id="randomize_options">
                             <label for="randomize_options">Randomize Options</label>
                         </div>
-                        <div class="form-row">
+                        <div class="form-row" id="instant_results_row">
                             <input type="checkbox" id="show_result_immediately" checked>
-                            <label for="show_result_immediately">Open Results</label>
+                            <label for="show_result_immediately">Instant Results (objective-only exams)</label>
                         </div>
+                        <p id="instant_results_hint" class="hidden" style="font-size: 0.8em; color: var(--gray-500); margin: -0.35em 0 0.5em 2.1em;">Essay and hybrid exams always require you to grade and publish results manually.</p>
                     </div>
                     <div>
                         <div class="form-row">
                             <input type="checkbox" id="allow_retake" onchange="toggleMaxAttempts()">
                             <label for="allow_retake">Allow Retake</label>
-                        </div>
-                        <div class="form-row">
-                            <input type="checkbox" id="auto_submit">
-                            <label for="auto_submit">Auto Submit on Timeout</label>
                         </div>
                     </div>
                 </div>
@@ -437,6 +452,7 @@
         initClassesTagInput();
         initSubjectDropdown();
         initExamTypeDropdown();
+        initGradingModeDropdown();
     });
 
     function adjustDropdownHeight(dropdown, container) {
@@ -642,6 +658,47 @@
         toggleVisibilityFields();
     }
 
+    function initGradingModeDropdown() {
+        const container = document.getElementById('grading_mode_container');
+        const dropdown = document.getElementById('grading_mode_dropdown');
+
+        container.addEventListener('click', () => {
+            dropdown.classList.toggle('show');
+            if(dropdown.classList.contains('show')) {
+                adjustDropdownHeight(dropdown, container);
+            }
+        });
+
+        document.addEventListener('click', (e) => {
+            if(!e.target.closest('#grading_mode_container')) {
+                dropdown.classList.remove('show');
+            }
+        });
+
+        toggleInstantResultsAvailability();
+    }
+
+    function selectGradingMode(value, text) {
+        document.getElementById('grading_mode').value = value;
+        document.getElementById('grading_mode_text').value = text;
+        document.getElementById('grading_mode_dropdown').classList.remove('show');
+        toggleInstantResultsAvailability();
+    }
+
+    function toggleInstantResultsAvailability() {
+        const gradingMode = document.getElementById('grading_mode').value;
+        const checkbox = document.getElementById('show_result_immediately');
+        const hint = document.getElementById('instant_results_hint');
+        if(gradingMode === 'objective') {
+            checkbox.disabled = false;
+            hint.classList.add('hidden');
+        } else {
+            checkbox.checked = false;
+            checkbox.disabled = true;
+            hint.classList.remove('hidden');
+        }
+    }
+
     function toggleMaxAttempts() {
         const allowRetake = document.getElementById('allow_retake').checked;
         const maxAttemptsGroup = document.getElementById('max_attempts_group');
@@ -729,13 +786,16 @@
         // Collect class IDs from tags
         const classIds = selectedClasses.map(c => c._id);
 
+        const gradingMode = document.getElementById('grading_mode').value;
+
         const payload = {
             title: document.getElementById('title').value,
             description: document.getElementById('description').value,
             exam_type: examType,
+            grading_mode: gradingMode,
             // Assuming subject is managed by a tag object id in a real DB, passing as string here
             subject_tag_id: document.getElementById('subject').value,
-            instructions: "",
+            instructions: document.getElementById('instructions').value,
             visibility: {
                 type: examType === 'public' ? 'public' : 'private',
                 class_ids: classIds,
@@ -748,10 +808,9 @@
                 max_attempts: parseInt(document.getElementById('max_attempts').value) || 1,
                 randomize_questions: document.getElementById('randomize_questions').checked,
                 randomize_options: document.getElementById('randomize_options').checked,
-                show_result_immediately: document.getElementById('show_result_immediately').checked,
+                show_result_immediately: gradingMode === 'objective' && document.getElementById('show_result_immediately').checked,
                 pass_mark_percent: parseInt(document.getElementById('pass_mark').value) || 50,
-                ai_proctoring_enabled: document.getElementById('ai_proctoring').checked,
-                auto_submit_on_timeout: document.getElementById('auto_submit').checked
+                ai_proctoring_enabled: document.getElementById('ai_proctoring').checked
             },
             schedule: {
                 available_from: document.getElementById('available_from').value || null,

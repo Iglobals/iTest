@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python scripts/reset_db.py)",
+      "Bash(python -m py_compile app/sessions/routes.py app/exams/routes.py app/classes/routes.py app/dashboard/routes.py app/utils/access.py app/utils/grading.py scripts/reset_db.py)",
+      "Bash(python -c ' *)"
+    ]
+  }
+}

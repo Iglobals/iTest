@@ -476,7 +476,7 @@
 <!-- Proctoring Violation Alert -->
 <div class="proctor-alert" id="proctorAlert">
     <i data-lucide="alert-triangle" class="proctor-alert-icon"></i>
-    <h1>⚠️ Violation Detected!</h1>
+    <h1>Violation Detected</h1>
     <p>You have left the examination screen. This action has been recorded.</p>
     <div class="flag-count" id="flagCountDisplay">Flag <span id="flagCountNumber">1</span> of 3</div>
     <p class="subtext" id="flagSubtext">You have 2 more chances remaining. After 3 flags, your exam will be auto-submitted.</p>
@@ -490,7 +490,7 @@
 <div class="modal-overlay" id="timeUpModal">
     <div class="modal-content">
         <i data-lucide="clock" style="width:64px; height:64px; color: #ef4444; margin: 0 auto 1rem;"></i>
-        <h2>⏰ Time's Up!</h2>
+        <h2>Time's Up</h2>
         <p>The exam timer has reached 00:00. Your answers are being submitted automatically...</p>
         <div style="margin-top: 1rem;">
             <div style="display: inline-block; width: 40px; height: 40px; border: 4px solid var(--purple-bg); border-top: 4px solid var(--purple); border-radius: 50%; animation: spin 1s linear infinite;"></div>
@@ -502,7 +502,7 @@
 <div class="modal-overlay" id="flaggedModal">
     <div class="modal-content">
         <i data-lucide="x-circle" style="width:64px; height:64px; color: #ef4444; margin: 0 auto 1rem;"></i>
-        <h2>🚫 Exam Terminated</h2>
+        <h2>Exam Terminated</h2>
         <p>You were flagged 3 times for leaving the exam screen. Your current progress has been submitted, but you won't be able to continue with this exam.</p>
         <p style="font-weight: 600; color: var(--purple);">Please reach out to your examiner for further assistance.</p>
         <div class="modal-actions" style="margin-top: 2rem;">
@@ -906,10 +906,23 @@
                         answers: Object.values(answersState)
                     })
                 });
+                const result = await response.json().catch(() => ({}));
+
                 if (response.ok) {
+                    // The server is authoritative on remaining time - resync the
+                    // local countdown to it so a slow/tampered client can't drift.
+                    if (typeof result.time_remaining_seconds === 'number') {
+                        timeLeft = result.time_remaining_seconds;
+                    }
                     statusEl.innerHTML = '<i data-lucide="cloud-check" style="width:16px;height:16px;"></i> Saved';
                     statusEl.style.color = 'var(--success)';
-                } else { throw new Error('Sync failed'); }
+                } else if (result.expired) {
+                    // Server already closed this session out (time's up) - stop
+                    // guessing locally and go through the normal timeout flow.
+                    timeLeft = 0;
+                } else {
+                    throw new Error('Sync failed');
+                }
             } catch (err) {
                 statusEl.innerHTML = '<i data-lucide="wifi-off" style="width:16px;height:16px;"></i> Offline (Saved Locally)';
                 statusEl.style.color = '#d97706'; // warning orange

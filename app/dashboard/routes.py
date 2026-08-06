@@ -801,12 +801,16 @@ def join_class(token):
         else:
             flash("You do not have an active organization.", "error")
     else:
-        # Check if already in class
-        is_existing_student = any(str(s.get("user_id")) == str(user_id) for s in class_obj.get("students", []))
+        # Check if already in class (a removed student's record is kept, not deleted,
+        # specifically so this still blocks them from rejoining via the shareable link)
+        existing_student_entry = next((s for s in class_obj.get("students", []) if str(s.get("user_id")) == str(user_id)), None)
         is_existing_teacher = any(str(t.get("user_id")) == str(user_id) for t in class_obj.get("teachers", []))
-        
-        if is_existing_student or is_existing_teacher:
-            flash("You are already a member of this class.", "info")
+
+        if existing_student_entry or is_existing_teacher:
+            if existing_student_entry and existing_student_entry.get("status") == "removed":
+                flash("You were removed from this class. Ask the teacher to send you a direct invitation to rejoin.", "error")
+            else:
+                flash("You are already a member of this class.", "info")
             return redirect(url_for('dashboard.classes'))
             
         target_role = link_type if link_type in ['student', 'teacher'] else user_role

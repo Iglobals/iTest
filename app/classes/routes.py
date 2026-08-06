@@ -239,8 +239,8 @@ def respond_join_request(class_id, student_id):
         )
 
         if action == "approve":
-            already_member = any(str(s.get("user_id")) == str(student_obj_id) for s in class_obj.get("students", []))
-            if not already_member:
+            existing_student_entry = next((s for s in class_obj.get("students", []) if str(s.get("user_id")) == str(student_obj_id)), None)
+            if not existing_student_entry:
                 classes_col.update_one(
                     {"_id": ObjectId(class_id)},
                     {"$push": {"students": {
@@ -249,6 +249,18 @@ def respond_join_request(class_id, student_id):
                         "invited_at": datetime.utcnow(),
                         "joined_at": datetime.utcnow()
                     }}}
+                )
+            elif existing_student_entry.get("status") == "removed":
+                # Approving a join request from a previously-removed student reactivates them.
+                classes_col.update_one(
+                    {"_id": ObjectId(class_id), "students.user_id": student_obj_id},
+                    {
+                        "$set": {
+                            "students.$.status": "active",
+                            "students.$.joined_at": datetime.utcnow(),
+                        },
+                        "$unset": {"students.$.removed_at": ""},
+                    }
                 )
             message = "Join request approved"
         else:
@@ -279,7 +291,7 @@ def invite(class_id):
             user_plan = g.current_user.get("plan", {}).get("type", "free")
             max_students = get_plan_limit(user_plan, "max_students_per_class")
             
-            current_students = len(class_obj.get("students", []))
+            current_students = sum(1 for s in class_obj.get("students", []) if s.get("status") != "removed")
             if current_students + len(emails) > max_students:
                 return jsonify({"error": f"Plan limit reached: Max {max_students} students allowed.", "limit_reached": True}), 403
         
@@ -290,17 +302,34 @@ def invite(class_id):
             user = users_col.find_one({"email": email})
             if user:
                 user_id = user["_id"]
-                
-                # Check if user is already in the class
-                is_existing_student = any(str(s.get("user_id")) == str(user_id) for s in class_obj.get("students", []))
+
+                # Check if user is already in the class. A "removed" student doesn't
+                # count as a member here - that's exactly the record a direct re-invite
+                # should be allowed to reactivate.
+                existing_student_entry = next((s for s in class_obj.get("students", []) if str(s.get("user_id")) == str(user_id)), None)
+                is_blocked_student = existing_student_entry is not None and existing_student_entry.get("status") != "removed"
                 is_existing_teacher = any(str(t.get("user_id")) == str(user_id) for t in class_obj.get("teachers", []))
-                
-                if is_existing_student or is_existing_teacher:
+
+                if is_blocked_student or is_existing_teacher:
                     skipped_users.append({"email": email, "reason": "already_member"})
                     continue # Skip already invited or existing members
-                
+
                 if role == 'student':
-                    classes_col.update_one({"_id": ObjectId(class_id)}, {"$push": {"students": {"user_id": user_id, "status": "pending", "invited_at": datetime.utcnow(), "joined_at": None}}})
+                    if existing_student_entry:
+                        # Reactivate their previously-removed record instead of pushing a duplicate.
+                        classes_col.update_one(
+                            {"_id": ObjectId(class_id), "students.user_id": user_id},
+                            {
+                                "$set": {
+                                    "students.$.status": "pending",
+                                    "students.$.invited_at": datetime.utcnow(),
+                                    "students.$.joined_at": None,
+                                },
+                                "$unset": {"students.$.removed_at": ""},
+                            }
+                        )
+                    else:
+                        classes_col.update_one({"_id": ObjectId(class_id)}, {"$push": {"students": {"user_id": user_id, "status": "pending", "invited_at": datetime.utcnow(), "joined_at": None}}})
                 else:
                     classes_col.update_one({"_id": ObjectId(class_id)}, {"$push": {"teachers": {"user_id": user_id, "role": "collaborator", "status": "pending", "added_at": datetime.utcnow()}}})
                 
@@ -437,6 +466,8 @@ def get_members(class_id):
                     members.append(data)
                 
         for s in class_obj.get("students", []):
+            if s.get("status") == "removed":
+                continue
             u = users_col.find_one({"_id": s["user_id"]})
             if u:
                 org_name = ""
@@ -497,9 +528,15 @@ def remove_member(class_id):
     classes_col = get_collection('classes')
     try:
         if role == 'student':
+            # Soft-delete: keep the record (status: "removed") instead of $pull-ing it,
+            # so the join-link handler still recognizes this user_id and blocks rejoin.
+            # A teacher can still bring them back via a direct re-invite (see invite()).
             classes_col.update_one(
-                {"_id": ObjectId(class_id)},
-                {"$pull": {"students": {"user_id": ObjectId(member_id)}}}
+                {"_id": ObjectId(class_id), "students.user_id": ObjectId(member_id)},
+                {"$set": {
+                    "students.$.status": "removed",
+                    "students.$.removed_at": datetime.utcnow()
+                }}
             )
         else:
             classes_col.update_one(
@@ -530,8 +567,12 @@ def respond_invite(class_id):
             return jsonify({"error": "Class not found"}), 404
             
         # Check students array
-        is_student = any(str(s.get("user_id")) == str(user_id) for s in class_obj.get("students", []))
-        if is_student:
+        student_entry = next((s for s in class_obj.get("students", []) if str(s.get("user_id")) == str(user_id)), None)
+        if student_entry:
+            # A removed student has no live invitation to respond to - block self-service
+            # reactivation here so it can only happen through a teacher-initiated re-invite.
+            if student_entry.get("status") == "removed":
+                return jsonify({"error": "No invitation found"}), 404
             classes_col.update_one(
                 {"_id": ObjectId(class_id), "students.user_id": user_id},
                 {"$set": {"students.$.status": new_status}}

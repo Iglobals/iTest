@@ -16,22 +16,20 @@
     <meta name="twitter:card" content="summary_large_image">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/global.css') }}">
     <style>
-        /* Floating Main Header */
+        /* Main Header - transparent, no background/shadow of its own;
+           only its three inner groups (logo, nav links, actions) carry any visual form. */
         .main-floating-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            gap: 0.5rem;
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border-radius: 1rem;
-            padding: 0.75rem 1.5rem;
-            box-shadow: 0 0.25rem 1.875rem rgba(0, 0, 0, 0.08);
+            gap: 1rem;
+            background: none;
             width: calc(100% - 2.5rem);
-            max-width: 68.75rem;
-            margin: 1.25rem auto;
+            max-width: 50rem;
+            margin: 0 auto;
+            padding: 1.25rem 0;
             position: sticky;
-            top: 1.25rem;
+            top: 0;
             z-index: 1000;
         }
 
@@ -48,6 +46,24 @@
         .header-logo i {
             color: var(--primary);
         }
+
+        .header-nav-links {
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+        }
+
+        .header-nav-links a {
+            color: var(--text-heading);
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.95rem;
+            transition: color 0.2s ease;
+        }
+
+        .header-nav-links a:hover {
+            color: var(--primary);
+        }
     </style>
     <script src="https://unpkg.com/lucide@latest"></script>
     {% block head %}{% endblock %}
@@ -55,12 +71,21 @@
 
 <body>
     <header class="main-floating-header">
-        <a href="/" class="header-logo">
-            <img src="https://res.cloudinary.com/dicut7e2y/image/upload/v1781773701/itest-favicon_yehhyy.png"
-                alt="iTest Logo" style="width: 24px; height: 24px; object-fit: contain;">
-            iTest
-        </a>
-        <div style="display: flex; align-items: center; gap: 1rem;">
+        <div class="header-logo-group">
+            <a href="{{ url_for('landing.index') }}" class="header-logo">
+                <img src="https://res.cloudinary.com/dicut7e2y/image/upload/v1781773701/itest-favicon_yehhyy.png"
+                    alt="iTest Logo" style="width: 24px; height: 24px; object-fit: contain;">
+                iTest
+            </a>
+        </div>
+
+        <nav class="header-nav-links">
+            <a href="{{ url_for('landing.index') }}">Home</a>
+            <a href="#">About</a>
+            <a href="{{ url_for('landing.pricing') }}">Pricing</a>
+        </nav>
+
+        <div class="header-cta-group" style="display: flex; align-items: center; gap: 1rem;">
             {% if session.get('access_token') %}
             <a href="{{ url_for('dashboard.index') }}" class="btn"
                 style="background: var(--surface-2); color: var(--text-heading); border: 1px solid var(--border); padding: 0.5rem 1rem; border-radius: 0.5rem; text-decoration: none; font-weight: 600;">Dashboard</a>
@@ -88,10 +113,9 @@
             </div>
             {% else %}
             <a href="{{ url_for('auth.login') }}"
-                style="color: var(--text-heading); text-decoration: none; font-weight: 600;">Log In</a>
-            <a href="{{ url_for('auth.login') }}"
-                style="background: var(--primary); color: white; padding: 0.6rem 1.25rem; border-radius: 0.5rem; text-decoration: none; font-weight: 600;">Sign
-                Up</a>
+                style="color: var(--text-heading); text-decoration: none; font-weight: 600; font-size: 0.95rem;">Log In</a>
+            <a href="{{ url_for('auth.login') }}" class="cta-btn" style="padding: 0.6rem 1.25rem; font-size: 0.95rem;">Get
+                Started</a>
             {% endif %}
         </div>
     </header>

@@ -2,85 +2,32 @@
 
 {% block content %}
 <section class="hero" id="hero">
-    <div class="hero-content">
-        <div class="badge">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10" />
-                <path d="M12 6v6l4 2" />
-            </svg>
-            Trusted by educators nationwide since 2020
-        </div>
-        <h1>Simple tools to <span>create and take exams</span></h1>
-        <p>Build assessments, manage test sessions, and review results with an exam platform designed for schools,
-            universities, and certification bodies.</p>
-        {% if session.get('access_token') %}
-        <a href="{{ url_for('dashboard.index') }}" class="cta-btn">
-            Use App
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
-                stroke-linejoin="round">
-                <path d="M5 12h14M12 5l7 7-7 7" />
-            </svg>
-        </a>
-        {% else %}
-        <a href="{{ url_for('auth.login') }}" class="cta-btn">
-            Get Started Free
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
-                stroke-linejoin="round">
-                <path d="M5 12h14M12 5l7 7-7 7" />
-            </svg>
-        </a>
-        {% endif %}
+    <div class="hero-banner">
+        <img class="hero-banner-img"
+            src="https://res.cloudinary.com/dicut7e2y/image/upload/v1781626485/auth_illustration_ttbtpa.jpg"
+            alt="iTest exam platform">
 
-        <div class="licensed-by">
-            <span>Zen out with secure online exams</span>
-        </div>
-    </div>
-
-    <div class="hero-images">
-        <div class="img-circle img-1">
-            <img src="https://picsum.photos/seed/exam1/400/400" alt="Student studying">
-        </div>
-        <div class="img-circle img-2">
-            <img src="https://picsum.photos/seed/exam2/400/400" alt="Exam hall">
-        </div>
-        <div class="img-circle img-3">
-            <img src="https://picsum.photos/seed/exam3/400/400" alt="Test results">
-        </div>
-        <div class="img-circle img-4">
-            <img src="https://picsum.photos/seed/exam4/400/400" alt="Teacher grading">
-        </div>
-
-        <div class="floating-card card-progress">
-            <div class="chart">
-                <svg width="70" height="70" viewBox="0 0 70 70">
-                    <circle cx="35" cy="35" r="30" fill="none" stroke="#e2e8f0" stroke-width="6" />
-                    <circle cx="35" cy="35" r="30" fill="none" stroke="#10b981" stroke-width="6"
-                        stroke-dasharray="141.37" stroke-dashoffset="35.34" stroke-linecap="round" />
-                </svg>
-                <div class="percent">75%</div>
-            </div>
-            <div class="label">Pass Rate</div>
-        </div>
-
-        <div class="floating-card card-badge">
-            <div class="icon">
+        <div class="hero-overlay-card">
+            <h1>Simple tools to create and take exams</h1>
+            <p>Build assessments, manage test sessions, and review results with ease.</p>
+            {% if session.get('access_token') %}
+            <a href="{{ url_for('dashboard.index') }}" class="cta-btn">
+                Use App
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
                     stroke-linejoin="round">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                    <polyline points="14 2 14 8 20 8" />
-                    <line x1="16" y1="13" x2="8" y2="13" />
-                    <line x1="16" y1="17" x2="8" y2="17" />
-                    <polyline points="10 9 9 9 8 9" />
+                    <path d="M5 12h14M12 5l7 7-7 7" />
                 </svg>
-            </div>
-            <div class="text">Exam Papers</div>
+            </a>
+            {% else %}
+            <a href="{{ url_for('auth.login') }}" class="cta-btn">
+                Get Started Free
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+                    stroke-linejoin="round">
+                    <path d="M5 12h14M12 5l7 7-7 7" />
+                </svg>
+            </a>
+            {% endif %}
         </div>
-    </div>
-
-    <div class="hero-single-image">
-        <img src="https://res.cloudinary.com/dicut7e2y/image/upload/v1781944257/85fa0ef7-f027-4ea6-9dd3-96449418b607_npvkdv.png"
-            alt="Exam platform">
     </div>
 </section>
 

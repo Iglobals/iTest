@@ -51,7 +51,7 @@
                     </div>
                     <div class="exam-details">
                         <h4>{{ cls.name }}</h4>
-                        <p>{{ cls.students | length }} Students</p>
+                        <p>{{ cls.students | rejectattr('status', 'equalto', 'removed') | list | length }} Students</p>
                     </div>
                     <div class="exam-meta">
                         <button class="btn-secondary" style="width:auto;height:auto;padding:0.4em 0.8em;font-size:0.75em;border:1px solid var(--gray-300);">View Details</button>

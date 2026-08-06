@@ -52,7 +52,7 @@
                     </div>
                     <div class="exam-details">
                         <h4>{{ cls.name }}</h4>
-                        <p>{{ cls.students | length }} Students Enrolled</p>
+                        <p>{{ cls.students | rejectattr('status', 'equalto', 'removed') | list | length }} Students Enrolled</p>
                     </div>
                     <div class="exam-meta">
                         <a href="{{ url_for('dashboard.manage_class', class_id=cls._id) }}" class="btn-secondary"

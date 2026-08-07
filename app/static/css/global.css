@@ -71,10 +71,10 @@ body {
     top: 50%;
     right: 4%;
     transform: translateY(-50%);
-    width: min(88%, 24rem);
+    width: min(88%, 32rem);
     background: white;
     border-radius: 0.75rem;
-    padding: 2rem 2.25rem;
+    padding: 1.75rem 2.5rem;
     box-shadow: 0 1.25rem 3.125rem rgba(0, 0, 0, 0.2);
 }
 
@@ -216,25 +216,18 @@ body {
     flex-shrink: 0;
     width: 10rem;
     height: 6.25rem;
-    background: var(--surface-2);
-    border-radius: 1rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 1.25rem;
-    border: 1px solid var(--border);
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    transition: transform 0.3s ease;
 }
 
 .logo-box:hover {
     transform: translateY(-5px);
-    box-shadow: 0 0.625rem 1.875rem rgba(0, 0, 0, 0.1);
 }
 
 .logo-box img {
-    max-width: 100%;
-    max-height: 3.75rem;
-    object-fit: contain;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 0.625rem;
     filter: grayscale(0.3);
     transition: filter 0.3s ease;
 }
@@ -809,20 +802,17 @@ body {
     }
 
     .hero-banner {
-        aspect-ratio: auto;
+        aspect-ratio: 4 / 3;
+        max-height: none;
         border-radius: 1rem;
-    }
-
-    .hero-banner-img {
-        height: 16rem;
     }
 
     .hero-overlay-card {
         position: static;
         transform: none;
         width: 100%;
-        margin-top: -2rem;
-        margin-inline: 1rem;
+        margin-top: 1rem;
+        margin-inline: 0;
         padding: 1.5rem;
     }
 
@@ -837,7 +827,7 @@ body {
 
     .logo-section {
         padding: 0 1rem;
-        margin-top: -3.75rem;
+        margin-top: 1rem;
     }
 
     .logo-container {

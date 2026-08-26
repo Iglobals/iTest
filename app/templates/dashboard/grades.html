@@ -1,0 +1,119 @@
+{% extends "dashboard/base.html" %}
+
+{% block page_title %}Grades{% endblock %}
+{% block page_subtitle %}Your results across every exam you've taken.{% endblock %}
+
+{% block dashboard_head %}
+<style>
+    .table-container {
+        width: 100%;
+        overflow-x: auto;
+        background: var(--white);
+        border: 1px solid var(--gray-200);
+        border-radius: 1em;
+        margin-top: 1.5em;
+        max-width: 1200px;
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+    }
+
+    .data-table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 600px;
+    }
+
+    .data-table th, .data-table td {
+        padding: 1rem 1.5rem;
+        text-align: left;
+        border-bottom: 1px solid var(--gray-100);
+        vertical-align: middle;
+    }
+
+    .data-table th {
+        background: var(--gray-50);
+        font-weight: 600;
+        color: var(--gray-500);
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .data-table tbody tr {
+        transition: background-color 0.2s;
+    }
+
+    .data-table tbody tr:hover {
+        background-color: var(--purple-bg);
+        cursor: pointer;
+    }
+
+    .data-table tbody tr:last-child td {
+        border-bottom: none;
+    }
+
+    .title-cell {
+        font-weight: 600;
+        color: var(--gray-900);
+        font-size: 1rem;
+    }
+
+    .sub-text {
+        font-size: 0.85rem;
+        color: var(--gray-500);
+    }
+</style>
+{% endblock %}
+
+{% block dashboard_content %}
+<div class="dashboard-body" style="grid-template-columns: 1fr; display: block;">
+    {% if grades %}
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Exam Title</th>
+                    <th>Submitted On</th>
+                    <th>Score</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in grades %}
+                <tr onclick="window.location.href='{{ url_for('dashboard.view_result', session_id=item.score.session_id) }}'">
+                    <td>
+                        <div class="title-cell">{{ item.exam.title }}</div>
+                    </td>
+                    <td>
+                        <span class="sub-text">{{ item.score.submitted_at.strftime('%b %d, %Y') }}</span>
+                    </td>
+                    <td>
+                        <div class="title-cell">{{ item.score.score_percent }}%</div>
+                        <span class="sub-text">{{ item.score.score }} / {{ item.score.total_marks }}</span>
+                    </td>
+                    <td>
+                        {% if item.score.passed %}
+                        <span class="status-badge success" style="background:var(--success-bg); color:var(--success);">Passed</span>
+                        {% else %}
+                        <span class="status-badge danger" style="background:var(--danger-bg); color:var(--danger);">Failed</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="{{ url_for('dashboard.view_result', session_id=item.score.session_id) }}" class="btn-outline" style="padding:0.4em 0.8em; font-size:0.85em; border-radius:0.5em; text-decoration:none; display:inline-block;" onclick="event.stopPropagation();">
+                            View Result
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <i data-lucide="inbox"></i>
+        <h3>No Grades Yet</h3>
+        <p>Once you complete an exam, your results will show up here.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

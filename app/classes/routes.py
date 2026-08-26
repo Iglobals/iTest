@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify, g
-from app.auth.decorators import require_auth, require_role, require_feature
+from app.auth.decorators import require_auth, require_role
 from app.utils.mongo import get_collection
 from datetime import datetime
 from bson import ObjectId
@@ -689,36 +689,8 @@ def react_broadcast(class_id, msg_id):
     except Exception:
         return jsonify({"error": "Invalid ID"}), 400
 
-@classes_bp.route('/<class_id>/messages', methods=['POST'])
-@require_feature('can_message_1on1')
-def send_message(class_id):
-    data = request.json
-    messages_col = get_collection('class_messages')
-    
-    new_msg = {
-        "class_id": str(class_id),
-        "sender_id": str(g.current_user["_id"]),
-        "receiver_id": data.get("receiver_id"),
-        "message": data.get("message"),
-        "created_at": datetime.utcnow()
-    }
-    
-    result = messages_col.insert_one(new_msg)
-    new_msg["_id"] = str(result.inserted_id)
-    return jsonify({"success": True, "data": new_msg}), 201
-
-@classes_bp.route('/<class_id>/messages', methods=['GET'])
-@require_feature('can_message_1on1')
-def get_messages(class_id):
-    messages_col = get_collection('class_messages')
-    user_id = str(g.current_user["_id"])
-    
-    msgs = list(messages_col.find({
-        "class_id": str(class_id),
-        "$or": [{"sender_id": user_id}, {"receiver_id": user_id}]
-    }).sort("created_at", -1))
-    
-    for m in msgs:
-        m["_id"] = str(m["_id"])
-        
-    return jsonify({"success": True, "data": msgs}), 200
+# Note: class-scoped 1:1 messaging (send_message/get_messages against
+# `class_messages`) used to live here but was dead code - no template ever
+# called it, and it had no receiver validation. Replaced by the general-
+# purpose messaging system in app/messaging/routes.py, which isn't tied to
+# a single class and enforces a real sender/receiver role permission matrix.

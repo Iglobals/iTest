@@ -47,12 +47,12 @@
             <i data-lucide="file-text"></i>
             My Exams
         </a>
-        <a href="#" class="nav-item">
+        <a href="{{ url_for('dashboard.grades') }}" class="nav-item {% if request.endpoint == 'dashboard.grades' %}active{% endif %}">
             <i data-lucide="award"></i>
             Grades
         </a>
         {% endif %}
-        <a href="#" class="nav-item">
+        <a href="{{ url_for('dashboard.messages') }}" class="nav-item {% if request.endpoint == 'dashboard.messages' %}active{% endif %}">
             <i data-lucide="message-square"></i>
             Messages
         </a>

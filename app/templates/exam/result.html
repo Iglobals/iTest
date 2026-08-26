@@ -116,9 +116,17 @@
             <i data-lucide="arrow-left" style="margin-right: 0.5em;"></i> Back to Manage Exams
         </a>
         {% else %}
-        <a href="{{ url_for('dashboard.my_exams') }}" class="btn-outline" style="display:inline-flex; width:auto; height:auto; padding: 0.5em 1em; margin-bottom: 2em; text-decoration: none;">
-            <i data-lucide="arrow-left" style="margin-right: 0.5em;"></i> Back to My Exams
-        </a>
+        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:1em; margin-bottom: 2em;">
+            <a href="{{ url_for('dashboard.my_exams') }}" class="btn-outline" style="display:inline-flex; width:auto; height:auto; padding: 0.5em 1em; text-decoration: none;">
+                <i data-lucide="arrow-left" style="margin-right: 0.5em;"></i> Back to My Exams
+            </a>
+            {% if exam.created_by %}
+            <a href="{{ url_for('dashboard.messages', compose_to=exam.created_by, to_name=teacher_name or 'Teacher', exam_id=exam._id, exam_title=exam.title, session_id=session._id) }}"
+                class="btn-outline" style="display:inline-flex; width:auto; height:auto; padding: 0.5em 1em; text-decoration: none;">
+                <i data-lucide="message-square" style="margin-right: 0.5em;"></i> Message the Teacher About This Result
+            </a>
+            {% endif %}
+        </div>
         {% endif %}
 
         {% if score_record %}

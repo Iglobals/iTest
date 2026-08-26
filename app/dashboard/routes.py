@@ -443,6 +443,42 @@ def my_exams():
         print(traceback.format_exc())
         return render_template('dashboard/my_exams.html', available_exams=[], taken_exams=[], error=str(e))
 
+@dashboard_bp.route('/grades')
+@require_auth()
+def grades():
+    if g.current_user.get('role') != 'student':
+        return "Unauthorized", 403
+
+    user_id = g.current_user.get('_id')
+    exams_col = get_collection('exams')
+
+    from app.models import ExamScore
+    from bson import ObjectId
+
+    taken_scores = ExamScore.query.filter_by(student_id=str(user_id)).order_by(ExamScore.submitted_at.desc()).all()
+    taken_exam_ids = [score.exam_id for score in taken_scores if score.exam_id]
+
+    exams_dict = {}
+    if taken_exam_ids and exams_col is not None:
+        valid_exam_ids = [ObjectId(eid) for eid in set(taken_exam_ids) if eid and ObjectId.is_valid(eid)]
+        if valid_exam_ids:
+            exams_dict = {str(e['_id']): e for e in exams_col.find({"_id": {"$in": valid_exam_ids}})}
+
+    grades_list = []
+    for score in taken_scores:
+        exam_info = exams_dict.get(str(score.exam_id))
+        if exam_info:
+            grades_list.append({"score": score, "exam": exam_info})
+
+    return render_template('dashboard/grades.html', grades=grades_list)
+
+
+@dashboard_bp.route('/messages')
+@require_auth()
+def messages():
+    return render_template('dashboard/messages.html')
+
+
 @dashboard_bp.route('/sessions/<session_id>/result')
 @require_auth()
 def view_result(session_id):
@@ -533,12 +569,18 @@ def view_result(session_id):
             "feedback": feedback
         })
         
-    return render_template('exam/result.html', 
-                         session=session, 
-                         exam=exam, 
-                         score_record=score_record, 
-                         review_data=review_data, 
-                         is_admin=is_admin)
+    teacher_name = None
+    if is_student and exam.get('created_by'):
+        teacher = get_collection('users').find_one({"_id": exam['created_by']})
+        teacher_name = teacher.get('full_name') if teacher else None
+
+    return render_template('exam/result.html',
+                         session=session,
+                         exam=exam,
+                         score_record=score_record,
+                         review_data=review_data,
+                         is_admin=is_admin,
+                         teacher_name=teacher_name)
 
 @dashboard_bp.route('/sessions/<session_id>/grade')
 @require_auth()

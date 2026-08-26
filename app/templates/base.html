@@ -104,6 +104,24 @@
             cursor: pointer;
         }
 
+        .hamburger-bars {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.25rem;
+        }
+
+        .hamburger-bars .bar {
+            display: block;
+            height: 2px;
+            border-radius: 1px;
+            background: currentColor;
+        }
+
+        .hamburger-bars .bar-1 { width: 1.1rem; }
+        .hamburger-bars .bar-2 { width: 0.8rem; }
+        .hamburger-bars .bar-3 { width: 0.55rem; }
+
         @media (max-width: 43.75rem) {
             .header-nav-links,
             .header-cta-group {
@@ -124,6 +142,13 @@
 
             .main-floating-header.mobile-open .header-logo {
                 text-shadow: none;
+            }
+
+            /* Logged in: the mobile header shows only the hamburger - no
+               Dashboard button, no profile menu, collapsed or expanded. */
+            .header-cta-loggedin,
+            .main-floating-header.mobile-open .header-cta-loggedin {
+                display: none !important;
             }
 
             .main-floating-header.mobile-open .header-nav-links,
@@ -168,7 +193,8 @@
             <a href="{{ url_for('landing.pricing') }}">Pricing</a>
         </nav>
 
-        <div class="header-cta-group" style="display: flex; align-items: center; gap: 1rem;">
+        <div class="header-cta-group{{ ' header-cta-loggedin' if session.get('access_token') }}"
+            style="display: flex; align-items: center; gap: 1rem;">
             {% if session.get('access_token') %}
             <a href="{{ url_for('dashboard.index') }}" class="btn"
                 style="background: var(--surface-2); color: var(--text-heading); border: 1px solid var(--border); padding: 0.5rem 1rem; border-radius: 0.5rem; text-decoration: none; font-weight: 600;">Dashboard</a>
@@ -202,20 +228,27 @@
         </div>
 
         <button class="header-menu-toggle" id="headerMenuToggle" aria-label="Open menu" aria-expanded="false">
-            <i data-lucide="menu" style="width: 20px; height: 20px;"></i>
+            <span class="hamburger-bars">
+                <span class="bar bar-1"></span>
+                <span class="bar bar-2"></span>
+                <span class="bar bar-3"></span>
+            </span>
         </button>
     </header>
 
     <script>
-        document.getElementById('headerMenuToggle')?.addEventListener('click', function () {
-            const header = this.closest('.main-floating-header');
-            const open = header.classList.toggle('mobile-open');
-            this.setAttribute('aria-expanded', open);
-            this.innerHTML = open
-                ? '<i data-lucide="x" style="width: 20px; height: 20px;"></i>'
-                : '<i data-lucide="menu" style="width: 20px; height: 20px;"></i>';
-            if (typeof lucide !== 'undefined') lucide.createIcons();
-        });
+        (function () {
+            const HAMBURGER_HTML = '<span class="hamburger-bars"><span class="bar bar-1"></span><span class="bar bar-2"></span><span class="bar bar-3"></span></span>';
+            const CLOSE_HTML = '<i data-lucide="x" style="width: 20px; height: 20px;"></i>';
+
+            document.getElementById('headerMenuToggle')?.addEventListener('click', function () {
+                const header = this.closest('.main-floating-header');
+                const open = header.classList.toggle('mobile-open');
+                this.setAttribute('aria-expanded', open);
+                this.innerHTML = open ? CLOSE_HTML : HAMBURGER_HTML;
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+            });
+        })();
     </script>
 
     {% block content %}{% endblock %}

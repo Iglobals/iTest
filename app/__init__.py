@@ -37,7 +37,10 @@ def create_app(config_name='default'):
     
     from app.sessions.routes import sessions_bp
     app.register_blueprint(sessions_bp)
-    
+
+    from app.messaging.routes import messaging_bp
+    app.register_blueprint(messaging_bp)
+
     from app.api.webhooks import webhooks_bp
     app.register_blueprint(webhooks_bp)
     

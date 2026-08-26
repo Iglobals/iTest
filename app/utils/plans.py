@@ -24,7 +24,8 @@ PLAN_LIMITS = {
         "max_questions_per_bank": 500,
         "can_use_images": True,
         "can_message_1on1": True,
-        "can_see_broadcast_reactions": True
+        "can_see_broadcast_reactions": True,
+        "can_use_ai_proctoring": True
     },
     "enterprise": {
         "max_classes": float('inf'),
@@ -33,7 +34,8 @@ PLAN_LIMITS = {
         "max_questions_per_bank": float('inf'),
         "can_use_images": True,
         "can_message_1on1": True,
-        "can_see_broadcast_reactions": True
+        "can_see_broadcast_reactions": True,
+        "can_use_ai_proctoring": True
     }
 }
 

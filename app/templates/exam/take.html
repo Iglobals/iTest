@@ -476,8 +476,8 @@
 <!-- Proctoring Violation Alert -->
 <div class="proctor-alert" id="proctorAlert">
     <i data-lucide="alert-triangle" class="proctor-alert-icon"></i>
-    <h1>Violation Detected</h1>
-    <p>You have left the examination screen. This action has been recorded.</p>
+    <h1 id="proctorAlertTitle">Violation Detected</h1>
+    <p id="proctorAlertMessage">You have left the examination screen. This action has been recorded.</p>
     <div class="flag-count" id="flagCountDisplay">Flag <span id="flagCountNumber">1</span> of 3</div>
     <p class="subtext" id="flagSubtext">You have 2 more chances remaining. After 3 flags, your exam will be auto-submitted.</p>
     <button class="btn-exam btn-next" onclick="dismissProctorAlert()" style="margin-top: 2rem; font-size: 1.1rem; padding: 1rem 2rem;">
@@ -503,7 +503,7 @@
     <div class="modal-content">
         <i data-lucide="x-circle" style="width:64px; height:64px; color: #ef4444; margin: 0 auto 1rem;"></i>
         <h2>Exam Terminated</h2>
-        <p>You were flagged 3 times for leaving the exam screen. Your current progress has been submitted, but you won't be able to continue with this exam.</p>
+        <p id="flaggedModalMessage">You were flagged 3 times for leaving the exam screen. Your current progress has been submitted, but you won't be able to continue with this exam.</p>
         <p style="font-weight: 600; color: var(--purple);">Please reach out to your examiner for further assistance.</p>
         <div class="modal-actions" style="margin-top: 2rem;">
             <button class="modal-btn modal-btn-primary" onclick="goToDashboard()">
@@ -638,8 +638,6 @@
     const totalQ = {{ questions| length }};
     const isProctored = {{ 'true' if exam.settings.ai_proctoring_enabled else 'false' }};
     let currentQ = 0;
-    let flagCount = 0;
-    const maxFlags = 3;
 
     // Check if exam is empty
     if (totalQ === 0) {
@@ -672,41 +670,69 @@
     let timeLeft = parseInt("{{ time_remaining }}") || 3600;
 
     // ── Proctoring Logic ───────────────────────────────────────────────────
+    const PROCTOR_VISION_ENDPOINT = `/api/sessions/${sessionId}/proctor/vision`;
+    const PROCTOR_AUDIO_ENDPOINT = `/api/sessions/${sessionId}/proctor/audio`;
+
+    // Randomized bounds (seconds) for routine frame captures.
+    const VISION_INTERVAL_MIN = 20;
+    const VISION_INTERVAL_MAX = 45;
+    // On an ambiguous "might_be_cheating" frame, re-check almost immediately
+    // instead of waiting for the next randomized interval, until it resolves
+    // one way or the other.
+    const VISION_RETRY_DELAY = 2;
+
+    // Sustained-loudness gate for audio - a cough, click, or chair creak
+    // never crosses this, so we don't spam the AI service with every noise.
+    const AUDIO_LOUD_THRESHOLD = 0.12;   // RMS level, 0-1 scale
+    const AUDIO_SUSTAIN_MS = 1500;       // must stay loud this long before recording starts
+    const AUDIO_MAX_CLIP_MS = 6000;      // hard cap per clip
+
+    let proctorStream = null;
+    let visionTimer = null;
+
+    function showProctorAlert(title, message, count, max) {
+        document.getElementById('proctorAlertTitle').textContent = title;
+        document.getElementById('proctorAlertMessage').textContent = message;
+        document.getElementById('flagCountDisplay').innerHTML = `Flag <span id="flagCountNumber">${count}</span> of ${max}`;
+        const remaining = max - count;
+        const subtextEl = document.getElementById('flagSubtext');
+        if (remaining <= 0) {
+            subtextEl.textContent = 'Maximum warnings reached. Your exam is being submitted...';
+        } else if (remaining === 1) {
+            subtextEl.textContent = 'This is your last warning! One more and your exam will be auto-submitted.';
+        } else {
+            subtextEl.textContent = `You have ${remaining} more chances remaining. After ${max} warnings, your exam will be auto-submitted.`;
+        }
+        document.getElementById('proctorAlert').classList.add('show');
+        lucide.createIcons();
+    }
+
+    function stopProctoring() {
+        clearTimeout(visionTimer);
+        if (proctorStream) {
+            proctorStream.getTracks().forEach(t => t.stop());
+            proctorStream = null;
+        }
+    }
+
     if (isProctored) {
-        // 1. Camera Access
-        navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+        // 1. Camera + microphone access - both required for a proctored exam.
+        navigator.mediaDevices.getUserMedia({ video: true, audio: true })
             .then(stream => {
+                proctorStream = stream;
                 const video = document.getElementById('proctorVideo');
                 if (video) video.srcObject = stream;
+                startVisionCaptureLoop();
+                startAudioLoudnessWatch(stream);
             })
             .catch(err => {
-                alert("Camera access is required for this proctored exam. Please allow access and refresh.");
-                console.error("Camera error:", err);
+                alert("Camera and microphone access are required for this proctored exam. Please allow access and refresh.");
+                console.error("Proctoring media error:", err);
             });
 
         // 2. Tab Visibility Check with flag tracking
         document.addEventListener("visibilitychange", () => {
             if (document.hidden) {
-                flagCount++;
-                
-                // Show proctoring alert
-                const alertEl = document.getElementById('proctorAlert');
-                alertEl.classList.add('show');
-                
-                // Update flag count display
-                document.getElementById('flagCountNumber').textContent = flagCount;
-                
-                // Update subtext based on flag count
-                const subtextEl = document.getElementById('flagSubtext');
-                if (flagCount === 1) {
-                    subtextEl.textContent = 'You have 2 more chances remaining. After 3 flags, your exam will be auto-submitted.';
-                } else if (flagCount === 2) {
-                    subtextEl.textContent = 'This is your last warning! One more flag and your exam will be auto-submitted.';
-                } else if (flagCount >= 3) {
-                    subtextEl.textContent = 'Maximum flags reached. Your exam is being submitted...';
-                }
-                
-                // Log violation to server
                 fetch(`/api/sessions/${sessionId}/flag`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -714,12 +740,14 @@
                 })
                 .then(response => response.json())
                 .then(data => {
+                    showProctorAlert(
+                        'Violation Detected',
+                        'You have left the examination screen. This action has been recorded.',
+                        data.flag_count, data.max_flags
+                    );
                     if (data.force_submit) {
-                        // Auto-submit after 3 flags
                         dismissProctorAlert();
-                        setTimeout(() => {
-                            submitExamForFlags();
-                        }, 1000);
+                        setTimeout(() => submitExamForFlags('You were flagged for repeatedly leaving the exam screen.'), 1000);
                     }
                 })
                 .catch(e => console.log('Flag logging failed:', e));
@@ -727,26 +755,170 @@
         });
     }
 
+    // ── AI vision: capture a frame from the hidden video element ────────────
+    function captureVideoFrame() {
+        const video = document.getElementById('proctorVideo');
+        if (!video || !video.videoWidth) return Promise.resolve(null);
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext('2d').drawImage(video, 0, 0);
+        return new Promise(resolve => canvas.toBlob(blob => resolve(blob), 'image/jpeg', 0.8));
+    }
+
+    function scheduleNextVisionCheck(immediate) {
+        clearTimeout(visionTimer);
+        const delaySeconds = immediate
+            ? VISION_RETRY_DELAY
+            : VISION_INTERVAL_MIN + Math.random() * (VISION_INTERVAL_MAX - VISION_INTERVAL_MIN);
+        visionTimer = setTimeout(runVisionCheck, delaySeconds * 1000);
+    }
+
+    function startVisionCaptureLoop() {
+        scheduleNextVisionCheck(false);
+    }
+
+    async function runVisionCheck() {
+        const blob = await captureVideoFrame();
+        if (!blob) { scheduleNextVisionCheck(false); return; }
+
+        const form = new FormData();
+        form.append('image', blob, 'frame.jpg');
+
+        try {
+            const res = await fetch(PROCTOR_VISION_ENDPOINT, { method: 'POST', body: form });
+            const data = await res.json();
+
+            if (data.classification === 'cheating') {
+                showProctorAlert(
+                    'Cheating Detected',
+                    'Our proctoring system detected a serious exam violation (for example, a phone or another device).',
+                    data.flag_count, data.max_flags
+                );
+            } else if (data.classification === 'might_be_cheating') {
+                showProctorAlert(
+                    'Possible Violation Detected',
+                    'Our proctoring system flagged unusual behavior (for example, looking away from the screen).',
+                    data.flag_count, data.max_flags
+                );
+            }
+
+            if (data.force_submit) {
+                dismissProctorAlert();
+                setTimeout(() => submitExamForFlags('Our AI proctoring system detected repeated exam violations.'), 1000);
+                return;
+            }
+
+            scheduleNextVisionCheck(data.classification === 'might_be_cheating');
+        } catch (e) {
+            console.log('Vision check failed:', e);
+            scheduleNextVisionCheck(false);
+        }
+    }
+
+    // ── AI audio: only send a clip once sustained loud sound is detected ────
+    function startAudioLoudnessWatch(stream) {
+        if (!stream.getAudioTracks().length) return;
+
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        const audioCtx = new AudioCtx();
+        const source = audioCtx.createMediaStreamSource(stream);
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 2048;
+        source.connect(analyser);
+
+        const timeData = new Uint8Array(analyser.fftSize);
+        let loudSince = null;
+        let recording = false;
+
+        function currentRms() {
+            analyser.getByteTimeDomainData(timeData);
+            let sumSquares = 0;
+            for (let i = 0; i < timeData.length; i++) {
+                const norm = (timeData[i] - 128) / 128;
+                sumSquares += norm * norm;
+            }
+            return Math.sqrt(sumSquares / timeData.length);
+        }
+
+        function startRecordingClip() {
+            recording = true;
+            let recorder;
+            const chunks = [];
+            try {
+                recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+            } catch (e) {
+                recording = false;
+                return;
+            }
+            recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+            recorder.onstop = () => {
+                recording = false;
+                loudSince = null;
+                if (chunks.length) sendAudioClip(new Blob(chunks, { type: 'audio/webm' }));
+            };
+            recorder.start();
+            setTimeout(() => { if (recorder.state === 'recording') recorder.stop(); }, AUDIO_MAX_CLIP_MS);
+        }
+
+        setInterval(() => {
+            if (recording) return;
+            const level = currentRms();
+            if (level >= AUDIO_LOUD_THRESHOLD) {
+                if (loudSince === null) loudSince = Date.now();
+                if (Date.now() - loudSince >= AUDIO_SUSTAIN_MS) startRecordingClip();
+            } else {
+                loudSince = null;
+            }
+        }, 200);
+    }
+
+    async function sendAudioClip(blob) {
+        const form = new FormData();
+        form.append('audio', blob, 'slice.webm');
+        try {
+            const res = await fetch(PROCTOR_AUDIO_ENDPOINT, { method: 'POST', body: form });
+            const data = await res.json();
+
+            if (data.keyword_flags && data.keyword_flags.length) {
+                showProctorAlert(
+                    'Possible Violation Detected',
+                    'Our proctoring system detected speech that may involve sharing exam answers.',
+                    data.flag_count, data.max_flags
+                );
+            }
+
+            if (data.force_submit) {
+                dismissProctorAlert();
+                setTimeout(() => submitExamForFlags('Our AI proctoring system detected repeated exam violations.'), 1000);
+            }
+        } catch (e) {
+            console.log('Audio check failed:', e);
+        }
+    }
+
     function dismissProctorAlert() {
         document.getElementById('proctorAlert').classList.remove('show');
         lucide.createIcons();
     }
-    
+
     function goToDashboard() {
         window.location.href = '/dashboard';
     }
-    
-    async function submitExamForFlags() {
-        // Show flagged modal
+
+    async function submitExamForFlags(message) {
+        stopProctoring();
+        document.getElementById('flaggedModalMessage').textContent =
+            message || 'Your exam has been auto-submitted due to repeated proctoring violations.';
         document.getElementById('flaggedModal').classList.add('show');
         lucide.createIcons();
-        
+
         // Submit exam in background
         try {
             await fetch(`/api/sessions/${sessionId}/submit`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
+                body: JSON.stringify({
                     answers: Object.values(answersState),
                     reason: 'flagged_violations'
                 })
@@ -978,6 +1150,7 @@
     }
     
     async function performSubmit(isTimeout = false) {
+        if (isProctored) stopProctoring();
         try {
             const response = await fetch(`/api/sessions/${sessionId}/submit`, {
                 method: 'POST',

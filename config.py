@@ -43,6 +43,10 @@ class Config:
     ICA_CLIENT_SECRET = os.environ.get('ICA_CLIENT_SECRET')
     ICA_REDIRECT_URI = os.environ.get('ICA_REDIRECT_URI', 'http://localhost:5000/auth/callback')
     
+    # AI Proctoring (anticheat-system-roboflow FastAPI service)
+    PROCTOR_API_BASE_URL = os.environ.get('PROCTOR_API_BASE_URL', 'http://localhost:8000')
+    PROCTOR_API_KEY = os.environ.get('PROCTOR_API_KEY', '')
+
     # Flutterwave
     FLUTTERWAVE_PUBLIC_KEY = os.environ.get('FLUTTERWAVE_PUBLIC_KEY')
     FLUTTERWAVE_SECRET_KEY = os.environ.get('FLUTTERWAVE_SECRET_KEY')

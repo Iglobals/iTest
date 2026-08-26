@@ -242,6 +242,42 @@ def start_session():
     return jsonify({"success": True, "data": new_session}), 201
 
 
+# Each violation "type" has its own independent count and threshold, so an AI
+# proctoring warning never contributes to (or is diluted by) the tab-switch
+# count and vice versa. A type in HARD_FLAG_TYPES force-submits on its very
+# first occurrence, no threshold needed.
+FLAG_THRESHOLDS = {
+    "tab_switch": 3,
+    "ai_vision_warning": 5,
+    "ai_audio_flag": 5,
+}
+HARD_FLAG_TYPES = {"ai_vision_cheating"}
+
+
+def _push_flag(session_obj_id, flag_type, extra=None):
+    """Record one violation of `flag_type` on the session and report back
+    whether this type has now crossed its own threshold. Shared by the
+    student-reported /flag endpoint and the AI proctoring routes below so
+    there is exactly one counting rule, not two copies of it."""
+    sessions_col = get_collection('exam_sessions')
+    flag_entry = {
+        "type": flag_type,
+        "timestamp": datetime.utcnow().isoformat(),
+        "logged_at": datetime.utcnow(),
+        **(extra or {}),
+    }
+    sessions_col.update_one(
+        {"_id": session_obj_id},
+        {"$push": {"proctoring_flags": flag_entry}}
+    )
+    updated_session = sessions_col.find_one({"_id": session_obj_id})
+    all_flags = updated_session.get("proctoring_flags", [])
+    type_count = sum(1 for f in all_flags if f.get("type") == flag_type)
+    max_flags = FLAG_THRESHOLDS.get(flag_type, 3)
+    force_submit = flag_type in HARD_FLAG_TYPES or type_count >= max_flags
+    return {"flag_count": type_count, "max_flags": max_flags, "force_submit": force_submit}
+
+
 @sessions_bp.route('/<session_id>/flag', methods=['POST'])
 @require_auth()
 def flag_violation(session_id):
@@ -263,34 +299,107 @@ def flag_violation(session_id):
         if session["status"] != "in_progress":
             return jsonify({"error": "Session is already closed"}), 400
 
-        flag_entry = {
-            "type": data.get("type", "tab_switch"),
-            "timestamp": data.get("timestamp", datetime.utcnow().isoformat()),
-            "logged_at": datetime.utcnow()
-        }
-
-        sessions_col.update_one(
-            {"_id": session_obj_id},
-            {"$push": {"proctoring_flags": flag_entry}}
-        )
-
-        # Get updated flag count
-        updated_session = sessions_col.find_one({"_id": session_obj_id})
-        flag_count = len(updated_session.get("proctoring_flags", []))
-
-        # If 3 or more flags, auto-submit
-        max_flags = 3
-        force_submit = flag_count >= max_flags
-
-        return jsonify({
-            "success": True,
-            "flag_count": flag_count,
-            "max_flags": max_flags,
-            "force_submit": force_submit
-        }), 200
+        outcome = _push_flag(session_obj_id, data.get("type", "tab_switch"))
+        return jsonify({"success": True, **outcome}), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+
+
+@sessions_bp.route('/<session_id>/proctor/vision', methods=['POST'])
+@require_auth()
+def proctor_vision(session_id):
+    """Receives one webcam frame, forwards it to the anticheat service, and
+    turns the classification into a session flag when warranted. A single
+    'cheating' verdict force-submits immediately; 'might_be_cheating' counts
+    toward the 5-warning cap; 'not_cheating' is a no-op."""
+    sessions_col = get_collection('exam_sessions')
+    exams_col = get_collection('exams')
+
+    try:
+        session_obj_id = ObjectId(session_id)
+    except Exception:
+        return jsonify({"error": "Invalid session_id"}), 400
+
+    session = sessions_col.find_one({"_id": session_obj_id})
+    if not session or session["student_id"] != g.current_user["_id"]:
+        return jsonify({"error": "Session not found or unauthorized"}), 404
+
+    exam = exams_col.find_one({"_id": session["exam_id"]})
+    session = ensure_session_not_expired(session, exam) if exam else session
+    if session["status"] != "in_progress":
+        return jsonify({"error": "Session is already closed", "expired": True}), 400
+
+    image = request.files.get('image')
+    if not image or not image.filename:
+        return jsonify({"error": "image file required"}), 400
+
+    from app.utils.proctoring_client import classify_frame, ProctoringServiceError
+    try:
+        result = classify_frame(session_id, image.read(), image.filename)
+    except ProctoringServiceError:
+        # Fail open: the AI service being unreachable should never block or
+        # penalize a student mid-exam.
+        return jsonify({"classification": "unavailable", "force_submit": False}), 200
+
+    classification = result.get("frame_classification")
+
+    if classification == "cheating":
+        outcome = _push_flag(session_obj_id, "ai_vision_cheating", {"confidence": result.get("confidence")})
+    elif classification == "might_be_cheating":
+        outcome = _push_flag(session_obj_id, "ai_vision_warning", {"confidence": result.get("confidence")})
+    else:
+        outcome = {"flag_count": 0, "max_flags": FLAG_THRESHOLDS["ai_vision_warning"], "force_submit": False}
+
+    return jsonify({"classification": classification, **outcome}), 200
+
+
+@sessions_bp.route('/<session_id>/proctor/audio', methods=['POST'])
+@require_auth()
+def proctor_audio(session_id):
+    """Receives one audio slice (only sent by the client when it detected a
+    sustained loud sound, not every flimsy noise), forwards it to the
+    anticheat service, and flags the session if the transcript matched a
+    known answer-leakage phrase."""
+    sessions_col = get_collection('exam_sessions')
+    exams_col = get_collection('exams')
+
+    try:
+        session_obj_id = ObjectId(session_id)
+    except Exception:
+        return jsonify({"error": "Invalid session_id"}), 400
+
+    session = sessions_col.find_one({"_id": session_obj_id})
+    if not session or session["student_id"] != g.current_user["_id"]:
+        return jsonify({"error": "Session not found or unauthorized"}), 404
+
+    exam = exams_col.find_one({"_id": session["exam_id"]})
+    session = ensure_session_not_expired(session, exam) if exam else session
+    if session["status"] != "in_progress":
+        return jsonify({"error": "Session is already closed", "expired": True}), 400
+
+    audio = request.files.get('audio')
+    if not audio or not audio.filename:
+        return jsonify({"error": "audio file required"}), 400
+
+    from app.utils.proctoring_client import classify_audio, ProctoringServiceError
+    try:
+        result = classify_audio(session_id, audio.read(), audio.filename)
+    except ProctoringServiceError:
+        return jsonify({"speech_detected": False, "force_submit": False}), 200
+
+    keyword_flags = result.get("keyword_flags") or []
+
+    if keyword_flags:
+        outcome = _push_flag(session_obj_id, "ai_audio_flag", {"keyword_flags": keyword_flags})
+    else:
+        outcome = {"flag_count": 0, "max_flags": FLAG_THRESHOLDS["ai_audio_flag"], "force_submit": False}
+
+    return jsonify({
+        "speech_detected": result.get("speech_detected", False),
+        "keyword_flags": keyword_flags,
+        **outcome
+    }), 200
 
 
 @sessions_bp.route('/<session_id>/sync', methods=['PUT'])

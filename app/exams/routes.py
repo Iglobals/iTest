@@ -250,6 +250,18 @@ def update_exam(exam_id):
                 update_data["subject_tag_id"] = data["subject_tag_id"]
                 
         if "settings" in data:
+            wants_ai_proctoring = data["settings"].get("ai_proctoring_enabled")
+            already_enabled = existing_exam.get("settings", {}).get("ai_proctoring_enabled")
+            if wants_ai_proctoring and not already_enabled:
+                from app.utils.plans import get_plan_limit
+                user_plan = g.current_user.get("plan", {}).get("type", "free")
+                if not get_plan_limit(user_plan, "can_use_ai_proctoring"):
+                    return jsonify({
+                        "error": "AI proctoring requires a Pro or Enterprise plan.",
+                        "limit_reached": True,
+                        "upgrade_url": "/pricing"
+                    }), 402
+
             update_data["settings"] = existing_exam.get("settings", {})
             update_data["settings"].update(data["settings"])
             effective_grading_mode = update_data.get("grading_mode", existing_exam.get("grading_mode", "hybrid"))

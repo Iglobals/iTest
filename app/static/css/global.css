@@ -44,7 +44,11 @@ body {
 
 .hero {
     background: var(--surface-2);
-    padding: 1.5rem 5% 3rem;
+    /* Top padding is deliberately generous: it's the white space the fixed,
+       transparent header floats over at the top of the page. The banner
+       image only reaches the header once the page is scrolled down by
+       roughly this amount. */
+    padding: 6.5rem 5% 3rem;
 }
 
 .hero-banner {
@@ -798,7 +802,9 @@ body {
     }
 
     .hero {
-        padding: 1rem 1.5rem 2rem;
+        /* Same reasoning as the desktop rule - white space for the fixed
+           header to float over before the page scrolls the banner under it. */
+        padding: 5.5rem 1.5rem 2rem;
     }
 
     .hero-banner {

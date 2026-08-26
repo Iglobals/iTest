@@ -104,6 +104,13 @@
             cursor: pointer;
         }
 
+        /* Mobile-only Dashboard/Log Out pair - hidden by default (this is
+           the default, un-media-queried rule, so it stays hidden at every
+           width above the mobile breakpoint below). */
+        .header-mobile-loggedin-links {
+            display: none;
+        }
+
         .hamburger-bars {
             display: flex;
             flex-direction: column;

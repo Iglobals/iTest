@@ -243,6 +243,50 @@
         margin-bottom: 1rem;
         font-family: inherit;
     }
+
+    .chat-back-btn {
+        display: none;
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: var(--gray-600);
+        padding: 0.4rem;
+        margin-right: 0.5rem;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* Mobile / narrow tablets: the list and the open conversation each take
+       the full width, one at a time, instead of sitting side by side. */
+    @media (max-width: 48rem) {
+        .messages-shell {
+            position: relative;
+        }
+
+        .thread-list {
+            width: 100%;
+            border-right: none;
+        }
+
+        .chat-pane {
+            display: none;
+            position: absolute;
+            inset: 0;
+            background: var(--white);
+        }
+
+        .messages-shell.chat-open .thread-list {
+            display: none;
+        }
+
+        .messages-shell.chat-open .chat-pane {
+            display: flex;
+        }
+
+        .chat-back-btn {
+            display: flex;
+        }
+    }
 </style>
 {% endblock %}
 
@@ -358,7 +402,10 @@ function renderChatHeader(name, examTitle, sessionId) {
 
     document.getElementById('chatPane').innerHTML = `
         <div class="chat-header">
-            <div class="chat-header-info">
+            <button class="chat-back-btn" onclick="goBackToThreadList()" aria-label="Back to conversations">
+                <i data-lucide="arrow-left" style="width:18px;height:18px;"></i>
+            </button>
+            <div class="chat-header-info" style="flex:1;">
                 <h2>${name}</h2>
                 ${examLine}
             </div>
@@ -391,12 +438,41 @@ function renderMessages(msgs) {
     body.scrollTop = body.scrollHeight;
 }
 
+// Mobile drill-in: opening a conversation pushes a history entry so the
+// device's native swipe-back gesture (and the on-screen back button) both
+// return to the thread list, instead of leaving the browser's back button.
+function openMobileChat() {
+    document.querySelector('.messages-shell').classList.add('chat-open');
+    if (window.matchMedia('(max-width: 48rem)').matches) {
+        history.pushState({ chatOpen: true }, '', location.pathname);
+    }
+}
+
+function closeMobileChat() {
+    document.querySelector('.messages-shell').classList.remove('chat-open');
+}
+
+function goBackToThreadList() {
+    if (history.state && history.state.chatOpen) {
+        history.back();
+    } else {
+        closeMobileChat();
+    }
+}
+
+window.addEventListener('popstate', (e) => {
+    if (!e.state || !e.state.chatOpen) {
+        closeMobileChat();
+    }
+});
+
 async function openThread(threadKey) {
     activeThreadKey = threadKey;
     const thread = threadsCache.find(t => t.thread_key === threadKey);
     if (!thread) return;
 
     renderChatHeader(thread.other_user.name, thread.related_exam_title, thread.related_session_id || null);
+    openMobileChat();
 
     const res = await apiCall(`/threads/${threadKey}`);
     if (res.success) renderMessages(res.data);
@@ -425,6 +501,7 @@ async function openThread(threadKey) {
 
 function openPendingCompose() {
     renderChatHeader(pendingCompose.receiverName, pendingCompose.examTitle, null);
+    openMobileChat();
     document.getElementById('chatBody').innerHTML = `<div style="text-align:center; color:var(--gray-400); margin:auto;">
         Start the conversation below.
     </div>`;
@@ -486,7 +563,10 @@ if (canCompose) {
     await loadThreads();
     if (pendingCompose) {
         openPendingCompose();
-    } else if (threadsCache.length > 0) {
+    } else if (threadsCache.length > 0 && !window.matchMedia('(max-width: 48rem)').matches) {
+        // Desktop only: land on the first conversation by default. On mobile
+        // the list itself is the landing view - a thread only opens full-
+        // screen once the user actually taps one.
         openThread(threadsCache[0].thread_key);
     }
 })();

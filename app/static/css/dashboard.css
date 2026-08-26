@@ -172,6 +172,8 @@ body {
 
 .menu-btn {
     display: none;
+    align-items: center;
+    justify-content: center;
     background: none;
     border: none;
     cursor: pointer;
@@ -183,6 +185,24 @@ body {
     height: 1.5em;
     color: var(--gray-600);
 }
+
+.menu-btn .hamburger-bars {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.3em;
+}
+
+.menu-btn .hamburger-bars .bar {
+    display: block;
+    height: 2px;
+    border-radius: 1px;
+    background: var(--gray-600);
+}
+
+.menu-btn .hamburger-bars .bar-1 { width: 1.3em; }
+.menu-btn .hamburger-bars .bar-2 { width: 0.95em; }
+.menu-btn .hamburger-bars .bar-3 { width: 0.65em; }
 
 .page-title h1 {
     font-size: clamp(1.1em, 2vw, 1.25em);

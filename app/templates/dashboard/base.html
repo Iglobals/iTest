@@ -83,7 +83,11 @@
     <div class="top-bar">
         <div style="display:flex;align-items:center;gap:1em;">
             <button class="menu-btn" id="menuBtn">
-                <i data-lucide="menu"></i>
+                <span class="hamburger-bars">
+                    <span class="bar bar-1"></span>
+                    <span class="bar bar-2"></span>
+                    <span class="bar bar-3"></span>
+                </span>
             </button>
             <div class="page-title">
                 <h1>{% block page_title %}Welcome back, {{ g.current_user.full_name.split(' ')[0] }}!{% endblock %}</h1>

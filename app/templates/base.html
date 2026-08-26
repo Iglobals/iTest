@@ -144,15 +144,17 @@
                 text-shadow: none;
             }
 
-            /* Logged in: the mobile header shows only the hamburger - no
-               Dashboard button, no profile menu, collapsed or expanded. */
+            /* Logged in: the collapsed bar shows only the hamburger - the
+               desktop Dashboard button + profile dropdown don't fit here
+               (or in the expanded panel below), collapsed or expanded. */
             .header-cta-loggedin,
             .main-floating-header.mobile-open .header-cta-loggedin {
                 display: none !important;
             }
 
             .main-floating-header.mobile-open .header-nav-links,
-            .main-floating-header.mobile-open .header-cta-group {
+            .main-floating-header.mobile-open .header-cta-group,
+            .main-floating-header.mobile-open .header-mobile-loggedin-links {
                 display: flex;
                 flex-direction: column;
                 align-items: stretch;
@@ -170,6 +172,37 @@
                 text-align: center;
                 border: 1px solid var(--border);
                 padding: 0.65rem 1rem;
+            }
+
+            /* The logged-in mobile Dashboard/Log Out pair - hidden until the
+               menu is actually open, then sits right under the nav links
+               (Home/About/Pricing), properly sized like every other item
+               in this list instead of the desktop pill button. */
+            .header-mobile-loggedin-links {
+                display: none;
+                margin-top: 0.6rem !important;
+            }
+
+            .header-mobile-dashboard-link,
+            .header-mobile-logout-link {
+                display: block;
+                text-align: center;
+                text-decoration: none;
+                font-weight: 600;
+                font-size: 0.9rem;
+                padding: 0.65rem 1rem;
+                border-radius: 1.5rem;
+                box-sizing: border-box;
+            }
+
+            .header-mobile-dashboard-link {
+                background: var(--primary);
+                color: white;
+            }
+
+            .header-mobile-logout-link {
+                border: 1px solid var(--border);
+                color: var(--red, #dc2626);
             }
         }
     </style>
@@ -226,6 +259,16 @@
                 Started</a>
             {% endif %}
         </div>
+
+        {% if session.get('access_token') %}
+        <!-- Mobile-only: the desktop profile dropdown above doesn't fit the
+             expanded mobile menu, so logged-in mobile users get plain,
+             properly-sized Dashboard/Log Out links instead. -->
+        <div class="header-mobile-loggedin-links">
+            <a href="{{ url_for('dashboard.index') }}" class="header-mobile-dashboard-link">Dashboard</a>
+            <a href="{{ url_for('auth.logout') }}" class="header-mobile-logout-link">Log Out</a>
+        </div>
+        {% endif %}
 
         <button class="header-menu-toggle" id="headerMenuToggle" aria-label="Open menu" aria-expanded="false">
             <span class="hamburger-bars">

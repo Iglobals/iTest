@@ -1,0 +1,77 @@
+{% extends "raw_base.html" %}
+
+{% block title %}Manage subscription - iTest{% endblock %}
+
+{% block head %}
+<style>
+  :root { --primary-color: #6d28d9; --bg-color: #f8fafc; --card-bg: #fff; --text-primary: #0f172a; --text-secondary: #64748b; --border-color: #e2e8f0; }
+  body { background-color: var(--bg-color); color: var(--text-primary); font-family: 'Inter', system-ui, -apple-system, sans-serif; margin: 0; }
+  .container { max-width: 640px; margin: 0 auto; padding: clamp(1rem, 5vw, 4rem) 1.5rem; }
+  h1 { font-size: 1.75rem; font-weight: 800; margin-bottom: 2rem; }
+  .flash { padding: 0.75rem 1rem; border-radius: 0.5rem; text-align: center; font-weight: 600; margin-bottom: 1.5rem; }
+  .flash.error { background: #fee2e2; color: #991b1b; }
+  .flash.success { background: #dcfce7; color: #166534; }
+  .card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 1rem; padding: 2rem; margin-bottom: 1.5rem; }
+  .row { display: flex; justify-content: space-between; padding: 0.75rem 0; border-bottom: 1px solid var(--border-color); }
+  .row:last-child { border-bottom: none; }
+  .row .label { color: var(--text-secondary); }
+  .row .value { font-weight: 600; }
+  .badge { display: inline-block; padding: 0.2rem 0.75rem; border-radius: 1rem; font-size: 0.8rem; font-weight: 700; }
+  .badge.active { background: #dcfce7; color: #166534; }
+  .badge.cancelled, .badge.expired { background: #fee2e2; color: #991b1b; }
+  .btn { display: inline-block; padding: 0.75rem 1.5rem; border-radius: 0.5rem; border: none; font-weight: 700; cursor: pointer; }
+  .btn-danger { background: #fee2e2; color: #991b1b; }
+  .btn-outline { background: transparent; border: 1px solid var(--border-color); color: var(--text-primary); text-decoration: none; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+  <h1>Manage subscription</h1>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="flash {{ category }}">{{ message }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <div class="card">
+    <div class="row">
+      <span class="label">Current plan</span>
+      <span class="value">{{ (plan.type or 'free')|capitalize }}{% if plan.interval %} ({{ plan.interval }}){% endif %}</span>
+    </div>
+    <div class="row">
+      <span class="label">Status</span>
+      <span class="value"><span class="badge {{ plan.subscription_status or 'active' }}">{{ plan.subscription_status or (plan.type == 'free' and 'free' or 'active') }}</span></span>
+    </div>
+    {% if plan_row %}
+    <div class="row">
+      <span class="label">Price</span>
+      <span class="value">₦{{ '{:,.0f}'.format(plan_row.price_ngn) }} ({{ plan.interval }})</span>
+    </div>
+    {% endif %}
+    {% if plan.expires_at %}
+    <div class="row">
+      <span class="label">{{ 'Renews' if plan.subscription_status == 'active' else 'Access until' }}</span>
+      <span class="value">{{ plan.expires_at.strftime('%d %b %Y') }}</span>
+    </div>
+    {% endif %}
+  </div>
+
+  {% if last_payment %}
+  <div class="card">
+    <div class="row"><span class="label">Last payment</span><span class="value">₦{{ '{:,.0f}'.format(last_payment.amount_ngn) }}</span></div>
+    <div class="row"><span class="label">Paid on</span><span class="value">{{ last_payment.paid_at.strftime('%d %b %Y') if last_payment.paid_at else '-' }}</span></div>
+    <div class="row"><span class="label">Reference</span><span class="value">{{ last_payment.provider_ref }}</span></div>
+  </div>
+  {% endif %}
+
+  <a href="{{ url_for('billing.select_plan') }}" class="btn btn-outline" style="margin-right: 0.75rem;">Change plan</a>
+
+  {% if plan.type != 'free' and plan.subscription_status == 'active' %}
+  <form method="POST" action="{{ url_for('billing.cancel') }}" style="display:inline;" onsubmit="return confirm('Cancel your subscription? You will keep access until the current period ends.');">
+    <button type="submit" class="btn btn-danger">Cancel subscription</button>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

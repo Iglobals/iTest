@@ -9,6 +9,32 @@ def get_user_by_ica_sub(sub):
         return None
     return users.find_one({"ica_sub": sub})
 
+
+def _downgrade_if_expired(user):
+    """If a paid plan's expires_at has passed, revert to free in the DB and
+    in the in-memory `user` dict (so the rest of this request sees it too).
+    Catches the case where Paystack's cancel/renewal-failure webhook never
+    arrived or was missed - access still ends on schedule either way."""
+    from datetime import datetime
+
+    plan = user.get("plan") or {}
+    expires_at = plan.get("expires_at")
+    if plan.get("type") in (None, "free") or not expires_at:
+        return
+    if expires_at > datetime.utcnow():
+        return
+
+    users = get_collection('users')
+    users.update_one({"_id": user["_id"]}, {"$set": {
+        "plan.type": "free",
+        "plan.interval": None,
+        "plan.subscription_status": "expired",
+    }})
+    plan["type"] = "free"
+    plan["interval"] = None
+    plan["subscription_status"] = "expired"
+    user["plan"] = plan
+
 def require_auth(redirect_on_fail=True):
     def decorator(f):
         @wraps(f)
@@ -39,6 +65,23 @@ def require_auth(redirect_on_fail=True):
                         if redirect_on_fail:
                             return redirect(url_for("onboarding.index"))
                         return jsonify({"error": "Onboarding required"}), 403
+                else:
+                    # A subscription that lapsed (cancelled and its paid
+                    # period ended, or a renewal charge failed) should not
+                    # silently keep granting paid-tier access forever just
+                    # because no webhook happened to fire - check on read
+                    # instead of relying solely on Paystack's callbacks.
+                    _downgrade_if_expired(user)
+
+                    # Enforce plan selection (teachers only - see
+                    # onboarding/routes.py, students and org admins have
+                    # plan_selected=True from onboarding).
+                    if not user.get("plan_selected", True):
+                        endpoint = request.endpoint or ""
+                        if not endpoint.startswith("billing.") and not endpoint.startswith("auth.logout") and not endpoint.startswith("static"):
+                            if redirect_on_fail:
+                                return redirect(url_for("billing.select_plan"))
+                            return jsonify({"error": "Plan selection required"}), 403
 
             except Exception as e:
                 import traceback

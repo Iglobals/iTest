@@ -45,12 +45,23 @@ class NationalRanking(db.Model):
 
 class SubscriptionPlan(db.Model):
     __tablename__ = 'subscription_plans'
-    
+
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.Text, nullable=False, unique=True)
+    # `tier` is the PLAN_LIMITS key (free/basic/pro/enterprise) this row grants -
+    # feature gating (app/utils/plans.py) checks user.plan.type against this,
+    # never against `name` or `id`, so multiple rows (e.g. Pro Monthly / Pro
+    # Annual) can share one tier.
+    tier = db.Column(db.Text, nullable=False)
+    # 'monthly' | 'annual' | None (Free has no billing interval).
+    interval = db.Column(db.Text)
     price_ngn = db.Column(db.Numeric(12, 2), nullable=False)
     price_usd = db.Column(db.Numeric(12, 2))
     billing = db.Column(db.Text, nullable=False)
+    # Paystack's Plan code (from their Create Plan API) that a checkout for
+    # this row's tier/interval must reference so recurring billing attaches
+    # to it. Null for Free, which never touches Paystack.
+    paystack_plan_code = db.Column(db.Text)
     limits = db.Column(db.JSON, nullable=False)
     features = db.Column(db.JSON, nullable=False)
     is_active = db.Column(db.Boolean, default=True)

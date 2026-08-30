@@ -22,6 +22,9 @@ def create_app(config_name='default'):
     
     from app.onboarding.routes import onboarding_bp
     app.register_blueprint(onboarding_bp)
+
+    from app.billing.routes import billing_bp
+    app.register_blueprint(billing_bp)
     
     from app.organizations.routes import org_bp
     app.register_blueprint(org_bp)

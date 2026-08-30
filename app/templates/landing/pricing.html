@@ -30,12 +30,14 @@
             <div style="background: var(--card-bg); border: 2px solid var(--primary); border-radius: 1rem; padding: 2.5rem 2rem; transform: scale(1.05); box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); position: relative; z-index: 10;">
                 <div style="background: #e4bf38e8; color: #22172c; display: inline-block; padding: 0.25rem 1rem; border-radius: 1rem; font-size: 0.75rem; font-weight: 800; margin-bottom: 1rem; text-transform: uppercase;">POPULAR</div>
                 <h3 style="font-size: 1.5rem; margin-bottom: 1rem;">Pro</h3>
-                <div style="font-size: 3rem; font-weight: 800; margin: 1rem 0; color: var(--text-heading);">₦15,000<span style="font-size: 1rem; color: var(--text-muted); font-weight: 500;">/mo</span></div>
+                {% set pro_monthly = plans_by_tier.get('pro', {}).get('monthly') %}
+                <div style="font-size: 3rem; font-weight: 800; margin: 1rem 0; color: var(--text-heading);">₦{{ '{:,.0f}'.format(pro_monthly.price_ngn) if pro_monthly else '11,500' }}<span style="font-size: 1rem; color: var(--text-muted); font-weight: 500;">/mo</span></div>
                 <p style="color: var(--text-body);">For growing organizations and schools.</p>
                 <ul style="list-style: none; padding: 0; margin: 2rem 0; text-align: left; color: var(--text-body);">
                     <li style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;"><i data-lucide="check" style="color: var(--success); width: 20px; height: 20px;"></i> Unlimited classes</li>
                     <li style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;"><i data-lucide="check" style="color: var(--success); width: 20px; height: 20px;"></i> Unlimited students</li>
                     <li style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;"><i data-lucide="check" style="color: var(--success); width: 20px; height: 20px;"></i> Advanced analytics</li>
+                    <li style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;"><i data-lucide="check" style="color: var(--success); width: 20px; height: 20px;"></i> AI proctoring</li>
                     <li style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;"><i data-lucide="check" style="color: var(--success); width: 20px; height: 20px;"></i> Custom branding</li>
                 </ul>
                 <a href="/auth/login" style="display: block; width: 100%; background: var(--primary); color: white; padding: 0.875rem; border-radius: 0.5rem; text-decoration: none; font-weight: 600; box-sizing: border-box;">Subscribe Now</a>
@@ -43,15 +45,15 @@
             
             <div style="background: var(--card-bg); border: 1px solid var(--border); border-radius: 1rem; padding: 2.5rem 2rem; border-top: 4px solid var(--gray-600); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
                 <h3 style="font-size: 1.5rem; margin-bottom: 1rem;">Enterprise</h3>
-                <div style="font-size: 3rem; font-weight: 800; margin: 1rem 0; color: var(--text-heading);">Custom</div>
+                {% set ent_monthly = plans_by_tier.get('enterprise', {}).get('monthly') %}
+                <div style="font-size: 3rem; font-weight: 800; margin: 1rem 0; color: var(--text-heading);">₦{{ '{:,.0f}'.format(ent_monthly.price_ngn) if ent_monthly else '25,000' }}<span style="font-size: 1rem; color: var(--text-muted); font-weight: 500;">/mo</span></div>
                 <p style="color: var(--text-body);">For large institutions with advanced needs.</p>
                 <ul style="list-style: none; padding: 0; margin: 2rem 0; text-align: left; color: var(--text-body);">
                     <li style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;"><i data-lucide="check" style="color: var(--success); width: 20px; height: 20px;"></i> Everything in Pro</li>
-                    <li style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;"><i data-lucide="check" style="color: var(--success); width: 20px; height: 20px;"></i> AI Proctoring</li>
                     <li style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;"><i data-lucide="check" style="color: var(--success); width: 20px; height: 20px;"></i> Priority Support</li>
                     <li style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;"><i data-lucide="check" style="color: var(--success); width: 20px; height: 20px;"></i> Dedicated Account Manager</li>
                 </ul>
-                <a href="/contact" style="display: block; width: 100%; background: var(--surface-2); color: var(--text-heading); border: 1px solid var(--border); padding: 0.875rem; border-radius: 0.5rem; text-decoration: none; font-weight: 600; box-sizing: border-box;">Contact Sales</a>
+                <a href="/auth/login" style="display: block; width: 100%; background: var(--surface-2); color: var(--text-heading); border: 1px solid var(--border); padding: 0.875rem; border-radius: 0.5rem; text-decoration: none; font-weight: 600; box-sizing: border-box;">Subscribe Now</a>
             </div>
         </div>
     </div>

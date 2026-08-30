@@ -1,0 +1,133 @@
+{% extends "raw_base.html" %}
+
+{% block title %}Choose a plan - iTest{% endblock %}
+
+{% block head %}
+<style>
+  :root {
+    --primary-color: #6d28d9;
+    --primary-hover: #5b21b6;
+    --bg-color: #f8fafc;
+    --card-bg: #ffffff;
+    --text-primary: #0f172a;
+    --text-secondary: #64748b;
+    --border-color: #e2e8f0;
+  }
+
+  body {
+    background-color: var(--bg-color);
+    color: var(--text-primary);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    margin: 0;
+  }
+
+  .plan-container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: clamp(1rem, 5vw, 4rem) clamp(1rem, 5vw, 2rem);
+  }
+
+  .plan-header { text-align: center; margin-bottom: 2.5rem; }
+  .plan-title { font-size: clamp(1.5rem, 4vw, 2.25rem); font-weight: 800; margin: 0 0 0.5rem 0; }
+  .plan-subtitle { color: var(--text-secondary); font-size: 1.05rem; }
+
+  .flash { max-width: 500px; margin: 0 auto 1.5rem; padding: 0.75rem 1rem; border-radius: 0.5rem; text-align: center; font-weight: 600; }
+  .flash.error { background: #fee2e2; color: #991b1b; }
+  .flash.success { background: #dcfce7; color: #166534; }
+
+  .interval-toggle { display: flex; justify-content: center; align-items: center; gap: 0.75rem; margin-bottom: 3rem; }
+  .interval-toggle button {
+    border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-secondary);
+    padding: 0.5rem 1.25rem; border-radius: 2rem; font-weight: 600; cursor: pointer; transition: all 0.15s;
+  }
+  .interval-toggle button.active { background: var(--primary-color); color: #fff; border-color: var(--primary-color); }
+
+  .plan-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 2rem; }
+  .plan-card {
+    background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 1rem;
+    padding: 2.25rem 2rem; text-align: center; display: flex; flex-direction: column;
+  }
+  .plan-card.featured { border: 2px solid var(--primary-color); transform: scale(1.03); }
+  .plan-name { font-size: 1.25rem; font-weight: 700; margin-bottom: 0.5rem; }
+  .plan-price { font-size: 2.5rem; font-weight: 800; margin: 0.5rem 0 1.5rem; }
+  .plan-price small { font-size: 1rem; font-weight: 500; color: var(--text-secondary); }
+  .plan-features { list-style: none; padding: 0; margin: 0 0 2rem; text-align: left; flex-grow: 1; }
+  .plan-features li { margin-bottom: 0.75rem; color: var(--text-secondary); }
+  .plan-btn {
+    display: block; width: 100%; padding: 0.875rem; border-radius: 0.5rem; border: none;
+    font-weight: 700; font-size: 1rem; cursor: pointer;
+    background: var(--surface-2, #f1f5f9); color: var(--text-primary);
+  }
+  .plan-btn.primary { background: var(--primary-color); color: #fff; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="plan-container">
+  <div class="plan-header">
+    <h1 class="plan-title">Choose your plan</h1>
+    <p class="plan-subtitle">Pick a plan to continue to your dashboard - you can change this anytime from Manage Subscription.</p>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="flash {{ category }}">{{ message }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <div class="interval-toggle">
+    <button type="button" id="btn-monthly" class="active" onclick="setInterval_('monthly')">Monthly</button>
+    <button type="button" id="btn-annual" onclick="setInterval_('annual')">Annual</button>
+  </div>
+
+  <div class="plan-grid">
+    {% set free = plans_by_tier.get('free', {}).get(None) %}
+    <div class="plan-card">
+      <div class="plan-name">Free</div>
+      <div class="plan-price">₦0</div>
+      <ul class="plan-features">
+        <li>Up to 2 classes</li>
+        <li>30 students per class</li>
+        <li>Basic analytics</li>
+      </ul>
+      <form method="POST" action="{{ url_for('billing.select_plan') }}">
+        <input type="hidden" name="tier" value="free">
+        <button type="submit" class="plan-btn">Choose Free</button>
+      </form>
+    </div>
+
+    {% for tier, label, features, featured in [
+      ('pro', 'Pro', ['Unlimited classes', 'Unlimited students', 'Advanced analytics', 'AI proctoring'], true),
+      ('enterprise', 'Enterprise', ['Everything in Pro', 'Priority support', 'Dedicated account manager'], false)
+    ] %}
+    {% set monthly_row = plans_by_tier.get(tier, {}).get('monthly') %}
+    {% set annual_row = plans_by_tier.get(tier, {}).get('annual') %}
+    <div class="plan-card {{ 'featured' if featured else '' }}" data-tier="{{ tier }}">
+      <div class="plan-name">{{ label }}</div>
+      <div class="plan-price">
+        <span class="price-monthly">₦{{ '{:,.0f}'.format(monthly_row.price_ngn) if monthly_row else '-' }}<small>/mo</small></span>
+        <span class="price-annual" style="display:none;">₦{{ '{:,.0f}'.format(annual_row.price_ngn) if annual_row else '-' }}<small>/yr</small></span>
+      </div>
+      <ul class="plan-features">
+        {% for f in features %}<li>{{ f }}</li>{% endfor %}
+      </ul>
+      <form method="POST" action="{{ url_for('billing.select_plan') }}" class="plan-form">
+        <input type="hidden" name="tier" value="{{ tier }}">
+        <input type="hidden" name="interval" class="interval-input" value="monthly">
+        <button type="submit" class="plan-btn {{ 'primary' if featured else '' }}">Subscribe to {{ label }}</button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<script>
+  function setInterval_(interval) {
+    document.getElementById('btn-monthly').classList.toggle('active', interval === 'monthly');
+    document.getElementById('btn-annual').classList.toggle('active', interval === 'annual');
+    document.querySelectorAll('.price-monthly').forEach(el => el.style.display = interval === 'monthly' ? '' : 'none');
+    document.querySelectorAll('.price-annual').forEach(el => el.style.display = interval === 'annual' ? '' : 'none');
+    document.querySelectorAll('.interval-input').forEach(el => el.value = interval);
+  }
+</script>
+{% endblock %}

@@ -31,12 +31,21 @@ def index():
         if role == 'student':
             update_data["institution"] = request.form.get('institution', '').strip()
             update_data["programme"] = request.form.get('programme', '').strip()
+            # Students never see the plan-selection screen - only teachers
+            # and org admins subscribe to a plan.
+            update_data["plan_selected"] = True
             
         elif role == 'teacher':
             update_data["institution"] = request.form.get('institution', '').strip()
             update_data["phone"] = request.form.get('phone', '').strip()
-            
+            # Individual teachers subscribe personally - gated to the
+            # plan-selection screen below via plan_selected staying False.
+
         elif role == 'org_admin':
+            # Organization billing is a separate surface (org.limits, set
+            # below) from personal plan subscriptions - not part of this
+            # flow, so org admins skip the personal plan-selection gate.
+            update_data["plan_selected"] = True
             org_name = request.form.get('org_name', '').strip()
             if not org_name:
                 flash("Organization name is required.", "error")

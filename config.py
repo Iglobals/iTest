@@ -47,6 +47,10 @@ class Config:
     PROCTOR_API_BASE_URL = os.environ.get('PROCTOR_API_BASE_URL', 'http://localhost:8000')
     PROCTOR_API_KEY = os.environ.get('PROCTOR_API_KEY', '')
 
+    # Paystack (subscription billing - see app/billing/routes.py)
+    PAYSTACK_SECRET_KEY = os.environ.get('PAYSTACK_SECRET_KEY', '')
+    PAYSTACK_PUBLIC_KEY = os.environ.get('PAYSTACK_PUBLIC_KEY', '')
+
     # Flutterwave
     FLUTTERWAVE_PUBLIC_KEY = os.environ.get('FLUTTERWAVE_PUBLIC_KEY')
     FLUTTERWAVE_SECRET_KEY = os.environ.get('FLUTTERWAVE_SECRET_KEY')

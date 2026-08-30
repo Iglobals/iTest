@@ -32,7 +32,25 @@ def get_or_create_user(ica_payload: dict) -> dict:
         'date_of_birth': None,
         'subject_tags_interest': [],
         'notification_preferences': {'email': True, 'in_app': True},
-        'plan': {'type': 'free', 'expires_at': None, 'stripe_customer_id': None},
+        'plan': {
+            'type': 'free',
+            'interval': None,
+            'expires_at': None,
+            'subscription_status': None,
+            'paystack_customer_code': None,
+            'paystack_subscription_code': None,
+            # Required (alongside the subscription code) by Paystack's
+            # Disable Subscription API - only available from the
+            # subscription.create webhook, not from the charge itself.
+            'paystack_email_token': None,
+        },
+        # Teachers/org admins must explicitly pick a plan (even Free) before
+        # reaching the dashboard - see require_auth() in auth/decorators.py.
+        # Role is always 'student' at this point (onboarding sets the real
+        # role later), so this can't be conditioned on role yet - onboarding
+        # itself flips this to True immediately for students, since they
+        # never see the plan-selection screen.
+        'plan_selected': False,
         'limits': {'max_classes': 2, 'max_students_per_class': 30, 'max_total_students': 60, 'ai_proctoring': False, 'analytics_advanced': False},
         'created_at': now,
         'updated_at': now,

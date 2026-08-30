@@ -389,15 +389,24 @@ def proctor_audio(session_id):
         return jsonify({"speech_detected": False, "force_submit": False}), 200
 
     keyword_flags = result.get("keyword_flags") or []
+    intent_flagged = bool(result.get("cheating_intent_detected"))
 
-    if keyword_flags:
-        outcome = _push_flag(session_obj_id, "ai_audio_flag", {"keyword_flags": keyword_flags})
+    # Keyword matches and the intent model are independent signals feeding the
+    # same counter — either one crossing paths here counts as one occurrence,
+    # since both mean "this transcript looked like answer-seeking speech."
+    if keyword_flags or intent_flagged:
+        outcome = _push_flag(session_obj_id, "ai_audio_flag", {
+            "keyword_flags": keyword_flags,
+            "intent_label": result.get("intent_label"),
+            "intent_confidence": result.get("intent_confidence"),
+        })
     else:
         outcome = {"flag_count": 0, "max_flags": FLAG_THRESHOLDS["ai_audio_flag"], "force_submit": False}
 
     return jsonify({
         "speech_detected": result.get("speech_detected", False),
         "keyword_flags": keyword_flags,
+        "cheating_intent_detected": intent_flagged,
         **outcome
     }), 200
 

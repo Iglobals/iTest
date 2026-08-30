@@ -250,6 +250,12 @@ FLAG_THRESHOLDS = {
     "tab_switch": 3,
     "ai_vision_warning": 5,
     "ai_audio_flag": 5,
+    # Raw presence detection (not a behavior-trained classifier like the
+    # vision model's "cheating" class), so it's more false-positive prone -
+    # e.g. a phone visible on the desk without being used. A low threshold
+    # instead of HARD_FLAG_TYPES status absorbs one stray misdetection
+    # without ignoring someone who's actually holding a phone up repeatedly.
+    "ai_object_phone_detected": 2,
 }
 HARD_FLAG_TYPES = {"ai_vision_cheating"}
 
@@ -351,7 +357,20 @@ def proctor_vision(session_id):
     else:
         outcome = {"flag_count": 0, "max_flags": FLAG_THRESHOLDS["ai_vision_warning"], "force_submit": False}
 
-    return jsonify({"classification": classification, **outcome}), 200
+    # Independent second signal from the object-presence model (phone/laptop/
+    # person) - separate counter from the behavioral classification above, so
+    # a phone sighting is never diluted by (or dilutes) the might_be_cheating
+    # count. Either signal reaching its own threshold force-submits.
+    phone_detected = bool(result.get("phone_detected"))
+    if phone_detected:
+        phone_outcome = _push_flag(session_obj_id, "ai_object_phone_detected", {"confidence": result.get("phone_confidence")})
+        outcome["force_submit"] = outcome["force_submit"] or phone_outcome["force_submit"]
+
+    return jsonify({
+        "classification": classification,
+        "phone_detected": phone_detected,
+        **outcome,
+    }), 200
 
 
 @sessions_bp.route('/<session_id>/proctor/audio', methods=['POST'])

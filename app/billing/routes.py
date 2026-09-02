@@ -60,7 +60,14 @@ def select_plan():
                 amount_kobo=int(plan_row.price_ngn * 100),
                 plan_code=plan_row.paystack_plan_code,
                 callback_url=url_for('billing.callback', _external=True),
-                metadata={"user_id": str(g.current_user['_id']), "tier": tier, "interval": interval},
+                metadata={
+                    "user_id": str(g.current_user['_id']), "tier": tier, "interval": interval,
+                    # Required for ICA's centralized webhook relay to route
+                    # this event back to iTest (see docs/PAYSTACK_WEBHOOK_RELAY.md
+                    # in Iglobals-CAuth).
+                    "client_id": current_app.config.get('ICA_CLIENT_ID', ''),
+                    "purpose": "subscription",
+                },
             )
         except PaystackError as exc:
             logger.error("Paystack initialize failed for user=%s: %s", g.current_user['_id'], exc)
@@ -103,14 +110,18 @@ def callback():
 
 @billing_bp.route('/webhook', methods=['POST'])
 def webhook():
-    """No @require_auth - Paystack calls this directly. Trust is established
-    via the signature, not a session."""
-    secret_key = current_app.config.get('PAYSTACK_SECRET_KEY', '').encode()
-    signature = request.headers.get('x-paystack-signature', '')
-    computed = hmac.new(secret_key, request.get_data(), hashlib.sha512).hexdigest()
+    """No @require_auth. Called by ICA's centralized Paystack webhook relay
+    (see docs/PAYSTACK_WEBHOOK_RELAY.md in Iglobals-CAuth), not by Paystack
+    directly - trust comes from ICA_WEBHOOK_RELAY_SECRET (a secret unique to
+    iTest, generated when this webhook URL was registered in ICA's admin
+    panel), never PAYSTACK_SECRET_KEY. iTest doesn't hold Paystack's own
+    shared secret at all - ICA is the only thing that verifies against it."""
+    relay_secret = current_app.config.get('ICA_WEBHOOK_RELAY_SECRET', '').encode()
+    signature = request.headers.get('x-ica-relay-signature', '')
+    computed = hmac.new(relay_secret, request.get_data(), hashlib.sha512).hexdigest()
 
     if not hmac.compare_digest(computed, signature):
-        logger.warning("Rejected webhook call with invalid Paystack signature.")
+        logger.warning("Rejected webhook call with invalid ICA relay signature.")
         return jsonify({"error": "invalid signature"}), 401
 
     payload = request.get_json(silent=True) or {}

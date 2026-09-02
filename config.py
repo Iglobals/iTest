@@ -47,9 +47,17 @@ class Config:
     PROCTOR_API_BASE_URL = os.environ.get('PROCTOR_API_BASE_URL', 'http://localhost:8000')
     PROCTOR_API_KEY = os.environ.get('PROCTOR_API_KEY', '')
 
-    # Paystack (subscription billing - see app/billing/routes.py)
+    # Paystack (subscription billing - see app/billing/routes.py). This is the
+    # ONE shared IGLOBALS HUB Paystack account's key - same value across every
+    # client app - used only for OUTBOUND calls (verify/create-plan/disable).
     PAYSTACK_SECRET_KEY = os.environ.get('PAYSTACK_SECRET_KEY', '')
     PAYSTACK_PUBLIC_KEY = os.environ.get('PAYSTACK_PUBLIC_KEY', '')
+
+    # ICA centralized Paystack webhook relay - the secret ICA generated for
+    # iTest specifically (Settings > Clients > iTest > Payment webhooks in
+    # the ICA admin panel), NOT the shared Paystack key above. Verifies
+    # inbound calls to /billing/webhook, which now come from ICA, not Paystack.
+    ICA_WEBHOOK_RELAY_SECRET = os.environ.get('ICA_WEBHOOK_RELAY_SECRET', '')
 
     # Flutterwave
     FLUTTERWAVE_PUBLIC_KEY = os.environ.get('FLUTTERWAVE_PUBLIC_KEY')

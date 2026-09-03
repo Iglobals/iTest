@@ -25,6 +25,15 @@ versions, since a real modal can't block script execution.
 </div>
 
 <style>
+    /* Scoped to this component specifically - `.hidden` is NOT a global
+       utility class in this app (it's only defined locally inside a few
+       unrelated templates' own <style> blocks), so this can't rely on it
+       existing on every page this partial gets included into. Without this,
+       the backdrop rendered open by default on any page that happened not
+       to define .hidden itself. */
+    #cdBackdrop.hidden { display: none !important; }
+    #cdInput.hidden, #cdChoices.hidden { display: none !important; }
+
     .cd-backdrop {
         position: fixed;
         inset: 0;

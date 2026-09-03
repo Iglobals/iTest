@@ -52,6 +52,16 @@ def get_or_create_user(ica_payload: dict) -> dict:
         # never see the plan-selection screen.
         'plan_selected': False,
         'limits': {'max_classes': 2, 'max_students_per_class': 30, 'max_total_students': 60, 'ai_proctoring': False, 'analytics_advanced': False},
+        # One-time identity check (front/left/right/mouth-open photos) -
+        # enforced before starting any AI-proctored exam, see
+        # app/sessions/routes.py. 'status' moves not_started -> completed
+        # only; save_liveness_photos() below refuses to overwrite a
+        # completed one, matching the "one-time step" requirement.
+        'liveness_verification': {
+            'status': 'not_started',
+            'photos': {'front': None, 'left': None, 'right': None, 'mouth_open': None},
+            'completed_at': None,
+        },
         'created_at': now,
         'updated_at': now,
         'last_login_at': now,
@@ -64,9 +74,15 @@ def get_or_create_user(ica_payload: dict) -> dict:
 
 
 def update_profile(user_id: str, data: dict) -> dict:
+    # full_name is deliberately NOT editable here - get_or_create_user()
+    # overwrites it from the ICA identity payload on every login, so a local
+    # edit would silently vanish on the user's next sign-in. Name changes
+    # belong on ICA's own settings page, which is exactly why iTest's
+    # settings page links out there for identity fields and only exposes
+    # iTest-specific ones here.
     users = get_collection('users')
     _id = build_object_id(user_id)
-    update_fields = {k: v for k, v in data.items() if k in ['full_name', 'institution', 'programme', 'phone', 'date_of_birth']}
+    update_fields = {k: v for k, v in data.items() if k in ['institution', 'programme', 'phone', 'date_of_birth']}
     update_fields['updated_at'] = datetime.utcnow()
     users.update_one({'_id': _id}, {'$set': update_fields})
     return users.find_one({'_id': _id})
@@ -76,4 +92,24 @@ def upload_avatar(user_id: str, avatar_url: str) -> dict:
     users = get_collection('users')
     _id = build_object_id(user_id)
     users.update_one({'_id': _id}, {'$set': {'avatar_url': avatar_url, 'updated_at': datetime.utcnow()}})
+    return users.find_one({'_id': _id})
+
+
+def save_liveness_photos(user_id: str, photos: dict) -> dict:
+    """One-time only - refuses if already completed, per the requirement
+    that this step (unlike the rest of the profile) can't be redone."""
+    users = get_collection('users')
+    _id = build_object_id(user_id)
+    user = users.find_one({'_id': _id})
+    if user and user.get('liveness_verification', {}).get('status') == 'completed':
+        raise ValueError('Liveness verification was already completed and cannot be redone.')
+
+    users.update_one({'_id': _id}, {'$set': {
+        'liveness_verification': {
+            'status': 'completed',
+            'photos': photos,
+            'completed_at': datetime.utcnow(),
+        },
+        'updated_at': datetime.utcnow(),
+    }})
     return users.find_one({'_id': _id})

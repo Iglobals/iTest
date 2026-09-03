@@ -42,6 +42,10 @@ class Config:
     ICA_CLIENT_ID = os.environ.get('ICA_CLIENT_ID')
     ICA_CLIENT_SECRET = os.environ.get('ICA_CLIENT_SECRET')
     ICA_REDIRECT_URI = os.environ.get('ICA_REDIRECT_URI', 'http://localhost:5000/auth/callback')
+    # Where iTest's own Settings page links out to for identity/account
+    # edits (name, email, password) - deliberately a separate env var rather
+    # than guessing/hardcoding the exact public domain spelling.
+    ICA_ACCOUNT_URL = os.environ.get('ICA_ACCOUNT_URL', '#')
     
     # AI Proctoring (anticheat-system-roboflow FastAPI service)
     PROCTOR_API_BASE_URL = os.environ.get('PROCTOR_API_BASE_URL', 'http://localhost:8000')

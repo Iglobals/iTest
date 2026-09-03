@@ -261,6 +261,13 @@
         document.getElementById(stepId).classList.add('active');
     }
 
+    function resetStartButton() {
+        const btn = document.getElementById('btnStartExam');
+        btn.disabled = false;
+        btn.innerHTML = 'Begin Exam <i data-lucide="play-circle"></i>';
+        lucide.createIcons();
+    }
+
     async function startExam() {
         const btn = document.getElementById('btnStartExam');
         btn.disabled = true;
@@ -274,25 +281,23 @@
                 body: JSON.stringify({ exam_id: examId })
             });
             const result = await response.json();
-            
+
             if (result.success) {
                 // Stop streams so the next page can acquire them fresh if needed,
                 // or just leave them. take.html asks for camera again.
                 if(window.cameraStream) window.cameraStream.getTracks().forEach(t => t.stop());
                 if(window.screenStream) window.screenStream.getTracks().forEach(t => t.stop());
-                
+
                 window.location.href = `/dashboard/sessions/${result.data._id}/take`;
+            } else if (result.liveness_required) {
+                showConfirm(result.error, () => {
+                    window.location.href = '/dashboard/settings';
+                }, { title: 'Verification Required', confirmText: 'Go to Settings', onCancel: resetStartButton });
             } else {
-                alert('Error starting exam: ' + result.error);
-                btn.disabled = false;
-                btn.innerHTML = 'Begin Exam <i data-lucide="play-circle"></i>';
-                lucide.createIcons();
+                showAlert(result.error, { title: 'Could Not Start Exam', onClose: resetStartButton });
             }
         } catch (err) {
-            alert('Network error. Please try again.');
-            btn.disabled = false;
-            btn.innerHTML = 'Begin Exam <i data-lucide="play-circle"></i>';
-            lucide.createIcons();
+            showAlert('Network error. Please try again.', { title: 'Could Not Start Exam', onClose: resetStartButton });
         }
     }
 </script>

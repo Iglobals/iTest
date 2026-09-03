@@ -306,29 +306,24 @@
         document.getElementById('filterForm').submit();
     }
 
-    async function deleteExam(examId) {
-        if (!confirm("Are you sure you want to delete this exam? This action cannot be undone.")) return;
-        try {
-            const res = await fetch(`/api/exams/${examId}`, {
-                method: 'DELETE'
-            });
-            const data = await res.json();
-            if (data.success) {
-                if (typeof showToast !== 'undefined') {
+    function deleteExam(examId) {
+        showConfirm("Delete this exam? This action cannot be undone.", async () => {
+            try {
+                const res = await fetch(`/api/exams/${examId}`, {
+                    method: 'DELETE'
+                });
+                const data = await res.json();
+                if (data.success) {
                     showToast("Exam deleted successfully", "success");
+                    setTimeout(() => window.location.reload(), 1000);
                 } else {
-                    alert("Exam deleted successfully");
+                    showToast("Error: " + data.error, "error");
                 }
-                setTimeout(() => window.location.reload(), 1000);
-            } else {
-                if (typeof showToast !== 'undefined') showToast("Error: " + data.error, "error");
-                else alert("Error: " + data.error);
+            } catch (err) {
+                console.error(err);
+                showToast("Failed to delete exam", "error");
             }
-        } catch (err) {
-            console.error(err);
-            if (typeof showToast !== 'undefined') showToast("Failed to delete exam", "error");
-            else alert("Failed to delete exam");
-        }
+        }, { title: 'Delete Exam', confirmText: 'Delete', danger: true });
     }
 </script>
 {% endblock %}

@@ -591,7 +591,7 @@ For urgent academic questions, please reach out to the examiner via [e.g., inter
                 if(matched) {
                     addClassTag(matched);
                 } else if(filterText !== '') {
-                    alert("Class not found. Please select from the dropdown.");
+                    showAlert("Class not found. Please select from the dropdown.", { title: 'Not Found' });
                 }
                 input.value = '';
                 dropdown.classList.remove('show');
@@ -694,7 +694,7 @@ For urgent academic questions, please reach out to the examiner via [e.g., inter
             const pasteData = (e.clipboardData || window.clipboardData).getData('text');
             const invalid = addEmailsFromText(pasteData);
             if (invalid.length > 0) {
-                alert("Invalid email(s) ignored: " + invalid.join(', '));
+                showAlert("Invalid email(s) ignored: " + invalid.join(', '), { title: 'Some Emails Skipped' });
             }
         });
 
@@ -703,7 +703,7 @@ For urgent academic questions, please reach out to the examiner via [e.g., inter
                 e.preventDefault();
                 const invalid = addEmailsFromText(input.value);
                 if (invalid.length > 0 && invalid[0] !== '') {
-                    alert("Invalid email(s): " + invalid.join(', '));
+                    showAlert("Invalid email(s): " + invalid.join(', '), { title: 'Some Emails Skipped' });
                     input.value = invalid.join(', ');
                 } else {
                     input.value = '';

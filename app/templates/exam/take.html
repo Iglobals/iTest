@@ -145,6 +145,8 @@
 
     .image-wrapper img {
         max-width: 100%;
+        height: auto;
+        object-fit: contain;
         border-radius: 0.5rem;
         margin: 1rem 0;
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -553,7 +555,7 @@
                 </div>
 
                 <div class="q-text">
-                    {{ q.text }}
+                    {{ q.text | safe }}
                     {% if q.image %}
                     <div class="image-wrapper"><img src="{{ q.image }}" alt="Question Image"></div>
                     {% endif %}
@@ -568,10 +570,14 @@
                 <div class="options-container">
                     {% for opt in q.options %}
                     <label class="option-row">
-                        <input type="radio" name="question_{{ q._id }}" value="{{ opt.text }}">
+                        {# Value is the option's stable id, never its (possibly
+                           rich-HTML) text - grading compares by id now, see
+                           app/utils/grading.py, so options can safely contain
+                           markup without affecting correctness checks. #}
+                        <input type="radio" name="question_{{ q._id }}" value="{{ opt.id or opt.key }}">
                         <span class="opt-bubble">{{ ['A', 'B', 'C', 'D', 'E', 'F'][loop.index0] }}</span>
                         <div style="flex: 1;">
-                            {{ opt.text }}
+                            {{ opt.text | safe }}
                             {% if opt.image %}
                             <div class="image-wrapper"><img src="{{ opt.image }}" alt="Option Image"
                                     style="max-height: 150px;"></div>
@@ -726,7 +732,7 @@
                 startAudioLoudnessWatch(stream);
             })
             .catch(err => {
-                alert("Camera and microphone access are required for this proctored exam. Please allow access and refresh.");
+                showAlert("Camera and microphone access are required for this proctored exam. Please allow access and refresh.", { title: 'Camera Access Needed' });
                 console.error("Proctoring media error:", err);
             });
 
@@ -930,9 +936,9 @@
     }
 
     function leaveExam() {
-        if (confirm("Your progress is saved. You can return to complete the exam later. Leave now?")) {
+        showConfirm("Your progress is saved. You can return to complete the exam later. Leave now?", () => {
             window.location.href = '/dashboard';
-        }
+        }, { title: 'Leave Exam', confirmText: 'Leave' });
     }
 
     // ── Timer Logic ────────────────────────────────────────────────────────
@@ -1048,9 +1054,14 @@
                 return;
             }
 
-            // Try textarea
+            // Try textarea - guard on `val` being truthy, unlike the radio
+            // branch above which naturally no-ops on a null/empty value
+            // (no radio has value="null"). Without this guard, every essay
+            // question - answered or not - gets marked "answered" here,
+            // since the textarea element itself always exists regardless
+            // of whether it's ever been typed in.
             const textarea = document.querySelector(`textarea[name="question_${qid}"]`);
-            if (textarea) {
+            if (textarea && val) {
                 textarea.value = val;
                 const container = textarea.closest('.question-container');
                 const pIdx = container.id.replace('q-', '');
@@ -1171,9 +1182,11 @@
                         window.location.href = '/dashboard/my-exams';
                     }, 2000);
                 } else {
-                    // Show success message
-                    alert('Exam submitted successfully! Redirecting to results...');
-                    window.location.href = '/dashboard/my-exams';
+                    // Show success message, then redirect once dismissed
+                    showAlert('Exam submitted successfully! Redirecting to results...', {
+                        title: 'Submitted',
+                        onClose: () => { window.location.href = '/dashboard/my-exams'; },
+                    });
                 }
             } else {
                 closeSubmitModal();
@@ -1184,7 +1197,7 @@
                     submitBtn.innerHTML = '<i data-lucide="check-circle" style="width:16px; height:16px; vertical-align:middle;"></i> Submit Exam';
                     lucide.createIcons();
                 }
-                alert('Error submitting exam: ' + result.error);
+                showAlert('Error submitting exam: ' + result.error, { title: 'Submission Failed' });
             }
         } catch (err) {
             closeSubmitModal();
@@ -1195,7 +1208,7 @@
                 submitBtn.innerHTML = '<i data-lucide="check-circle" style="width:16px; height:16px; vertical-align:middle;"></i> Submit Exam';
                 lucide.createIcons();
             }
-            alert('Network error submitting exam. Your answers are safely cached. Please try submitting again when you have a stable connection.');
+            showAlert('Network error submitting exam. Your answers are safely cached. Please try submitting again when you have a stable connection.', { title: 'Submission Failed' });
             console.error('Submit error:', err);
         }
     }

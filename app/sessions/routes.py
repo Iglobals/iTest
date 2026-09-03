@@ -161,8 +161,19 @@ def start_session():
     if not can_student_access_exam(exam, user_email, class_ids):
         return jsonify({"error": "You do not have access to this exam."}), 403
 
-    # Check max attempts
     settings = exam.get("settings", {})
+
+    # One-time identity check required before any AI-proctored attempt -
+    # see app/users/service.py's save_liveness_photos() / dashboard/settings.html.
+    if settings.get("ai_proctoring_enabled"):
+        liveness = g.current_user.get("liveness_verification", {})
+        if liveness.get("status") != "completed":
+            return jsonify({
+                "error": "This exam requires identity verification before you can start. Complete it once in Settings.",
+                "liveness_required": True,
+            }), 403
+
+    # Check max attempts
     allow_retake = settings.get("allow_retake", False)
     max_attempts = settings.get("max_attempts", 1)
 
@@ -190,13 +201,22 @@ def start_session():
 
     # CRITICAL: Create a deep copy/snapshot of questions at the time of taking
     # This ensures results can be viewed even if exam questions change later
+    randomize_options = settings.get("randomize_options", False)
     question_snapshot = []
     for q in questions:
+        # Grading resolves the correct answer by option id/key (see
+        # app/utils/grading.py resolve_correct_text), never by array
+        # position, so shuffling this list's order is safe - it never
+        # changes which option is correct.
+        options = list(q.get("options", []))
+        if randomize_options:
+            random.shuffle(options)
+
         question_snapshot.append({
             "_id": str(q.get("_id")),
             "text": q.get("text"),
             "question_type": q.get("question_type", q.get("type", "mcq")),
-            "options": q.get("options", []),
+            "options": options,
             "correct_answer": q.get("correct_answer"),
             "explanation": q.get("explanation", ""),
             "marks": q.get("marks", 1),

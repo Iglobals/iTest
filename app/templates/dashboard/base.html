@@ -64,7 +64,7 @@
 
     <div class="nav-section">
         <div class="nav-label">General</div>
-        <a href="#" class="nav-item">
+        <a href="{{ url_for('dashboard.settings') }}" class="nav-item {% if request.endpoint == 'dashboard.settings' %}active{% endif %}">
             <i data-lucide="settings"></i>
             Settings
         </a>
@@ -124,6 +124,8 @@
 
 <!-- Custom Toast Notification Container -->
 <div id="toastContainer" class="toast-container"></div>
+
+{% include "_custom_dialogs.html" %}
 
 {% endblock %}
 

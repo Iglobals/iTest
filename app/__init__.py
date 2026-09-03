@@ -46,7 +46,10 @@ def create_app(config_name='default'):
 
     from app.api.webhooks import webhooks_bp
     app.register_blueprint(webhooks_bp)
-    
+
+    from app.users.routes import users_bp
+    app.register_blueprint(users_bp)
+
     # TODO: Register other blueprints here
     
     @app.route('/health')

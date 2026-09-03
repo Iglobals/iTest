@@ -55,6 +55,20 @@ def create_exam():
     # Instant results only ever make sense when there's no essay component to manually grade.
     settings["show_result_immediately"] = grading_mode == "objective" and bool(settings.get("show_result_immediately"))
 
+    # Same plan gate as update_exam() - without this, a free/basic-plan user
+    # could turn on AI proctoring from day one simply by including it in the
+    # initial create payload, bypassing the gate that only checks the
+    # off->on transition on a later edit.
+    if settings.get("ai_proctoring_enabled"):
+        from app.utils.plans import get_plan_limit
+        user_plan = g.current_user.get("plan", {}).get("type", "free")
+        if not get_plan_limit(user_plan, "can_use_ai_proctoring"):
+            return jsonify({
+                "error": "AI proctoring requires a Pro or Enterprise plan.",
+                "limit_reached": True,
+                "upgrade_url": "/pricing"
+            }), 402
+
     exam = {
         "title": data.get("title", "Untitled Exam"),
         "slug": generate_unique_slug(data.get("title", "Untitled Exam"), exams_col),

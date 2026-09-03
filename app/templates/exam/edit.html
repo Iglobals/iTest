@@ -393,7 +393,7 @@
 
     function nextStep(current) {
         if (current === 1 && !document.getElementById('title').value) {
-            alert('Please enter an exam title.'); return;
+            showAlert('Please enter an exam title.', { title: 'Missing Title' }); return;
         }
         document.getElementById('step-' + current).classList.remove('active');
         document.getElementById('step-' + (current + 1)).classList.add('active');
@@ -460,14 +460,13 @@
             const result = await res.json();
             
             if (res.ok && result.success) {
-                alert('Exam updated successfully!');
-                window.location.href = '/dashboard';
+                showAlert('Exam updated successfully!', { title: 'Saved', onClose: () => { window.location.href = '/dashboard'; } });
             } else {
-                alert('Failed to update exam: ' + (result.error || 'Unknown error'));
+                showAlert('Failed to update exam: ' + (result.error || 'Unknown error'), { title: 'Update Failed' });
             }
         } catch (e) {
             console.error(e);
-            alert('A network error occurred.');
+            showAlert('A network error occurred.', { title: 'Update Failed' });
         } finally {
             btn.disabled = false;
             btn.innerHTML = '<i data-lucide="save"></i> Save Changes';

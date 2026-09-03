@@ -69,9 +69,16 @@
   <a href="{{ url_for('billing.select_plan') }}" class="btn btn-outline" style="margin-right: 0.75rem;">Change plan</a>
 
   {% if plan.type != 'free' and plan.subscription_status == 'active' %}
-  <form method="POST" action="{{ url_for('billing.cancel') }}" style="display:inline;" onsubmit="return confirm('Cancel your subscription? You will keep access until the current period ends.');">
-    <button type="submit" class="btn btn-danger">Cancel subscription</button>
+  <form id="cancelSubForm" method="POST" action="{{ url_for('billing.cancel') }}" style="display:inline;" onsubmit="return false;">
+    <button type="button" class="btn btn-danger" onclick="confirmCancelSubscription()">Cancel subscription</button>
   </form>
+  <script>
+    function confirmCancelSubscription() {
+        showConfirm('Cancel your subscription? You will keep access until the current period ends.', () => {
+            document.getElementById('cancelSubForm').submit();
+        }, { title: 'Cancel Subscription', confirmText: 'Cancel Subscription', danger: true });
+    }
+  </script>
   {% endif %}
 </div>
 {% endblock %}

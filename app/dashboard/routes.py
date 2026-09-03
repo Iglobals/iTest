@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, g
 from app.auth.decorators import require_auth
 from app.utils.mongo import get_collection
-from app.utils.grading import is_answer_correct, resolve_correct_text
+from app.utils.grading import is_answer_correct, resolve_correct_text, resolve_option_text
 
 dashboard_bp = Blueprint('dashboard', __name__, url_prefix='/dashboard')
 
@@ -26,11 +26,37 @@ def index():
     elif role == 'org_admin':
         orgs_col = get_collection('organizations')
         org = orgs_col.find_one({"admin_user_id": user_id}) if orgs_col is not None else None
-        
+
         if org:
             org_classes = list(classes_col.find({"organization_id": org['_id'], "is_active": {"$ne": False}})) if classes_col is not None else []
-            return render_template('dashboard/org_admin.html', org=org, classes=org_classes)
-        return render_template('dashboard/org_admin.html', org=None, classes=[])
+
+            # Real counts instead of the old hardcoded 0s - distinct people,
+            # not a sum of memberships (one teacher/student can be on several
+            # of the org's classes).
+            teacher_ids = set()
+            student_ids = set()
+            for cls in org_classes:
+                for t in cls.get("teachers", []):
+                    if t.get("status", "active") == "active":
+                        teacher_ids.add(str(t.get("user_id")))
+                for s in cls.get("students", []):
+                    if s.get("status", "active") == "active":
+                        student_ids.add(str(s.get("user_id")))
+
+            import json as _json
+            classes_json = _json.dumps([{
+                "_id": str(c["_id"]),
+                "name": c.get("name", "Untitled"),
+                "folder_id": str(c["folder_id"]) if c.get("folder_id") else None,
+                "student_count": len([s for s in c.get("students", []) if s.get("status", "active") not in ("removed",)]),
+            } for c in org_classes])
+
+            return render_template(
+                'dashboard/org_admin.html', org=org, classes=org_classes,
+                total_teachers=len(teacher_ids), total_students=len(student_ids),
+                classes_json=classes_json,
+            )
+        return render_template('dashboard/org_admin.html', org=None, classes=[], total_teachers=0, total_students=0, classes_json='[]')
         
     else:
         # Student Dashboard
@@ -479,6 +505,14 @@ def messages():
     return render_template('dashboard/messages.html')
 
 
+@dashboard_bp.route('/settings')
+@require_auth()
+def settings():
+    from flask import current_app
+    ica_account_url = current_app.config.get('ICA_ACCOUNT_URL', '#')
+    return render_template('dashboard/settings.html', user=g.current_user, ica_account_url=ica_account_url)
+
+
 @dashboard_bp.route('/sessions/<session_id>/result')
 @require_auth()
 def view_result(session_id):
@@ -487,35 +521,43 @@ def view_result(session_id):
     exams_col = get_collection('exams')
     
     from bson import ObjectId
+    from flask import flash, redirect, request, url_for
+    # Send a failed view-result attempt back to wherever the link was clicked
+    # from (Taken Exams tab, a grading page, etc.) rather than a hardcoded
+    # page - the error shows as a toast there, so there's no reason to lose
+    # the student's/teacher's place to show it.
+    back = request.referrer or url_for('dashboard.index')
+
     try:
         session = sessions_col.find_one({"_id": ObjectId(session_id)})
     except:
-        return "Invalid session ID", 400
-        
+        flash("Invalid session ID.", "error")
+        return redirect(back)
+
     if not session:
-        return "Session not found", 404
-        
-    from flask import flash, redirect, url_for
+        flash("Session not found.", "error")
+        return redirect(back)
+
     # Security: Only the student or a teacher/admin can view
     is_student = str(session.get("student_id")) == str(user_id)
     is_admin = g.current_user.get('role') in ['teacher', 'org_admin', 'platform_admin']
     if not is_student and not is_admin:
         flash("Unauthorized to view this result.", "error")
-        return redirect(url_for('dashboard.index'))
-        
+        return redirect(back)
+
     exam = exams_col.find_one({"_id": session["exam_id"]})
     if not exam:
         flash("Exam not found.", "error")
-        return redirect(url_for('dashboard.index'))
-        
+        return redirect(back)
+
     from app.models import ExamScore
     score_record = ExamScore.query.filter_by(session_id=session_id).first()
-    
+
     if is_student:
         # Check if results are published for student
         if score_record and not score_record.results_published:
             flash("Results are not yet published. Please check back later.", "info")
-            return redirect(url_for('dashboard.my_exams'))
+            return redirect(back)
         
     # Map questions to answers for detailed review
     # Use question_snapshot from session if available (preserves questions at time of taking)
@@ -544,15 +586,21 @@ def view_result(session_id):
         awarded_marks = None
         feedback = None
 
+        essay_graded = False
         if question_type != 'essay':
             is_correct = is_answer_correct(question, student_answer)
+            # student_answer is the selected option's id (see take.html) -
+            # resolve it to display text/HTML for the template, same as the
+            # correct answer already is via resolve_correct_text above.
+            student_answer = resolve_option_text(question, student_answer) if student_answer else student_answer
         else:
             # Check for manual grading
             if q_id in manual_grades:
                 awarded_marks = manual_grades[q_id].get('score', 0)
                 feedback = manual_grades[q_id].get('feedback', '')
                 is_correct = None  # Essays don't have true/false
-            
+                essay_graded = True
+
         review_data.append({
             "question": {
                 "_id": q_id,
@@ -563,6 +611,10 @@ def view_result(session_id):
             "student_response": student_answer,
             "correct_response": correct_answer_text if question_type != 'essay' else 'Manual grading required',
             "is_correct": is_correct,
+            # Lets the template tell "essay not graded yet" apart from
+            # "essay graded" without overloading is_correct (which is
+            # meaningless for essays - see docs on the Pending Review bug).
+            "essay_graded": essay_graded,
             "explanation": question.get('explanation', ''),
             "marks": question.get('marks', 1),
             "awarded_marks": awarded_marks,
@@ -585,25 +637,32 @@ def view_result(session_id):
 @dashboard_bp.route('/sessions/<session_id>/grade')
 @require_auth()
 def grade_submission(session_id):
+    from flask import flash, redirect, request, url_for
+    back = request.referrer or url_for('dashboard.index')
+
     if g.current_user.get('role') not in ['teacher', 'org_admin', 'platform_admin']:
-        return "Unauthorized", 403
-        
+        flash("Unauthorized.", "error")
+        return redirect(back)
+
     sessions_col = get_collection('exam_sessions')
     exams_col = get_collection('exams')
     users_col = get_collection('users')
-    
+
     from bson import ObjectId
     try:
         session = sessions_col.find_one({"_id": ObjectId(session_id)})
     except:
-        return "Invalid session ID", 400
-        
+        flash("Invalid session ID.", "error")
+        return redirect(back)
+
     if not session:
-        return "Session not found", 404
-        
+        flash("Session not found.", "error")
+        return redirect(back)
+
     exam = exams_col.find_one({"_id": session["exam_id"]})
     if not exam:
-        return "Exam not found", 404
+        flash("Exam not found.", "error")
+        return redirect(back)
         
     # Get student info
     student_id = session.get("student_id")
@@ -642,12 +701,13 @@ def grade_submission(session_id):
 
         if question_type != 'essay':
             is_correct = is_answer_correct(question, student_answer)
+            student_answer = resolve_option_text(question, student_answer) if student_answer else student_answer
         else:
             # Check for manual grading
             if q_id in manual_grades:
                 awarded_marks = manual_grades[q_id].get('score', 0)
                 feedback = manual_grades[q_id].get('feedback', '')
-            
+
         review_data.append({
             "question": {
                 "_id": q_id,
@@ -726,25 +786,28 @@ def manage_class(class_id):
         if not class_obj:
             return "Class not found", 404
             
-        role = g.current_user.get('role', 'student')
-        user_id = str(g.current_user['_id'])
-        
-        # Determine if user is teacher for this class
-        is_teacher = False
-        if role in ['teacher', 'org_admin']:
-            for t in class_obj.get("teachers", []):
-                if str(t.get("user_id")) == user_id:
-                    is_teacher = True
-                    break
-        
+        # is_teacher now means "can manage this class" (owner, org, or a
+        # collaborator explicitly granted edit access) - not just "is a
+        # member of teachers[]" like before. See _can_manage_class()'s
+        # docstring in app/classes/routes.py for why plain membership no
+        # longer implies management rights.
+        from app.classes.routes import _can_manage_class
+        is_teacher = _can_manage_class(class_obj, g.current_user)
+        # require_owner=True's check already covers org_admin-of-this-org too
+        # (see _can_manage_class - that branch isn't gated by require_owner),
+        # so this alone is exactly "owner or org", the set allowed to grant
+        # teacher edit-access.
+        is_owner_or_org = _can_manage_class(class_obj, g.current_user, require_owner=True)
+
         from app.utils.plans import get_plan_limit
         user_plan = g.current_user.get("plan", {}).get("type", "free")
         can_message = get_plan_limit(user_plan, "can_message_1on1")
         can_see_reactions = get_plan_limit(user_plan, "can_see_broadcast_reactions")
-                    
-        return render_template('dashboard/manage_class.html', 
-                               class_obj=class_obj, 
+
+        return render_template('dashboard/manage_class.html',
+                               class_obj=class_obj,
                                is_teacher=is_teacher,
+                               is_owner_or_org=is_owner_or_org,
                                can_message=can_message,
                                can_see_reactions=can_see_reactions)
     except Exception as e:

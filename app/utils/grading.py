@@ -9,23 +9,34 @@ correct/incorrect that disagreed with the score a student was actually given.
 """
 
 
-def resolve_correct_text(question):
-    """A question's correct_answer is an option id/key (for mcq-style
-    questions) - resolve it to the option's display text for comparison
-    against the student's submitted answer (which is also option text, per
-    the take-exam UI)."""
-    correct_answer = question.get("correct_answer")
-    correct_text = str(correct_answer).strip() if correct_answer is not None else ""
+def resolve_option_text(question, option_id):
+    """Resolves any option id/key (correct_answer, or a student's submitted
+    answer - both are ids, see is_answer_correct) to that option's display
+    text/HTML, for review/result pages. Falls back to the raw id string if
+    no matching option is found (e.g. options changed after this attempt)."""
+    text = str(option_id).strip() if option_id is not None else ""
     options = question.get("options")
     if isinstance(options, list):
         for opt in options:
-            if opt.get("id") == correct_answer or opt.get("key") == correct_answer:
-                correct_text = str(opt.get("text", correct_answer)).strip()
+            if opt.get("id") == option_id or opt.get("key") == option_id:
+                text = str(opt.get("text", option_id)).strip()
                 break
-    return correct_text
+    return text
+
+
+def resolve_correct_text(question):
+    """Display text for a question's correct_answer (an option id/key)."""
+    return resolve_option_text(question, question.get("correct_answer"))
 
 
 def is_answer_correct(question, student_answer):
+    """student_answer is the selected option's id/key (see app/templates/
+    exam/take.html's radio value), compared directly against correct_answer -
+    both are already the same id/key, so this never touches option TEXT.
+    That's deliberate: options can now contain rich HTML (bold, sub/sup,
+    Greek symbols), and text-based comparison would break the moment two
+    otherwise-identical options differ only in markup, or would require
+    comparing entire HTML strings verbatim."""
     if student_answer is None or student_answer == "":
         return False
 
@@ -33,8 +44,8 @@ def is_answer_correct(question, student_answer):
     if question_type == "essay":
         return False
 
-    correct_text = resolve_correct_text(question)
-    return str(student_answer).strip().lower() == correct_text.lower()
+    correct_answer = question.get("correct_answer")
+    return str(student_answer).strip().lower() == str(correct_answer).strip().lower()
 
 
 def compute_score(questions_to_grade, question_order, answers_dict, manual_grades=None):

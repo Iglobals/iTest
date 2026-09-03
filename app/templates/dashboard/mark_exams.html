@@ -329,35 +329,35 @@
         });
     }
     
-    async function publishAllResults() {
-        if (!confirm('Publish all graded results? Students will be able to view their scores.')) return;
-        
-        const btn = document.getElementById('publishAllBtn');
-        btn.disabled = true;
-        btn.innerHTML = '<i data-lucide="loader" class="spin" style="width:1em;height:1em;margin-right:0.5em;"></i> Publishing...';
-        
-        try {
-            const res = await fetch('/api/exams/{{ exam._id }}/publish-all-results', {
-                method: 'POST'
-            });
-            const data = await res.json();
-            
-            if (data.success) {
-                showToast(`Published ${data.count} result(s)`, 'success');
-                setTimeout(() => window.location.reload(), 1500);
-            } else {
-                showToast('Error: ' + data.error, 'error');
+    function publishAllResults() {
+        showConfirm('Publish all graded results? Students will be able to view their scores.', async () => {
+            const btn = document.getElementById('publishAllBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<i data-lucide="loader" class="spin" style="width:1em;height:1em;margin-right:0.5em;"></i> Publishing...';
+
+            try {
+                const res = await fetch('/api/exams/{{ exam._id }}/publish-all-results', {
+                    method: 'POST'
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    showToast(`Published ${data.count} result(s)`, 'success');
+                    setTimeout(() => window.location.reload(), 1500);
+                } else {
+                    showToast('Error: ' + data.error, 'error');
+                    btn.disabled = false;
+                    btn.innerHTML = '<i data-lucide="send" style="width:1em;height:1em;margin-right:0.5em;"></i> Publish All Results';
+                    lucide.createIcons();
+                }
+            } catch (err) {
+                console.error(err);
+                showToast('Failed to publish results', 'error');
                 btn.disabled = false;
                 btn.innerHTML = '<i data-lucide="send" style="width:1em;height:1em;margin-right:0.5em;"></i> Publish All Results';
                 lucide.createIcons();
             }
-        } catch (err) {
-            console.error(err);
-            showToast('Failed to publish results', 'error');
-            btn.disabled = false;
-            btn.innerHTML = '<i data-lucide="send" style="width:1em;height:1em;margin-right:0.5em;"></i> Publish All Results';
-            lucide.createIcons();
-        }
+        }, { title: 'Publish Results', confirmText: 'Publish' });
     }
 </script>
 {% endblock %}

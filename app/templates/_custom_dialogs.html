@@ -1,0 +1,212 @@
+<!--
+Custom confirm/prompt/choice/alert dialogs - replaces native confirm()/
+prompt()/alert() (and native <select> for "pick one of these" cases)
+everywhere in the app with a styled dialog matching the rest of the UI.
+Included once in both dashboard/base.html and raw_base.html, so every page
+gets the same four global functions: showConfirm, showPrompt, showChoice,
+showAlert. These are ASYNC/callback-based (onConfirm fires later, when the
+user actually clicks) - never a blocking return value like the native
+versions, since a real modal can't block script execution.
+-->
+<div id="cdBackdrop" class="cd-backdrop hidden">
+    <div class="cd-box">
+        <h3 id="cdTitle" class="cd-title"></h3>
+        <p id="cdMessage" class="cd-message"></p>
+
+        <input type="text" id="cdInput" class="cd-input hidden" autocomplete="off">
+
+        <div id="cdChoices" class="cd-choices hidden"></div>
+
+        <div class="cd-actions">
+            <button type="button" id="cdCancelBtn" class="cd-btn cd-btn-cancel">Cancel</button>
+            <button type="button" id="cdConfirmBtn" class="cd-btn cd-btn-confirm">Confirm</button>
+        </div>
+    </div>
+</div>
+
+<style>
+    .cd-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(17, 12, 34, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+        padding: clamp(1rem, 5vw, 2rem);
+    }
+    .cd-box {
+        background: var(--white, #fff);
+        border-radius: 1rem;
+        padding: clamp(1.25rem, 4vw, 1.75rem);
+        width: 100%;
+        max-width: 26rem;
+        box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+    }
+    .cd-title {
+        margin: 0 0 0.5rem;
+        font-size: clamp(1.05rem, 3vw, 1.2rem);
+        font-weight: 700;
+        color: var(--gray-900, #111);
+    }
+    .cd-message {
+        margin: 0 0 1rem;
+        font-size: clamp(0.85rem, 2.5vw, 0.9375rem);
+        color: var(--gray-600, #555);
+        line-height: 1.5;
+        white-space: pre-line;
+    }
+    .cd-input {
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+        padding: 0.65em 0.85em;
+        border: 1px solid var(--gray-300, #ccc);
+        border-radius: 0.5em;
+        font-size: 0.9375rem;
+        margin-bottom: 1rem;
+    }
+    .cd-input:focus { outline: none; border-color: var(--purple, #5B21D1); }
+
+    .cd-choices {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+        margin-bottom: 1rem;
+        max-height: 40vh;
+        overflow-y: auto;
+    }
+    .cd-choice {
+        width: 100%;
+        text-align: left;
+        padding: 0.6em 0.85em;
+        border: 1px solid var(--gray-200, #e5e5e5);
+        border-radius: 0.5em;
+        background: var(--white, #fff);
+        cursor: pointer;
+        font-size: 0.9rem;
+        color: var(--gray-700, #333);
+    }
+    .cd-choice:hover { border-color: var(--purple, #5B21D1); background: var(--purple-bg, #f3f0ff); }
+    .cd-choice.cd-choice-selected { border-color: var(--purple, #5B21D1); background: var(--purple-bg, #f3f0ff); font-weight: 600; }
+
+    .cd-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.6rem;
+        flex-wrap: wrap;
+    }
+    .cd-btn {
+        width: auto;
+        height: auto;
+        padding: 0.6em 1.2em;
+        border-radius: 0.5em;
+        border: none;
+        font-size: 0.875rem;
+        font-weight: 600;
+        cursor: pointer;
+    }
+    .cd-btn-cancel { background: var(--gray-100, #f2f2f2); color: var(--gray-700, #333); }
+    .cd-btn-cancel:hover { background: var(--gray-200, #e5e5e5); }
+    .cd-btn-confirm { background: var(--purple, #5B21D1); color: #fff; }
+    .cd-btn-confirm:hover { opacity: 0.9; }
+    .cd-btn-confirm.cd-danger { background: var(--danger, #dc2626); }
+</style>
+
+<script>
+(function () {
+    const backdrop = document.getElementById('cdBackdrop');
+    const titleEl = document.getElementById('cdTitle');
+    const messageEl = document.getElementById('cdMessage');
+    const inputEl = document.getElementById('cdInput');
+    const choicesEl = document.getElementById('cdChoices');
+    const cancelBtn = document.getElementById('cdCancelBtn');
+    const confirmBtn = document.getElementById('cdConfirmBtn');
+
+    let activeChoice = null;
+
+    function closeDialog() {
+        backdrop.classList.add('hidden');
+        inputEl.classList.add('hidden');
+        choicesEl.classList.add('hidden');
+        choicesEl.innerHTML = '';
+        confirmBtn.onclick = null;
+        cancelBtn.onclick = null;
+        confirmBtn.classList.remove('cd-danger');
+        activeChoice = null;
+    }
+
+    function openDialog({ title, message, confirmText = 'Confirm', cancelText = 'Cancel', danger = false, showCancel = true }) {
+        titleEl.textContent = title || '';
+        titleEl.style.display = title ? '' : 'none';
+        messageEl.textContent = message || '';
+        confirmBtn.textContent = confirmText;
+        cancelBtn.textContent = cancelText;
+        cancelBtn.style.display = showCancel ? '' : 'none';
+        confirmBtn.classList.toggle('cd-danger', !!danger);
+        backdrop.classList.remove('hidden');
+    }
+
+    // Clicking the dark backdrop itself cancels, same as pressing Escape on
+    // a native dialog - clicking inside the box never bubbles here.
+    backdrop.addEventListener('click', (e) => { if (e.target === backdrop) closeDialog(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !backdrop.classList.contains('hidden')) closeDialog(); });
+
+    window.showConfirm = function (message, onConfirm, opts = {}) {
+        openDialog({ title: opts.title || 'Please confirm', message, confirmText: opts.confirmText || 'Confirm', danger: opts.danger });
+        confirmBtn.onclick = () => { closeDialog(); if (onConfirm) onConfirm(); };
+        cancelBtn.onclick = () => { closeDialog(); if (opts.onCancel) opts.onCancel(); };
+    };
+
+    window.showAlert = function (message, opts = {}) {
+        openDialog({ title: opts.title || '', message, confirmText: opts.confirmText || 'OK', showCancel: false });
+        confirmBtn.onclick = () => { closeDialog(); if (opts.onClose) opts.onClose(); };
+    };
+
+    window.showPrompt = function (message, onConfirm, opts = {}) {
+        openDialog({ title: opts.title || '', message, confirmText: opts.confirmText || 'Save' });
+        inputEl.classList.remove('hidden');
+        inputEl.placeholder = opts.placeholder || '';
+        inputEl.value = opts.defaultValue || '';
+        messageEl.insertAdjacentElement('afterend', inputEl); // keep input right under the message
+        setTimeout(() => inputEl.focus(), 50);
+
+        const submit = () => {
+            const value = inputEl.value.trim();
+            if (opts.required !== false && !value) { inputEl.focus(); return; }
+            closeDialog();
+            onConfirm(value);
+        };
+        confirmBtn.onclick = submit;
+        cancelBtn.onclick = () => { closeDialog(); if (opts.onCancel) opts.onCancel(); };
+        inputEl.onkeydown = (e) => { if (e.key === 'Enter') submit(); };
+    };
+
+    // choices: [{id, label}], picked by clicking a row - no native <select>.
+    window.showChoice = function (message, choices, onConfirm, opts = {}) {
+        openDialog({ title: opts.title || '', message, confirmText: opts.confirmText || 'Confirm' });
+        choicesEl.classList.remove('hidden');
+        messageEl.insertAdjacentElement('afterend', choicesEl);
+
+        if (!choices.length) {
+            choicesEl.innerHTML = `<p style="color:var(--gray-400); font-size:0.85rem; margin:0;">${opts.emptyText || 'Nothing available yet.'}</p>`;
+        } else {
+            choicesEl.innerHTML = choices.map(c => `<button type="button" class="cd-choice" data-id="${c.id}">${c.label}</button>`).join('');
+            choicesEl.querySelectorAll('.cd-choice').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    choicesEl.querySelectorAll('.cd-choice').forEach(b => b.classList.remove('cd-choice-selected'));
+                    btn.classList.add('cd-choice-selected');
+                    activeChoice = btn.dataset.id;
+                });
+            });
+        }
+
+        confirmBtn.onclick = () => {
+            const picked = activeChoice;
+            closeDialog();
+            onConfirm(picked);
+        };
+        cancelBtn.onclick = () => { closeDialog(); if (opts.onCancel) opts.onCancel(); };
+    };
+})();
+</script>

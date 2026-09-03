@@ -349,7 +349,7 @@ async function apiCall(path, method = 'GET', body = null) {
     const res = await fetch(`/api/messages${path}`, opts);
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
-        alert(json.error || 'Something went wrong.');
+        showAlert(json.error || 'Something went wrong.', { title: 'Error' });
     }
     return json;
 }

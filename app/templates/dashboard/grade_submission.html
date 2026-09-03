@@ -313,12 +313,12 @@
                     <!-- Auto-graded question -->
                     <div class="answer-section auto-graded">
                         <div class="answer-label">Student Answer</div>
-                        <div class="answer-text">{{ item.student_response if item.student_response else '(No answer provided)' }}</div>
+                        <div class="answer-text">{{ (item.student_response | safe) if item.student_response else '(No answer provided)' }}</div>
                     </div>
-                    
+
                     <div class="answer-section" style="background:var(--success-bg); border-left-color:var(--success);">
                         <div class="answer-label">Correct Answer</div>
-                        <div class="answer-text">{{ item.correct_response }}</div>
+                        <div class="answer-text">{{ item.correct_response | safe }}</div>
                     </div>
                     
                     <div style="font-size: clamp(0.85rem, 2.2vw, 0.9rem); color:var(--gray-600); margin-top: clamp(0.75rem, 2vw, 1rem);">

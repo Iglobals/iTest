@@ -325,7 +325,7 @@
   function validateOrg() {
     const orgName = document.getElementById('org_name_input').value.trim();
     if (!orgName) {
-      alert("Please enter an Organization Name.");
+      showAlert("Please enter an Organization Name.", { title: 'Missing Information' });
       return false;
     }
     return true;

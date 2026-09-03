@@ -1,0 +1,263 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Settings{% endblock %}
+
+{% block dashboard_content %}
+<div class="dashboard-body" style="grid-template-columns: 1fr; display: block; max-width: 720px;">
+
+    <div class="settings-card">
+        <h2 class="settings-card-title">Account</h2>
+        <p class="settings-card-desc">Your name, email, and password are managed by your iGlobals account, not here.</p>
+        <a href="{{ ica_account_url }}" target="_blank" rel="noopener" style="color: var(--purple); font-weight: 700; text-decoration: none;">
+            Edit on iglobals &rarr;
+        </a>
+    </div>
+
+    <div class="settings-card">
+        <h2 class="settings-card-title">Profile</h2>
+        <div id="profileMsg"></div>
+
+        <div class="form-group">
+            <label>Profile Image</label>
+            <div style="display: flex; align-items: center; gap: 1rem;">
+                <img id="avatarPreview" src="{{ user.avatar_url or '' }}" style="width: 4rem; height: 4rem; border-radius: 50%; object-fit: cover; background: var(--gray-100); {% if not user.avatar_url %}display:none;{% endif %}">
+                <input type="file" id="avatarInput" accept="image/*" onchange="uploadAvatar(event)">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Institution / School</label>
+            <input type="text" id="institution" class="form-control" value="{{ user.institution or '' }}">
+        </div>
+
+        {% if user.role == 'student' %}
+        <div class="form-group">
+            <label>Programme</label>
+            <input type="text" id="programme" class="form-control" value="{{ user.programme or '' }}">
+        </div>
+        {% else %}
+        <div class="form-group">
+            <label>Phone Number</label>
+            <input type="text" id="phone" class="form-control" value="{{ user.phone or '' }}">
+        </div>
+        {% endif %}
+
+        <button class="btn-primary" style="width: auto; padding: 0.6em 1.5em;" onclick="saveProfile()">Save Changes</button>
+    </div>
+
+    {% if user.role == 'student' %}
+    <div class="settings-card">
+        <h2 class="settings-card-title">Identity Verification</h2>
+        <p class="settings-card-desc">Required once before you can take any AI-proctored exam. This is a one-time step and can't be redone once completed.</p>
+
+        {% if user.liveness_verification and user.liveness_verification.status == 'completed' %}
+        <div style="display:flex; align-items:center; gap:0.5rem; color: var(--success, #16a34a); font-weight: 700;">
+            <i data-lucide="check-circle"></i> Verification completed
+        </div>
+        {% else %}
+        <div id="livenessIntro">
+            <button class="btn-primary" style="width: auto; padding: 0.6em 1.5em;" onclick="startLiveness()">Start Verification</button>
+        </div>
+
+        <div id="livenessFlow" class="hidden">
+            <p id="livenessStepLabel" style="font-weight: 700; margin-bottom: 0.5rem;"></p>
+            <div style="position: relative; width: 100%; max-width: 24rem;">
+                <video id="livenessVideo" autoplay playsinline style="width: 100%; border-radius: 0.5rem; background: #000; display: block;"></video>
+                <img id="livenessCaptured" style="width: 100%; border-radius: 0.5rem; display: none;">
+            </div>
+            <canvas id="livenessCanvas" class="hidden"></canvas>
+
+            <div style="display:flex; gap:0.5rem; margin-top:1rem;">
+                <button id="livenessCaptureBtn" class="btn-primary" style="width:auto; padding:0.6em 1.5em;" onclick="captureLivenessPhoto()">Capture</button>
+                <button id="livenessRetakeBtn" class="btn-outline hidden" style="width:auto; padding:0.6em 1.5em;" onclick="retakeLivenessPhoto()">Retake</button>
+                <button id="livenessNextBtn" class="btn-outline hidden" style="width:auto; padding:0.6em 1.5em;" onclick="confirmLivenessPhoto()">Looks good, continue</button>
+            </div>
+            <p id="livenessError" style="color: var(--danger, #dc2626); margin-top: 0.5rem;"></p>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+
+<style>
+    .settings-card {
+        background: var(--white);
+        border: 1px solid var(--gray-200);
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    .settings-card-title { font-size: 1.1rem; font-weight: 700; margin: 0 0 0.5rem; }
+    .settings-card-desc { color: var(--gray-500); font-size: 0.875rem; margin: 0 0 1rem; }
+    .settings-card .form-group { margin-bottom: 1rem; display: flex; flex-direction: column; gap: 0.4rem; }
+    .settings-card .form-group label { font-size: 0.875rem; font-weight: 600; color: var(--gray-700); }
+</style>
+
+<script>
+    const LIVENESS_STEPS = [
+        { key: 'front', label: 'Look straight at the camera' },
+        { key: 'left', label: 'Turn your head to the left' },
+        { key: 'right', label: 'Turn your head to the right' },
+        { key: 'mouth_open', label: 'Open your mouth' },
+    ];
+    let livenessStepIdx = 0;
+    let livenessPhotos = {};
+    let livenessStream = null;
+    let capturedBlob = null;
+
+    function showMsg(elId, message, isError) {
+        const el = document.getElementById(elId);
+        el.innerHTML = `<div class="alert" style="padding:0.6em 1em; border-radius:0.5em; margin-bottom:1em; background:${isError ? '#fee2e2' : '#dcfce7'}; color:${isError ? '#991b1b' : '#166534'};">${message}</div>`;
+        setTimeout(() => { el.innerHTML = ''; }, 4000);
+    }
+
+    async function saveProfile() {
+        const body = { institution: document.getElementById('institution').value };
+        const programmeEl = document.getElementById('programme');
+        const phoneEl = document.getElementById('phone');
+        if (programmeEl) body.programme = programmeEl.value;
+        if (phoneEl) body.phone = phoneEl.value;
+
+        try {
+            const res = await fetch('/api/users/me', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+            if (!res.ok) throw new Error('Save failed');
+            showMsg('profileMsg', 'Saved.', false);
+        } catch (e) {
+            showMsg('profileMsg', 'Could not save changes. Try again.', true);
+        }
+    }
+
+    async function uploadAvatar(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        const fd = new FormData();
+        fd.append('avatar', file);
+        try {
+            const res = await fetch('/api/users/me/avatar', { method: 'POST', body: fd });
+            if (!res.ok) throw new Error('Upload failed');
+            const data = await res.json();
+            const preview = document.getElementById('avatarPreview');
+            preview.src = data.avatar_url;
+            preview.style.display = 'inline-block';
+            showMsg('profileMsg', 'Profile image updated.', false);
+        } catch (e) {
+            showMsg('profileMsg', 'Could not upload image. Try again.', true);
+        }
+    }
+
+    // ── Liveness capture ────────────────────────────────────────────────
+    async function startLiveness() {
+        document.getElementById('livenessIntro').classList.add('hidden');
+        document.getElementById('livenessFlow').classList.remove('hidden');
+        try {
+            livenessStream = await navigator.mediaDevices.getUserMedia({ video: true });
+            document.getElementById('livenessVideo').srcObject = livenessStream;
+        } catch (e) {
+            document.getElementById('livenessError').textContent = 'Camera access is required for this step.';
+            return;
+        }
+        renderLivenessStep();
+    }
+
+    function renderLivenessStep() {
+        const step = LIVENESS_STEPS[livenessStepIdx];
+        document.getElementById('livenessStepLabel').textContent = `Step ${livenessStepIdx + 1} of ${LIVENESS_STEPS.length}: ${step.label}`;
+        document.getElementById('livenessVideo').style.display = 'block';
+        document.getElementById('livenessCaptured').style.display = 'none';
+        document.getElementById('livenessCaptureBtn').classList.remove('hidden');
+        document.getElementById('livenessRetakeBtn').classList.add('hidden');
+        document.getElementById('livenessNextBtn').classList.add('hidden');
+        document.getElementById('livenessError').textContent = '';
+    }
+
+    function captureLivenessPhoto() {
+        const video = document.getElementById('livenessVideo');
+        const canvas = document.getElementById('livenessCanvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext('2d').drawImage(video, 0, 0);
+
+        canvas.toBlob(blob => {
+            capturedBlob = blob;
+            const url = URL.createObjectURL(blob);
+            const img = document.getElementById('livenessCaptured');
+            img.src = url;
+            img.style.display = 'block';
+            video.style.display = 'none';
+            document.getElementById('livenessCaptureBtn').classList.add('hidden');
+            document.getElementById('livenessRetakeBtn').classList.remove('hidden');
+            document.getElementById('livenessNextBtn').classList.remove('hidden');
+        }, 'image/jpeg', 0.9);
+    }
+
+    function retakeLivenessPhoto() {
+        capturedBlob = null;
+        renderLivenessStep();
+    }
+
+    async function confirmLivenessPhoto() {
+        const step = LIVENESS_STEPS[livenessStepIdx];
+        const errorEl = document.getElementById('livenessError');
+        errorEl.textContent = '';
+
+        try {
+            // Same signature-based direct-to-Cloudinary upload as the exam
+            // builder's question images - see app/templates/exam/builder.html.
+            const sigRes = await fetch('/api/media/cloudinary-signature');
+            const sigData = await sigRes.json();
+            if (!sigRes.ok) throw new Error(sigData.error || 'Failed to get upload signature');
+
+            const fd = new FormData();
+            fd.append('file', capturedBlob, `${step.key}.jpg`);
+            fd.append('api_key', sigData.api_key);
+            fd.append('timestamp', sigData.timestamp);
+            fd.append('signature', sigData.signature);
+
+            const cloudRes = await fetch(`https://api.cloudinary.com/v1_1/${sigData.cloud_name}/image/upload`, {
+                method: 'POST', body: fd,
+            });
+            const cloudData = await cloudRes.json();
+            if (!cloudData.secure_url) throw new Error('Upload failed');
+
+            livenessPhotos[step.key] = cloudData.secure_url;
+            fetch('/api/media/track-upload', { method: 'POST' });
+
+            if (livenessStepIdx < LIVENESS_STEPS.length - 1) {
+                livenessStepIdx++;
+                capturedBlob = null;
+                renderLivenessStep();
+            } else {
+                await finishLiveness();
+            }
+        } catch (e) {
+            errorEl.textContent = e.message || 'Something went wrong. Please retake this photo.';
+        }
+    }
+
+    async function finishLiveness() {
+        try {
+            const res = await fetch('/api/users/me/liveness', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(livenessPhotos),
+            });
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data.error || 'Verification failed');
+            }
+            if (livenessStream) livenessStream.getTracks().forEach(t => t.stop());
+            document.getElementById('livenessFlow').innerHTML = `
+                <div style="display:flex; align-items:center; gap:0.5rem; color: var(--success, #16a34a); font-weight: 700;">
+                    <i data-lucide="check-circle"></i> Verification completed
+                </div>`;
+            lucide.createIcons();
+        } catch (e) {
+            document.getElementById('livenessError').textContent = e.message;
+        }
+    }
+</script>
+{% endblock %}

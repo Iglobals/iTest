@@ -339,6 +339,7 @@
 <script>
 const classId = "{{ class_obj._id }}";
 const isTeacher = {{ 'true' if is_teacher else 'false' }};
+const isOwnerOrOrg = {{ 'true' if is_owner_or_org else 'false' }};
 const currentUserId = "{{ g.current_user._id }}";
 
 function switchTab(tabId, event) {
@@ -426,18 +427,36 @@ async function loadMembersData() {
                 if(isTeacher && i.user_id !== currentUserId) {
                     removeBtn = `<button onclick="removeMember('${i.user_id}', '${i.role}')" class="mc-btn mc-btn-danger" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; margin-left: 1rem;"><i data-lucide="trash-2" style="width:12px;height:12px;"></i></button>`;
                 }
-                
+
+                // Membership isn't management anymore - a collaborator only
+                // gets it via this explicit toggle (owner/org only), and a
+                // student only ever gets broadcast via this one (anyone who
+                // can manage the class). See _can_manage_class()/_can_broadcast().
+                let accessToggle = '';
+                if (i.role === 'examiner' && !i.is_owner && isOwnerOrOrg) {
+                    accessToggle = `<label style="display:flex; align-items:center; gap:0.35rem; font-size:0.8rem; color:var(--gray-600); margin-left:1rem; cursor:pointer;">
+                        <input type="checkbox" ${i.can_edit ? 'checked' : ''} onchange="toggleEditAccess('${i.user_id}', this.checked)"> Edit access
+                    </label>`;
+                } else if (i.role === 'examiner' && i.is_owner) {
+                    accessToggle = `<span style="font-size:0.8rem; color:var(--gray-400); margin-left:1rem;">Owner</span>`;
+                } else if (i.role === 'student' && isTeacher) {
+                    accessToggle = `<label style="display:flex; align-items:center; gap:0.35rem; font-size:0.8rem; color:var(--gray-600); margin-left:1rem; cursor:pointer;">
+                        <input type="checkbox" ${i.can_broadcast ? 'checked' : ''} onchange="toggleBroadcastAccess('${i.user_id}', this.checked)"> Broadcast access
+                    </label>`;
+                }
+
                 html += `<div class="mc-list-item">
-                    <div class="mc-list-info" style="width:100%; display:flex; justify-content:space-between; align-items:center;">
+                    <div class="mc-list-info" style="width:100%; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:0.5rem;">
                         <div>
                             <p class="name">${i.name || i.email}</p>
                             <p class="role" style="text-transform:none;">${i.email}</p>
                         </div>
-                        <div style="text-align:right; display:flex; align-items:center;">
+                        <div style="text-align:right; display:flex; align-items:center; flex-wrap:wrap;">
                             <div>
                                 <span style="font-weight:600; color:var(--gray-700); font-size: 0.9rem; text-transform:capitalize;">${i.role}</span>
                                 <div style="font-size: 0.8rem; color: var(--gray-500);">${orgStr}</div>
                             </div>
+                            ${accessToggle}
                             ${removeBtn}
                         </div>
                     </div>
@@ -545,14 +564,18 @@ async function saveEditClass() {
     }
 }
 
-async function deleteClass() {
-    if(!confirm('Delete this class permanently? Students and examiners will lose access, and it will be removed from any exams it was assigned to.')) return;
-
-    const res = await apiCall('', 'DELETE');
-    if(res.success) {
-        showToast('Class deleted');
-        setTimeout(() => { window.location.href = "{{ url_for('dashboard.classes') }}"; }, 1000);
-    }
+function deleteClass() {
+    showConfirm(
+        'Delete this class permanently? Students and examiners will lose access, and it will be removed from any exams it was assigned to.',
+        async () => {
+            const res = await apiCall('', 'DELETE');
+            if(res.success) {
+                showToast('Class deleted');
+                setTimeout(() => { window.location.href = "{{ url_for('dashboard.classes') }}"; }, 1000);
+            }
+        },
+        { title: 'Delete Class', confirmText: 'Delete', danger: true }
+    );
 }
 
 // Invite & Share Logic
@@ -614,34 +637,52 @@ function copyLink(id) {
     }
 }
 
-async function removeOrg() {
-    if(confirm("Are you sure you want to remove the organization from this class?")) {
+function removeOrg() {
+    showConfirm('Remove the organization from this class?', async () => {
         const res = await apiCall('/remove_org', 'POST');
         if(res.success) {
             showToast('Organization removed');
             setTimeout(() => window.location.reload(), 1000);
         }
-    }
+    }, { title: 'Remove Organization', confirmText: 'Remove', danger: true });
 }
 
-async function removeMember(userId, role) {
-    if(confirm("Are you sure you want to remove this member?")) {
+function removeMember(userId, role) {
+    showConfirm('Remove this member from the class?', async () => {
         const res = await apiCall('/remove_member', 'POST', {user_id: userId, role: role});
         if(res.success) {
             showToast('Member removed');
             loadMembersData();
         }
+    }, { title: 'Remove Member', confirmText: 'Remove', danger: true });
+}
+
+async function toggleEditAccess(userId, canEdit) {
+    const res = await apiCall(`/teachers/${userId}/edit-access`, 'PUT', {can_edit: canEdit});
+    if(res.success) {
+        showToast(canEdit ? 'Edit access granted' : 'Edit access revoked');
+    } else {
+        loadMembersData(); // revert the checkbox visually on failure
     }
 }
 
-async function uninviteMember(userId) {
-    if(confirm("Are you sure you want to uninvite this user?")) {
+async function toggleBroadcastAccess(userId, canBroadcast) {
+    const res = await apiCall(`/students/${userId}/broadcast-access`, 'PUT', {can_broadcast: canBroadcast});
+    if(res.success) {
+        showToast(canBroadcast ? 'Broadcast access granted' : 'Broadcast access revoked');
+    } else {
+        loadMembersData();
+    }
+}
+
+function uninviteMember(userId) {
+    showConfirm('Cancel this invitation?', async () => {
         const res = await apiCall('/uninvite', 'POST', {user_id: userId});
         if(res.success) {
             showToast('Invitation cancelled');
             loadMembersData();
         }
-    }
+    }, { title: 'Cancel Invitation', confirmText: 'Yes, cancel it', danger: true });
 }
 
 // Initial load

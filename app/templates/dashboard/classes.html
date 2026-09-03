@@ -238,7 +238,7 @@ async function respondInvite(classId, action) {
     if(data.success) {
         window.location.reload();
     } else {
-        alert(data.error || 'Failed to process invitation');
+        showAlert(data.error || 'Failed to process invitation', { title: 'Error' });
     }
 }
 </script>

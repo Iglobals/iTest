@@ -156,6 +156,24 @@
         gap: 0.5rem;
     }
 
+    .image-preview {
+        /* .form-group's flex-column default (align-items: stretch) forces a
+           direct-child img to stretch to the container's full width with no
+           aspect-ratio protection - align-self here opts this one element
+           back out of that stretch, and object-fit/height:auto is a second,
+           independent guarantee it can never distort even if some other
+           ancestor re-introduces a forced width/height. */
+        align-self: center;
+        display: block;
+        max-width: 100%;
+        max-height: 20rem;
+        height: auto;
+        width: auto;
+        object-fit: contain;
+        margin: 0 auto;
+        border-radius: 0.5rem;
+    }
+
     .form-group label {
         font-size: 0.875rem;
         font-weight: 500;
@@ -452,6 +470,19 @@
 
     let questions = [];
     let quill;
+    let optionEditors = {}; // id -> Quill instance, see addOptionRow()
+
+    // Same formatting an option realistically needs (bold/italic/underline,
+    // sub/superscript, math formulas) as the question editor, minus headers/
+    // lists/images which don't make sense for short option text. Passed as
+    // an array (not a DOM element id) so Quill builds its own toolbar per
+    // instance - options are added/removed dynamically, so there's no fixed
+    // set of toolbar elements to bind to ahead of time.
+    const OPTION_TOOLBAR = [
+        ['bold', 'italic', 'underline'],
+        [{ script: 'sub' }, { script: 'super' }],
+        ['formula'],
+    ];
     let selectedImageFile = null;
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -573,7 +604,11 @@
             quill.root.innerHTML = q.text;
             document.getElementById('qMarks').value = q.marks || 1;
             
-            // Image
+            // Image - reset upload widget state (button/status text/pending
+            // file) same as the new-question branch below, otherwise a
+            // stale "Upload successful!" from a PREVIOUS question's fresh
+            // upload keeps showing here even though this question's image
+            // (if any) was just loaded from storage, not just uploaded.
             document.getElementById('qImageUrl').value = q.image_url || '';
             const preview = document.getElementById('imagePreview');
             if (q.image_url) {
@@ -583,12 +618,17 @@
                 preview.src = '';
                 preview.style.display = 'none';
             }
-            
+            document.getElementById('qImage').value = '';
+            document.getElementById('uploadBtn').style.display = 'none';
+            document.getElementById('uploadStatus').innerText = '';
+            selectedImageFile = null;
+
             toggleTypeSpecifics();
             
             if(q.type === 'mcq') {
                 const builder = document.getElementById('optionsBuilder');
                 builder.innerHTML = '';
+                optionEditors = {};
                 q.options.forEach((opt, idx) => {
                     addOptionRow(opt.text, opt.is_correct);
                 });
@@ -609,6 +649,7 @@
             toggleTypeSpecifics();
             const builder = document.getElementById('optionsBuilder');
             builder.innerHTML = '';
+            optionEditors = {};
             addOptionRow('Option 1', true);
             addOptionRow('Option 2', false);
         }
@@ -635,16 +676,35 @@
     function addOptionRow(text = '', isCorrect = false) {
         const builder = document.getElementById('optionsBuilder');
         const id = 'opt_' + generateId();
-        
+
         const row = document.createElement('div');
         row.className = 'option-row';
+        row.dataset.optionId = id;
         row.innerHTML = `
             <input type="radio" name="correct_option" value="${id}" ${isCorrect ? 'checked' : ''} style="accent-color: var(--purple); width: 1.2rem; height: 1.2rem;">
-            <input type="text" class="form-control option-text" data-id="${id}" value="${text}" placeholder="Option text" required>
-            <button class="btn-icon danger" type="button" onclick="this.parentElement.remove()"><i data-lucide="trash-2"></i></button>
+            <div class="option-editor-wrap" style="flex: 1; min-width: 0;" data-id="${id}"></div>
+            <button class="btn-icon danger" type="button" onclick="removeOptionRow('${id}')"><i data-lucide="trash-2"></i></button>
         `;
         builder.appendChild(row);
+
+        const editorEl = row.querySelector('.option-editor-wrap');
+        const editor = new Quill(editorEl, {
+            theme: 'snow',
+            modules: { formula: true, toolbar: OPTION_TOOLBAR },
+        });
+        // `text` may be plain text (new row default like "Option 1") or
+        // already-saved HTML (editing an existing question) - Quill's
+        // clipboard handles both the same way the question editor already does.
+        if (text) editor.clipboard.dangerouslyPasteHTML(text);
+        optionEditors[id] = editor;
+
         lucide.createIcons();
+    }
+
+    function removeOptionRow(id) {
+        const row = document.querySelector(`.option-row[data-option-id="${id}"]`);
+        if (row) row.remove();
+        delete optionEditors[id];
     }
 
     function handleImageSelect(event) {
@@ -742,16 +802,24 @@
                 return;
             }
 
+            let hasEmptyOption = false;
             rows.forEach(row => {
                 const radio = row.querySelector('input[type="radio"]');
-                const input = row.querySelector('input[type="text"]');
+                const editor = optionEditors[radio.value];
+                const html = editor ? editor.root.innerHTML : '';
+                if (!editor || editor.getText().trim().length === 0) hasEmptyOption = true;
                 options.push({
                     id: radio.value,
-                    text: input.value,
+                    text: html,
                     is_correct: radio.checked
                 });
                 if(radio.checked) correctAnswer = radio.value;
             });
+
+            if(hasEmptyOption) {
+                showToast("Every option needs text.");
+                return;
+            }
 
             if(!correctAnswer) {
                 showToast("Please select one correct option.");
@@ -782,11 +850,11 @@
     }
 
     function deleteQuestion(id) {
-        if(confirm("Delete this question?")) {
+        showConfirm("Delete this question?", () => {
             questions = questions.filter(q => q._id !== id);
             saveToStorage();
             renderQuestions();
-        }
+        }, { title: 'Delete Question', confirmText: 'Delete', danger: true });
     }
 
     function renderQuestions() {

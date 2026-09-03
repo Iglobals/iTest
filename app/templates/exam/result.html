@@ -161,32 +161,43 @@
                     <span style="color:var(--success);"><i data-lucide="check-circle" style="width:16px;height:16px;"></i> Correct</span>
                     {% elif item.is_correct == False %}
                     <span style="color:var(--danger);"><i data-lucide="x-circle" style="width:16px;height:16px;"></i> Incorrect</span>
+                    {% elif item.essay_graded %}
+                    <span style="color:var(--success);"><i data-lucide="check-circle" style="width:16px;height:16px;"></i> Graded — {{ item.awarded_marks }}/{{ item.marks }}</span>
                     {% else %}
                     <span style="color:var(--gray-500);"><i data-lucide="clock" style="width:16px;height:16px;"></i> Pending Review</span>
                     {% endif %}
                 </div>
-                
+
                 <div class="q-text">
                     {{ item.question.text | safe }}
                 </div>
-                
+
                 {% if item.is_correct == True %}
                 <div class="answer-box answer-correct">
-                    <strong>Your Answer:</strong> {{ item.student_response }}
+                    <strong>Your Answer:</strong> {{ item.student_response | safe }}
                 </div>
                 {% elif item.is_correct == False %}
                 <div class="answer-box answer-wrong">
-                    <strong>Your Answer:</strong> {{ item.student_response if item.student_response else '(No Answer Selected)' }}
+                    <strong>Your Answer:</strong> {{ (item.student_response | safe) if item.student_response else '(No Answer Selected)' }}
                 </div>
                 <div class="correct-answer-ref">
-                    <strong>Correct Answer:</strong> {{ item.correct_response }}
+                    <strong>Correct Answer:</strong> {{ item.correct_response | safe }}
                 </div>
+                {% elif item.essay_graded %}
+                <div class="answer-box answer-correct">
+                    <strong>Your Answer:</strong> {{ item.student_response if item.student_response else '(No Answer Selected)' }}
+                </div>
+                {% if item.feedback %}
+                <div class="correct-answer-ref">
+                    <strong>Examiner Feedback:</strong> {{ item.feedback }}
+                </div>
+                {% endif %}
                 {% else %}
                 <div class="answer-box answer-pending">
                     <strong>Your Answer:</strong> {{ item.student_response if item.student_response else '(No Answer Selected)' }}
                 </div>
                 {% endif %}
-                
+
             </div>
             {% endfor %}
         </div>

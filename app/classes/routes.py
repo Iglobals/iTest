@@ -24,16 +24,45 @@ def _is_org_admin_of(class_obj, user):
 
 
 def _can_manage_class(class_obj, user, require_owner=False):
-    """Whether `user` may edit/delete this class or act on its join requests."""
+    """Whether `user` may edit/delete this class or act on its join requests.
+
+    Being a collaborator on a class is membership, not management - only the
+    owner, platform_admin, the org admin (for classes under their org), or a
+    collaborator explicitly granted can_edit (by the owner or the org - see
+    grant_teacher_edit_access()) may manage it. This is a deliberate
+    tightening: a plain collaborator used to pass this check unconditionally
+    whenever require_owner was False."""
     if user.get("role") == "platform_admin":
         return True
     t = _teacher_entry(class_obj, user["_id"])
     if t and t.get("status", "active") == "active":
-        if not require_owner or t.get("role") == "owner":
+        if t.get("role") == "owner":
+            return True
+        if not require_owner and t.get("can_edit"):
             return True
     if user.get("role") == "org_admin" and _is_org_admin_of(class_obj, user):
         return True
     return False
+
+
+def _student_entry(class_obj, user_id):
+    user_id_str = str(user_id)
+    for s in class_obj.get("students", []):
+        if str(s.get("user_id")) == user_id_str:
+            return s
+    return None
+
+
+def _can_broadcast(class_obj, user):
+    """Management (owner/edit-access collaborator/org) always implies
+    broadcast rights. A plain student can ALSO broadcast, but only if
+    explicitly granted can_broadcast on their membership entry - see
+    grant_student_broadcast_access(). This is what "class rep" means in
+    practice: no separate role, just this one flag."""
+    if _can_manage_class(class_obj, user):
+        return True
+    s = _student_entry(class_obj, user["_id"])
+    return bool(s and s.get("status", "active") == "active" and s.get("can_broadcast"))
 
 
 @classes_bp.route('/', methods=['GET'])
@@ -430,6 +459,157 @@ def uninvite(class_id):
 
 
 
+@classes_bp.route('/<class_id>/teachers/<user_id>/edit-access', methods=['PUT'])
+@require_auth(redirect_on_fail=False)
+def grant_teacher_edit_access(class_id, user_id):
+    """Grants (or revokes) edit access for a collaborator who is ALREADY a
+    member of this class - it does not add them to the class. Only the
+    class owner or the org (for classes under it) can do this - matches
+    "only the class creator manages it by default, except edit access
+    given to the examiner/org, and from org too to give examiner edit
+    access the same thing"."""
+    classes_col = get_collection('classes')
+    try:
+        class_obj = classes_col.find_one({"_id": ObjectId(class_id)})
+    except Exception:
+        return jsonify({"error": "Invalid class_id"}), 400
+    if not class_obj:
+        return jsonify({"error": "Class not found"}), 404
+
+    is_owner = _can_manage_class(class_obj, g.current_user, require_owner=True)
+    is_org = g.current_user.get("role") == "org_admin" and _is_org_admin_of(class_obj, g.current_user)
+    if not (is_owner or is_org):
+        return jsonify({"error": "Only the class owner or its organization can grant edit access."}), 403
+
+    target = _teacher_entry(class_obj, user_id)
+    if not target or target.get("status", "active") != "active":
+        return jsonify({"error": "That user is not an active member of this class."}), 400
+    if target.get("role") == "owner":
+        return jsonify({"error": "The owner already has full access."}), 400
+
+    can_edit = bool((request.json or {}).get("can_edit", True))
+    # Use target's own already-resolved user_id (whatever type it's actually
+    # stored as) rather than reconstructing one from the URL string - avoids
+    # a silent no-op update if this array happens to store strings vs ObjectIds.
+    classes_col.update_one(
+        {"_id": ObjectId(class_id), "teachers.user_id": target["user_id"]},
+        {"$set": {"teachers.$.can_edit": can_edit, "updated_at": datetime.utcnow()}}
+    )
+    return jsonify({"success": True, "can_edit": can_edit}), 200
+
+
+@classes_bp.route('/<class_id>/students/<user_id>/broadcast-access', methods=['PUT'])
+@require_auth(redirect_on_fail=False)
+def grant_student_broadcast_access(class_id, user_id):
+    """Lets a student post broadcasts to this class - informally "class rep"
+    in conversation, but there's no such role in the app, just this one
+    flag. Grantable by anyone who can already manage the class."""
+    classes_col = get_collection('classes')
+    try:
+        class_obj = classes_col.find_one({"_id": ObjectId(class_id)})
+    except Exception:
+        return jsonify({"error": "Invalid class_id"}), 400
+    if not class_obj:
+        return jsonify({"error": "Class not found"}), 404
+
+    if not _can_manage_class(class_obj, g.current_user):
+        return jsonify({"error": "You don't have permission to manage this class."}), 403
+
+    target = _student_entry(class_obj, user_id)
+    if not target or target.get("status", "active") != "active":
+        return jsonify({"error": "That user is not an active student in this class."}), 400
+
+    can_broadcast = bool((request.json or {}).get("can_broadcast", True))
+    classes_col.update_one(
+        {"_id": ObjectId(class_id), "students.user_id": target["user_id"]},
+        {"$set": {"students.$.can_broadcast": can_broadcast, "updated_at": datetime.utcnow()}}
+    )
+    return jsonify({"success": True, "can_broadcast": can_broadcast}), 200
+
+
+@classes_bp.route('/<class_id>/folder', methods=['PATCH'])
+@require_auth(redirect_on_fail=False)
+def move_class_to_folder(class_id):
+    """Move-to-folder, file-explorer style - reassigns folder_id on the
+    SAME class (no duplication). Org-only, per the org folder hierarchy
+    being an org-side organizational lens that classes/examiners/students
+    never need to know exists."""
+    classes_col = get_collection('classes')
+    try:
+        class_obj = classes_col.find_one({"_id": ObjectId(class_id)})
+    except Exception:
+        return jsonify({"error": "Invalid class_id"}), 400
+    if not class_obj:
+        return jsonify({"error": "Class not found"}), 404
+    if not class_obj.get("organization_id"):
+        return jsonify({"error": "This class isn't under an organization."}), 400
+
+    from app.organizations.routes import _is_org_admin
+    if not _is_org_admin(class_obj["organization_id"], g.current_user):
+        return jsonify({"error": "Not your organization"}), 403
+
+    data = request.json or {}
+    folder_id = data.get("folder_id")  # None/omitted = move to root (ungrouped)
+
+    if folder_id:
+        folder = get_collection('org_folders').find_one({
+            "_id": ObjectId(folder_id), "organization_id": class_obj["organization_id"]
+        })
+        if not folder:
+            return jsonify({"error": "Folder not found"}), 404
+        classes_col.update_one({"_id": ObjectId(class_id)}, {"$set": {"folder_id": ObjectId(folder_id), "updated_at": datetime.utcnow()}})
+    else:
+        classes_col.update_one({"_id": ObjectId(class_id)}, {"$set": {"folder_id": None, "updated_at": datetime.utcnow()}})
+
+    return jsonify({"success": True}), 200
+
+
+@classes_bp.route('/<class_id>/copy', methods=['POST'])
+@require_auth(redirect_on_fail=False)
+def copy_class(class_id):
+    """Copy, file-explorer style - a genuinely new, independent class (new
+    _id, no shared students/results with the source), not a link/shortcut.
+    Name/settings are duplicated and freely editable afterward."""
+    classes_col = get_collection('classes')
+    try:
+        source = classes_col.find_one({"_id": ObjectId(class_id)})
+    except Exception:
+        return jsonify({"error": "Invalid class_id"}), 400
+    if not source:
+        return jsonify({"error": "Class not found"}), 404
+    if not _can_manage_class(source, g.current_user):
+        return jsonify({"error": "You don't have permission to copy this class."}), 403
+
+    data = request.json or {}
+    new_name = (data.get("name") or f"{source.get('name', 'Class')} (Copy)").strip()
+    target_folder_id = data.get("folder_id", source.get("folder_id"))
+
+    now = datetime.utcnow()
+    new_class = {
+        "name": new_name,
+        "description": source.get("description", ""),
+        "cover_image_url": source.get("cover_image_url"),
+        "teachers": [{
+            "user_id": g.current_user["_id"],
+            "role": "owner",
+            "status": "active",
+            "added_at": now,
+        }],
+        "students": [],  # deliberately not copied - a fresh class, not a roster clone
+        "join_requests": [],
+        "subject_tags": source.get("subject_tags", []),
+        "organization_id": source.get("organization_id"),
+        "organization_status": source.get("organization_status"),
+        "folder_id": ObjectId(target_folder_id) if target_folder_id else None,
+        "links": {},
+        "is_active": True,
+        "created_at": now,
+        "updated_at": now,
+    }
+    result = classes_col.insert_one(new_class)
+    return jsonify({"success": True, "data": {"_id": str(result.inserted_id), "name": new_name}}), 201
+
+
 @classes_bp.route('/<class_id>/members', methods=['GET'])
 @require_auth()
 def get_members(class_id):
@@ -459,7 +639,12 @@ def get_members(class_id):
                     org_name = org_cache[org_id]
                     
                 status = t.get("status", "active")
-                data = {"user_id": str(u["_id"]), "name": u.get("full_name"), "email": u.get("email"), "role": "examiner", "status": status, "organization": org_name}
+                data = {
+                    "user_id": str(u["_id"]), "name": u.get("full_name"), "email": u.get("email"),
+                    "role": "examiner", "status": status, "organization": org_name,
+                    "is_owner": t.get("role") == "owner",
+                    "can_edit": bool(t.get("can_edit")),
+                }
                 if status in ["pending", "rejected"]:
                     invitations.append(data)
                 else:
@@ -479,7 +664,11 @@ def get_members(class_id):
                     org_name = org_cache[org_id]
                     
                 status = s.get("status", "pending")
-                data = {"user_id": str(u["_id"]), "name": u.get("full_name"), "email": u.get("email"), "role": "student", "status": status, "organization": org_name}
+                data = {
+                    "user_id": str(u["_id"]), "name": u.get("full_name"), "email": u.get("email"),
+                    "role": "student", "status": status, "organization": org_name,
+                    "can_broadcast": bool(s.get("can_broadcast")),
+                }
                 if status in ["pending", "declined"]:
                     invitations.append(data)
                 else:
@@ -610,11 +799,25 @@ def generate_link(class_id):
         return jsonify({"error": "Error generating link"}), 400
 
 @classes_bp.route('/<class_id>/broadcast', methods=['POST'])
-@require_role('teacher')
+@require_auth(redirect_on_fail=False)
 def broadcast_message(class_id):
+    # Was @require_role('teacher') only - any teacher could broadcast to ANY
+    # class regardless of membership. Now checks actual per-class permission:
+    # management (owner/edit-access collaborator/org) or an explicitly
+    # broadcast-enabled student - see _can_broadcast().
+    classes_col = get_collection('classes')
+    try:
+        class_obj = classes_col.find_one({"_id": ObjectId(class_id)})
+    except Exception:
+        return jsonify({"error": "Invalid class_id"}), 400
+    if not class_obj:
+        return jsonify({"error": "Class not found"}), 404
+    if not _can_broadcast(class_obj, g.current_user):
+        return jsonify({"error": "You don't have broadcast access to this class."}), 403
+
     data = request.json
     broadcasts_col = get_collection('class_broadcasts')
-    
+
     new_msg = {
         "class_id": str(class_id),
         "sender_id": str(g.current_user["_id"]),

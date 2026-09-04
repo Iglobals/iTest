@@ -16,11 +16,11 @@
                     <h2>Ready to<br>Test your<br>Knowledge?</h2>
                     <p>Track your progress and ace your next examination.</p>
                     <div class="hero-buttons">
-                        <a href="#" class="btn-primary">
+                        <a href="{{ url_for('dashboard.my_exams') }}" class="btn-primary">
                             <i data-lucide="play-circle" style="width: 14px; height: 14px;"></i>
                             Take Exam
                         </a>
-                        <a href="#" class="btn-secondary">
+                        <a href="{{ url_for('dashboard.grades') }}" class="btn-secondary">
                             <i data-lucide="award" style="width: 14px; height: 14px;"></i>
                             View Results
                         </a>

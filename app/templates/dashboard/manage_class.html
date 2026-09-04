@@ -239,7 +239,7 @@
     </div>
 
     <!-- Members Tab -->
-    <div id="tab-members" class="tab-content">
+    <div id="tab-members" class="mc-tab-content">
         <div class="mc-card">
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem; margin-bottom:1rem;">
                 <h3 style="margin:0;">Active Class Members</h3>
@@ -260,7 +260,7 @@
     </div>
 
     <!-- Invitations Tab -->
-    <div id="tab-invitations" class="tab-content hidden">
+    <div id="tab-invitations" class="mc-tab-content hidden">
         <div class="mc-card">
             <h3>Pending & Declined Invitations</h3>
             <div id="invitations-list">
@@ -278,7 +278,7 @@
     </div>
 
     <!-- Invite & Share Tab -->
-    <div id="tab-invite_share" class="tab-content hidden">
+    <div id="tab-invite_share" class="mc-tab-content hidden">
         {% if is_teacher %}
         <div class="mc-card">
             <h3>Invite via Email</h3>
@@ -348,7 +348,11 @@ const isOwnerOrOrg = {{ 'true' if is_owner_or_org else 'false' }};
 const currentUserId = "{{ g.current_user._id }}";
 
 function switchTab(tabId, event) {
-    document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+    // Deliberately its own class (not the shared "tab-content") - this
+    // page's tabs use a hidden-class toggle, not the .active-class
+    // convention that the shared global .tab-content rule expects, and
+    // reusing that name made every panel here permanently display:none.
+    document.querySelectorAll('.mc-tab-content').forEach(el => el.classList.add('hidden'));
     document.querySelectorAll('.mc-tab-btn').forEach(el => {
         el.classList.remove('active');
     });

@@ -1,3 +1,9 @@
+/* Real global utility - see dashboard.css for why this needs to actually
+   exist here too rather than being assumed. raw_base.html pages (this
+   stylesheet) previously had no working .hidden at all unless a specific
+   template happened to redefine it locally. */
+.hidden { display: none !important; }
+
 :root {
     --primary: #6912db;
     --primary-hover: #7816c7;

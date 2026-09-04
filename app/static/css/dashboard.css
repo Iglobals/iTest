@@ -16,7 +16,63 @@
     --success: #10b981;
     --success-bg: #d1fae5;
     --purple-bg: #f3effa;
+    --danger: #dc2626;
 }
+
+/* Real global utilities - these were previously only ever defined locally,
+   ad-hoc, inside a handful of unrelated templates (exam/edit.html,
+   dashboard/manage_class.html, exam/builder.html), so any OTHER page using
+   these classes (assuming they were global, since the naming strongly
+   implies it) silently did nothing. Confirmed root cause of settings.html's
+   buttons all showing at once and its inputs looking unstyled. */
+.hidden { display: none !important; }
+
+.form-control {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    padding: 0.65em 0.85em;
+    border: 1px solid var(--gray-300);
+    border-radius: 0.5em;
+    font-size: 0.9375rem;
+    font-family: inherit;
+    color: var(--gray-800);
+}
+.form-control:focus { outline: none; border-color: var(--purple); }
+
+/* Globalized from dashboard/my_exams.html's local copy - same reasoning as
+   .hidden/.form-control above, reused here for settings.html's tabs. */
+.tabs {
+    display: flex;
+    gap: 1em;
+    border-bottom: 2px solid var(--gray-200);
+    margin-bottom: clamp(1.25rem, 4vw, 2rem);
+    width: 100%;
+    flex-wrap: wrap;
+}
+.tab-btn {
+    padding: 0.75em 1.25em;
+    background: none;
+    border: none;
+    font-size: clamp(0.85rem, 2.5vw, 1rem);
+    font-weight: 500;
+    color: var(--gray-500);
+    cursor: pointer;
+    position: relative;
+}
+.tab-btn.active { color: var(--purple); }
+.tab-btn.active::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background: var(--purple);
+    border-radius: 2px 2px 0 0;
+}
+.tab-content { display: none; }
+.tab-content.active { display: block; }
 
 html {
     font-size: clamp(13px, 1.1vw, 16px);

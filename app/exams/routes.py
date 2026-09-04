@@ -22,7 +22,7 @@ def generate_unique_slug(title, collection):
     return slug
 
 @exams_bp.route('/', methods=['POST'])
-@require_role('teacher', 'org_admin', 'platform_admin')
+@require_role('teacher', 'platform_admin')
 def create_exam():
     data = request.json
     exams_col = get_collection('exams')
@@ -163,7 +163,7 @@ def get_exam_by_slug(slug):
 
 
 @exams_bp.route('/<exam_id>/questions', methods=['PUT'])
-@require_role('teacher', 'org_admin', 'platform_admin')
+@require_role('teacher', 'platform_admin')
 def update_exam_questions(exam_id):
     data = request.json
     exams_col = get_collection('exams')
@@ -217,7 +217,7 @@ def update_exam_questions(exam_id):
 
 
 @exams_bp.route('/<exam_id>', methods=['PUT'])
-@require_role('teacher', 'org_admin', 'platform_admin')
+@require_role('teacher', 'platform_admin')
 def update_exam(exam_id):
     data = request.json
     exams_col = get_collection('exams')
@@ -323,7 +323,7 @@ def update_exam(exam_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 @exams_bp.route('/<exam_id>', methods=['DELETE'])
-@require_role('teacher', 'org_admin', 'platform_admin')
+@require_role('teacher', 'platform_admin')
 def delete_exam(exam_id):
     exams_col = get_collection('exams')
     try:
@@ -343,7 +343,7 @@ def delete_exam(exam_id):
         return jsonify({"error": str(e)}), 400
 
 @exams_bp.route('/<exam_id>/publish-all-results', methods=['POST'])
-@require_role('teacher', 'org_admin', 'platform_admin')
+@require_role('teacher', 'platform_admin')
 def publish_all_results(exam_id):
     """Bulk publish all graded results for an exam."""
     from app.models import ExamScore

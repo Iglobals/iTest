@@ -33,9 +33,17 @@
             <i data-lucide="users"></i>
             Classes
         </a>
+        {% endif %}
+        {% if g.current_user.get('role') == 'teacher' %}
         <a href="{{ url_for('dashboard.manage_exams') }}" class="nav-item {% if request.endpoint == 'dashboard.manage_exams' %}active{% endif %}">
             <i data-lucide="file-text"></i>
             Manage Exams
+        </a>
+        {% endif %}
+        {% if g.current_user.get('role') == 'org_admin' %}
+        <a href="{{ url_for('dashboard.org_performance') }}" class="nav-item {% if request.endpoint in ['dashboard.org_performance', 'dashboard.class_performance'] %}active{% endif %}">
+            <i data-lucide="bar-chart-3"></i>
+            Performance
         </a>
         {% endif %}
         {% if g.current_user.get('role') == 'student' %}

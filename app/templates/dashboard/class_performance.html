@@ -1,0 +1,141 @@
+{% extends "dashboard/base.html" %}
+
+{% block page_title %}{{ cls.name }}{% endblock %}
+{% block page_subtitle %}Class performance overview.{% endblock %}
+
+{% block dashboard_content %}
+<div class="dashboard-body" style="grid-template-columns: 1fr; display: block;">
+
+    <a href="{{ url_for('dashboard.org_performance') }}" class="back-link">
+        <i data-lucide="arrow-left" style="width:14px;height:14px;"></i> Back to Performance
+    </a>
+
+    <div class="overview-grid">
+        <div class="overview-tile">
+            <strong>{{ overall.avg_percent }}%</strong>
+            <span>Average Score</span>
+        </div>
+        <div class="overview-tile pass">
+            <strong>{{ overall.passed }}</strong>
+            <span>Passed</span>
+        </div>
+        <div class="overview-tile fail">
+            <strong>{{ overall.failed }}</strong>
+            <span>Failed</span>
+        </div>
+        <div class="overview-tile">
+            <strong>{{ overall.attempts }}</strong>
+            <span>Total Attempts</span>
+        </div>
+    </div>
+
+    <h3 class="section-title">Exams</h3>
+    {% if exam_rows %}
+    <div class="row-grid">
+        {% for e in exam_rows %}
+        <div class="row-card">
+            <div class="row-card-main">
+                <h4>{{ e.name }}</h4>
+                <p>{{ e.attempts }} attempt{{ '' if e.attempts == 1 else 's' }}</p>
+            </div>
+            <div class="row-card-stats">
+                <div class="mini-stat"><strong>{{ e.avg_percent }}%</strong><span>Avg</span></div>
+                <div class="mini-stat pass"><strong>{{ e.passed }}</strong><span>Pass</span></div>
+                <div class="mini-stat fail"><strong>{{ e.failed }}</strong><span>Fail</span></div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state"><i data-lucide="file-text"></i><h3>No Exams Yet</h3><p>No exams have been assigned to this class.</p></div>
+    {% endif %}
+
+    <h3 class="section-title">Students</h3>
+    {% if student_rows %}
+    <div class="row-grid">
+        {% for s in student_rows %}
+        <div class="row-card">
+            <div class="row-card-main">
+                <h4>{{ s.name }}</h4>
+                <p>{{ s.attempts }} attempt{{ '' if s.attempts == 1 else 's' }}</p>
+            </div>
+            <div class="row-card-stats">
+                <div class="mini-stat"><strong>{{ s.best_percent }}%</strong><span>Best</span></div>
+                <div class="mini-stat pass"><strong>{{ s.passed }}</strong><span>Pass</span></div>
+                <div class="mini-stat fail"><strong>{{ s.failed }}</strong><span>Fail</span></div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state"><i data-lucide="users"></i><h3>No Students Yet</h3><p>No active students are enrolled in this class.</p></div>
+    {% endif %}
+
+</div>
+
+<style>
+    .back-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        color: var(--gray-500);
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 0.875rem;
+        margin-bottom: clamp(1rem, 4vw, 1.5rem);
+    }
+    .back-link:hover { color: var(--purple); }
+
+    /* Trick 1: auto-fit + minmax for the summary tiles */
+    .overview-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr));
+        gap: clamp(0.75rem, 3vw, 1rem);
+        margin-bottom: clamp(1.5rem, 4vw, 2.5rem);
+    }
+    .overview-tile {
+        background: var(--white);
+        border: 1px solid var(--gray-200);
+        border-radius: 1rem;
+        padding: clamp(1rem, 3vw, 1.25rem);
+        text-align: center;
+    }
+    .overview-tile strong { display: block; font-size: clamp(1.25rem, 4vw, 1.6rem); color: var(--gray-900); }
+    .overview-tile span { font-size: 0.75rem; color: var(--gray-500); text-transform: uppercase; letter-spacing: 0.02em; }
+    .overview-tile.pass strong { color: var(--success, #16a34a); }
+    .overview-tile.fail strong { color: var(--danger, #dc2626); }
+
+    .section-title { margin: 0 0 1rem; font-size: 1.1rem; font-weight: 700; color: var(--gray-900); }
+
+    .row-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+        gap: clamp(0.75rem, 3vw, 1rem);
+        margin-bottom: clamp(1.5rem, 4vw, 2.5rem);
+    }
+    .row-card {
+        background: var(--white);
+        border: 1px solid var(--gray-200);
+        border-radius: 0.85rem;
+        padding: clamp(0.85rem, 3vw, 1.1rem);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        flex-wrap: wrap;
+        min-width: 0;
+    }
+    .row-card-main h4 { margin: 0 0 0.15rem; font-size: 0.95rem; font-weight: 700; color: var(--gray-900); }
+    .row-card-main p { margin: 0; font-size: 0.78rem; color: var(--gray-500); }
+    .row-card-stats {
+        display: flex;
+        gap: 0.85rem;
+        margin-left: auto;
+    }
+    .mini-stat { text-align: center; }
+    .mini-stat strong { display: block; font-size: 0.95rem; color: var(--gray-900); }
+    .mini-stat span { font-size: 0.65rem; color: var(--gray-500); text-transform: uppercase; }
+    .mini-stat.pass strong { color: var(--success, #16a34a); }
+    .mini-stat.fail strong { color: var(--danger, #dc2626); }
+</style>
+{% endblock %}

@@ -5,76 +5,91 @@
 {% block dashboard_content %}
 <div class="dashboard-body" style="grid-template-columns: 1fr; display: block; max-width: 720px;">
 
-    <div class="settings-card">
-        <h2 class="settings-card-title">Account</h2>
-        <p class="settings-card-desc">Your name, email, and password are managed by your iGlobals account, not here.</p>
-        <a href="{{ ica_account_url }}" target="_blank" rel="noopener" style="color: var(--purple); font-weight: 700; text-decoration: none;">
-            Edit on iglobals &rarr;
-        </a>
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchSettingsTab('account')">Account</button>
+        <button class="tab-btn" onclick="switchSettingsTab('profile')">Profile</button>
+        {% if user.role == 'student' %}
+        <button class="tab-btn" onclick="switchSettingsTab('verification')">Identity Verification</button>
+        {% endif %}
     </div>
 
-    <div class="settings-card">
-        <h2 class="settings-card-title">Profile</h2>
-        <div id="profileMsg"></div>
+    <div id="tab-account" class="tab-content active">
+        <div class="settings-card">
+            <h2 class="settings-card-title">Account</h2>
+            <p class="settings-card-desc">Your name, email, and password are managed by your iGlobals account, not here.</p>
+            <a href="{{ ica_account_url }}" target="_blank" rel="noopener" style="color: var(--purple); font-weight: 700; text-decoration: none;">
+                Edit on iglobals &rarr;
+            </a>
+        </div>
+    </div>
 
-        <div class="form-group">
-            <label>Profile Image</label>
-            <div style="display: flex; align-items: center; gap: 1rem;">
-                <img id="avatarPreview" src="{{ user.avatar_url or '' }}" style="width: 4rem; height: 4rem; border-radius: 50%; object-fit: cover; background: var(--gray-100); {% if not user.avatar_url %}display:none;{% endif %}">
-                <input type="file" id="avatarInput" accept="image/*" onchange="uploadAvatar(event)">
+    <div id="tab-profile" class="tab-content">
+        <div class="settings-card">
+            <h2 class="settings-card-title">Profile</h2>
+            <div id="profileMsg"></div>
+
+            <div class="form-group">
+                <label>Profile Image</label>
+                <div style="display: flex; align-items: center; gap: 1rem;">
+                    <img id="avatarPreview" src="{{ user.avatar_url or '' }}" style="width: 4rem; height: 4rem; border-radius: 50%; object-fit: cover; background: var(--gray-100); {% if not user.avatar_url %}display:none;{% endif %}">
+                    <input type="file" id="avatarInput" accept="image/*" onchange="uploadAvatar(event)">
+                </div>
             </div>
-        </div>
 
-        <div class="form-group">
-            <label>Institution / School</label>
-            <input type="text" id="institution" class="form-control" value="{{ user.institution or '' }}">
-        </div>
+            <div class="form-group">
+                <label>Institution / School</label>
+                <input type="text" id="institution" class="form-control" value="{{ user.institution or '' }}">
+            </div>
 
-        {% if user.role == 'student' %}
-        <div class="form-group">
-            <label>Programme</label>
-            <input type="text" id="programme" class="form-control" value="{{ user.programme or '' }}">
-        </div>
-        {% else %}
-        <div class="form-group">
-            <label>Phone Number</label>
-            <input type="text" id="phone" class="form-control" value="{{ user.phone or '' }}">
-        </div>
-        {% endif %}
+            {% if user.role == 'student' %}
+            <div class="form-group">
+                <label>Programme</label>
+                <input type="text" id="programme" class="form-control" value="{{ user.programme or '' }}">
+            </div>
+            {% else %}
+            <div class="form-group">
+                <label>Phone Number</label>
+                <input type="text" id="phone" class="form-control" value="{{ user.phone or '' }}">
+            </div>
+            {% endif %}
 
-        <button class="btn-primary" style="width: auto; padding: 0.6em 1.5em;" onclick="saveProfile()">Save Changes</button>
+            <button class="btn-primary" style="width: auto; padding: 0.6em 1.5em;" onclick="saveProfile()">Save Changes</button>
+        </div>
     </div>
 
     {% if user.role == 'student' %}
-    <div class="settings-card">
-        <h2 class="settings-card-title">Identity Verification</h2>
-        <p class="settings-card-desc">Required once before you can take any AI-proctored exam. This is a one-time step and can't be redone once completed.</p>
+    <div id="tab-verification" class="tab-content">
+        <div class="settings-card">
+            <h2 class="settings-card-title">Identity Verification</h2>
+            <p class="settings-card-desc">Required once before you can take any AI-proctored exam. This is a one-time step and can't be redone once completed.</p>
 
-        {% if user.liveness_verification and user.liveness_verification.status == 'completed' %}
-        <div style="display:flex; align-items:center; gap:0.5rem; color: var(--success, #16a34a); font-weight: 700;">
-            <i data-lucide="check-circle"></i> Verification completed
-        </div>
-        {% else %}
-        <div id="livenessIntro">
-            <button class="btn-primary" style="width: auto; padding: 0.6em 1.5em;" onclick="startLiveness()">Start Verification</button>
-        </div>
-
-        <div id="livenessFlow" class="hidden">
-            <p id="livenessStepLabel" style="font-weight: 700; margin-bottom: 0.5rem;"></p>
-            <div style="position: relative; width: 100%; max-width: 24rem;">
-                <video id="livenessVideo" autoplay playsinline style="width: 100%; border-radius: 0.5rem; background: #000; display: block;"></video>
-                <img id="livenessCaptured" style="width: 100%; border-radius: 0.5rem; display: none;">
+            {% if user.liveness_verification and user.liveness_verification.status == 'completed' %}
+            <div style="display:flex; align-items:center; gap:0.5rem; color: var(--success); font-weight: 700;">
+                <i data-lucide="check-circle"></i> Verification completed
             </div>
-            <canvas id="livenessCanvas" class="hidden"></canvas>
-
-            <div style="display:flex; gap:0.5rem; margin-top:1rem;">
-                <button id="livenessCaptureBtn" class="btn-primary" style="width:auto; padding:0.6em 1.5em;" onclick="captureLivenessPhoto()">Capture</button>
-                <button id="livenessRetakeBtn" class="btn-outline hidden" style="width:auto; padding:0.6em 1.5em;" onclick="retakeLivenessPhoto()">Retake</button>
-                <button id="livenessNextBtn" class="btn-outline hidden" style="width:auto; padding:0.6em 1.5em;" onclick="confirmLivenessPhoto()">Looks good, continue</button>
+            {% else %}
+            <div id="livenessIntro">
+                <button class="btn-primary" style="width: auto; padding: 0.6em 1.5em;" onclick="startLiveness()">Start Verification</button>
             </div>
-            <p id="livenessError" style="color: var(--danger, #dc2626); margin-top: 0.5rem;"></p>
+
+            <div id="livenessFlow" class="hidden">
+                <p id="livenessStepLabel" class="liveness-step-label"></p>
+
+                <div class="liveness-frame">
+                    <video id="livenessVideo" autoplay playsinline muted></video>
+                    <img id="livenessCaptured" class="hidden">
+                </div>
+                <canvas id="livenessCanvas" class="hidden"></canvas>
+
+                <div class="liveness-actions">
+                    <button id="livenessCaptureBtn" class="btn-primary" style="width:auto; padding:0.6em 1.5em;" onclick="captureLivenessPhoto()">Capture</button>
+                    <button id="livenessRetakeBtn" class="btn-outline hidden" style="width:auto; padding:0.6em 1.5em;" onclick="retakeLivenessPhoto()">Retake</button>
+                    <button id="livenessNextBtn" class="btn-primary hidden" style="width:auto; padding:0.6em 1.5em;" onclick="confirmLivenessPhoto()">Looks good, continue</button>
+                </div>
+                <p id="livenessError" style="color: var(--danger); margin-top: 0.5rem;"></p>
+            </div>
+            {% endif %}
         </div>
-        {% endif %}
     </div>
     {% endif %}
 </div>
@@ -84,16 +99,54 @@
         background: var(--white);
         border: 1px solid var(--gray-200);
         border-radius: 0.75rem;
-        padding: 1.5rem;
+        padding: clamp(1.1rem, 4vw, 1.5rem);
         margin-bottom: 1.5rem;
     }
-    .settings-card-title { font-size: 1.1rem; font-weight: 700; margin: 0 0 0.5rem; }
+    .settings-card-title { font-size: clamp(1rem, 3vw, 1.1rem); font-weight: 700; margin: 0 0 0.5rem; }
     .settings-card-desc { color: var(--gray-500); font-size: 0.875rem; margin: 0 0 1rem; }
     .settings-card .form-group { margin-bottom: 1rem; display: flex; flex-direction: column; gap: 0.4rem; }
     .settings-card .form-group label { font-size: 0.875rem; font-weight: 600; color: var(--gray-700); }
+
+    .liveness-step-label { font-weight: 700; margin-bottom: 0.75rem; }
+
+    /* Fixed aspect ratio, capped width - Trick 2 (100% + max-width) - so the
+       live feed and the captured still always frame the same way regardless
+       of the camera's native resolution, instead of stretching to fill an
+       arbitrary box. */
+    .liveness-frame {
+        position: relative;
+        width: 100%;
+        max-width: 24rem;
+        aspect-ratio: 4 / 3;
+        background: #000;
+        border-radius: 0.75rem;
+        overflow: hidden;
+    }
+    .liveness-frame video,
+    .liveness-frame img {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .liveness-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-top: clamp(0.75rem, 3vw, 1rem);
+    }
 </style>
 
 <script>
+    function switchSettingsTab(tab) {
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+        document.getElementById('tab-' + tab).classList.add('active');
+        event.target.classList.add('active');
+    }
+
     const LIVENESS_STEPS = [
         { key: 'front', label: 'Look straight at the camera' },
         { key: 'left', label: 'Turn your head to the left' },
@@ -107,7 +160,7 @@
 
     function showMsg(elId, message, isError) {
         const el = document.getElementById(elId);
-        el.innerHTML = `<div class="alert" style="padding:0.6em 1em; border-radius:0.5em; margin-bottom:1em; background:${isError ? '#fee2e2' : '#dcfce7'}; color:${isError ? '#991b1b' : '#166534'};">${message}</div>`;
+        el.innerHTML = `<div style="padding:0.6em 1em; border-radius:0.5em; margin-bottom:1em; background:${isError ? '#fee2e2' : '#dcfce7'}; color:${isError ? '#991b1b' : '#166534'};">${message}</div>`;
         setTimeout(() => { el.innerHTML = ''; }, 4000);
     }
 
@@ -155,7 +208,13 @@
         document.getElementById('livenessFlow').classList.remove('hidden');
         try {
             livenessStream = await navigator.mediaDevices.getUserMedia({ video: true });
-            document.getElementById('livenessVideo').srcObject = livenessStream;
+            const video = document.getElementById('livenessVideo');
+            video.srcObject = livenessStream;
+            // toBlob() below needs real frame dimensions - wait for the
+            // stream to actually be playing, not just requested, otherwise
+            // an early capture can hand toBlob a 0x0 canvas (which silently
+            // resolves with a null blob, not an error).
+            await new Promise(resolve => { video.onloadedmetadata = resolve; });
         } catch (e) {
             document.getElementById('livenessError').textContent = 'Camera access is required for this step.';
             return;
@@ -166,8 +225,8 @@
     function renderLivenessStep() {
         const step = LIVENESS_STEPS[livenessStepIdx];
         document.getElementById('livenessStepLabel').textContent = `Step ${livenessStepIdx + 1} of ${LIVENESS_STEPS.length}: ${step.label}`;
-        document.getElementById('livenessVideo').style.display = 'block';
-        document.getElementById('livenessCaptured').style.display = 'none';
+        document.getElementById('livenessVideo').classList.remove('hidden');
+        document.getElementById('livenessCaptured').classList.add('hidden');
         document.getElementById('livenessCaptureBtn').classList.remove('hidden');
         document.getElementById('livenessRetakeBtn').classList.add('hidden');
         document.getElementById('livenessNextBtn').classList.add('hidden');
@@ -179,15 +238,23 @@
         const canvas = document.getElementById('livenessCanvas');
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
-        canvas.getContext('2d').drawImage(video, 0, 0);
 
+        if (!canvas.width || !canvas.height) {
+            document.getElementById('livenessError').textContent = 'Camera feed not ready yet - try again in a moment.';
+            return;
+        }
+
+        canvas.getContext('2d').drawImage(video, 0, 0);
         canvas.toBlob(blob => {
+            if (!blob) {
+                document.getElementById('livenessError').textContent = 'Could not capture that frame. Please try again.';
+                return;
+            }
             capturedBlob = blob;
-            const url = URL.createObjectURL(blob);
             const img = document.getElementById('livenessCaptured');
-            img.src = url;
-            img.style.display = 'block';
-            video.style.display = 'none';
+            img.src = URL.createObjectURL(blob);
+            img.classList.remove('hidden');
+            video.classList.add('hidden');
             document.getElementById('livenessCaptureBtn').classList.add('hidden');
             document.getElementById('livenessRetakeBtn').classList.remove('hidden');
             document.getElementById('livenessNextBtn').classList.remove('hidden');
@@ -203,6 +270,14 @@
         const step = LIVENESS_STEPS[livenessStepIdx];
         const errorEl = document.getElementById('livenessError');
         errorEl.textContent = '';
+
+        // Defensive: should never actually be null here since the button
+        // that calls this is hidden until a real capture succeeds, but a
+        // clear message beats a cryptic FormData TypeError if it ever is.
+        if (!capturedBlob) {
+            errorEl.textContent = 'No photo captured yet - click Capture first.';
+            return;
+        }
 
         try {
             // Same signature-based direct-to-Cloudinary upload as the exam
@@ -251,7 +326,7 @@
             }
             if (livenessStream) livenessStream.getTracks().forEach(t => t.stop());
             document.getElementById('livenessFlow').innerHTML = `
-                <div style="display:flex; align-items:center; gap:0.5rem; color: var(--success, #16a34a); font-weight: 700;">
+                <div style="display:flex; align-items:center; gap:0.5rem; color: var(--success); font-weight: 700;">
                     <i data-lucide="check-circle"></i> Verification completed
                 </div>`;
             lucide.createIcons();

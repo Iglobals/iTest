@@ -43,20 +43,11 @@ def index():
                     if s.get("status", "active") == "active":
                         student_ids.add(str(s.get("user_id")))
 
-            import json as _json
-            classes_json = _json.dumps([{
-                "_id": str(c["_id"]),
-                "name": c.get("name", "Untitled"),
-                "folder_id": str(c["folder_id"]) if c.get("folder_id") else None,
-                "student_count": len([s for s in c.get("students", []) if s.get("status", "active") not in ("removed",)]),
-            } for c in org_classes])
-
             return render_template(
                 'dashboard/org_admin.html', org=org, classes=org_classes,
                 total_teachers=len(teacher_ids), total_students=len(student_ids),
-                classes_json=classes_json,
             )
-        return render_template('dashboard/org_admin.html', org=None, classes=[], total_teachers=0, total_students=0, classes_json='[]')
+        return render_template('dashboard/org_admin.html', org=None, classes=[], total_teachers=0, total_students=0)
         
     else:
         # Student Dashboard
@@ -92,7 +83,31 @@ def classes():
     user_id = g.current_user['_id']
     user_id_str = str(user_id)
     
-    if role in ['teacher', 'org_admin']:
+    if role == 'org_admin':
+        # An org_admin manages classes by ORGANIZATION, not by personally
+        # sitting in a class's teachers[] array - a class an examiner made
+        # and later attached to the org should show here even though the
+        # org_admin was never individually added as one of its teachers.
+        # (Previously this branch reused the teacher query above, so it only
+        # ever showed classes the org_admin happened to be a personal member
+        # of - i.e. almost always empty, always falling back to the "Create
+        # Class" empty state even for an org with real classes.)
+        orgs_col = get_collection('organizations')
+        org = orgs_col.find_one({"admin_user_id": user_id}) if orgs_col is not None else None
+        if not org:
+            return render_template('dashboard/org_classes.html', org=None, classes_json='[]')
+
+        org_classes = list(classes_col.find({"organization_id": org['_id'], "is_active": {"$ne": False}})) if classes_col is not None else []
+        import json as _json
+        classes_json = _json.dumps([{
+            "_id": str(c["_id"]),
+            "name": c.get("name", "Untitled"),
+            "folder_id": str(c["folder_id"]) if c.get("folder_id") else None,
+            "student_count": len([s for s in c.get("students", []) if s.get("status", "active") not in ("removed",)]),
+        } for c in org_classes])
+        return render_template('dashboard/org_classes.html', org=org, classes_json=classes_json)
+
+    if role == 'teacher':
         teacher_classes = list(classes_col.find({"teachers.user_id": user_id, "is_active": {"$ne": False}})) if classes_col is not None else []
         active_classes = []
         invitations = []
@@ -135,8 +150,11 @@ def create_class_page():
 @dashboard_bp.route('/exams/manage')
 @require_auth()
 def manage_exams():
+    # org_admin never creates exams (they only view their org's class/exam
+    # performance - see the org_performance view) so this teacher-only,
+    # "exams I created" page doesn't apply to them.
     from flask import request
-    if g.current_user.get('role') not in ['teacher', 'org_admin', 'platform_admin']:
+    if g.current_user.get('role') not in ['teacher', 'platform_admin']:
         return "Unauthorized", 403
         
     exams_col = get_collection('exams')
@@ -171,6 +189,156 @@ def manage_exams():
                            total_pages=total_pages,
                            status_filter=status_filter,
                            subject_filter=subject_filter)
+
+
+def _class_student_ids(cls):
+    """Active (non-removed) student user_ids on a class, as strings - matches
+    how ExamScore.student_id is stored in Postgres (Text, not ObjectId)."""
+    return [str(s.get('user_id')) for s in cls.get('students', []) if s.get('status', 'active') != 'removed']
+
+
+def _class_exam_ids(exams_col, class_obj_id):
+    """Exam ids (as strings) visible to a class - exams reference classes via
+    visibility.class_ids (a list of ObjectId), never the other way round."""
+    exams = list(exams_col.find({"visibility.class_ids": class_obj_id}, {"_id": 1})) if exams_col is not None else []
+    return [str(e['_id']) for e in exams]
+
+
+def _aggregate_scores(exam_ids, student_ids):
+    """Collective pass/fail/average stats for a set of exams x students.
+    Mirrors the same score_percent/passed columns view_result()/grades() use -
+    see ExamScore in app/models.py - so these numbers agree with what
+    students/teachers see on their own results pages."""
+    from app.models import ExamScore
+    if not exam_ids or not student_ids:
+        return {"attempts": 0, "passed": 0, "failed": 0, "avg_percent": 0}
+    scores = ExamScore.query.filter(
+        ExamScore.exam_id.in_(exam_ids),
+        ExamScore.student_id.in_(student_ids),
+    ).all()
+    if not scores:
+        return {"attempts": 0, "passed": 0, "failed": 0, "avg_percent": 0}
+    passed = sum(1 for s in scores if s.passed)
+    avg_percent = sum(float(s.score_percent) for s in scores) / len(scores)
+    return {
+        "attempts": len(scores),
+        "passed": passed,
+        "failed": len(scores) - passed,
+        "avg_percent": round(avg_percent, 1),
+    }
+
+
+@dashboard_bp.route('/organizations/performance')
+@require_auth()
+def org_performance():
+    """Read-only, folder-organized view of exam/performance stats across the
+    org's classes - this is what replaced "Manage Exams" for org_admin, since
+    the org doesn't create exams, only looks at how its classes are doing."""
+    if g.current_user.get('role') != 'org_admin':
+        return "Unauthorized", 403
+
+    from bson import ObjectId
+    import json as _json
+
+    orgs_col = get_collection('organizations')
+    classes_col = get_collection('classes')
+    exams_col = get_collection('exams')
+    org = orgs_col.find_one({"admin_user_id": g.current_user['_id']}) if orgs_col is not None else None
+    if not org:
+        return render_template('dashboard/org_performance.html', org=None, classes_json='[]')
+
+    org_classes = list(classes_col.find({"organization_id": org['_id'], "is_active": {"$ne": False}})) if classes_col is not None else []
+
+    classes_data = []
+    for cls in org_classes:
+        student_ids = _class_student_ids(cls)
+        exam_ids = _class_exam_ids(exams_col, cls['_id'])
+        stats = _aggregate_scores(exam_ids, student_ids)
+        classes_data.append({
+            "_id": str(cls["_id"]),
+            "name": cls.get("name", "Untitled"),
+            "folder_id": str(cls["folder_id"]) if cls.get("folder_id") else None,
+            "student_count": len(student_ids),
+            "exam_count": len(exam_ids),
+            **stats,
+        })
+
+    return render_template('dashboard/org_performance.html', org=org, classes_json=_json.dumps(classes_data))
+
+
+@dashboard_bp.route('/organizations/classes/<class_id>/performance')
+@require_auth()
+def class_performance(class_id):
+    """Drill-down from org_performance: one class's exams and every student's
+    individual results, plus the collective pass/fail numbers for it."""
+    if g.current_user.get('role') != 'org_admin':
+        return "Unauthorized", 403
+
+    from bson import ObjectId
+    from flask import flash, redirect, url_for
+    from app.organizations.routes import _is_org_admin
+    from app.models import ExamScore
+
+    classes_col = get_collection('classes')
+    exams_col = get_collection('exams')
+    users_col = get_collection('users')
+
+    try:
+        cls = classes_col.find_one({"_id": ObjectId(class_id)}) if classes_col is not None else None
+    except Exception:
+        cls = None
+    if not cls:
+        flash("Class not found.", "error")
+        return redirect(url_for('dashboard.org_performance'))
+    if not cls.get("organization_id") or not _is_org_admin(cls["organization_id"], g.current_user):
+        flash("That class isn't part of your organization.", "error")
+        return redirect(url_for('dashboard.org_performance'))
+
+    student_ids = _class_student_ids(cls)
+    exams = list(exams_col.find({"visibility.class_ids": cls['_id']})) if exams_col is not None else []
+    exam_ids = [str(e['_id']) for e in exams]
+    overall = _aggregate_scores(exam_ids, student_ids)
+
+    exam_rows = []
+    for exam in exams:
+        stats = _aggregate_scores([str(exam['_id'])], student_ids)
+        exam_rows.append({"name": exam.get("title", "Untitled Exam"), "slug": exam.get("slug"), **stats})
+
+    scores = []
+    if exam_ids and student_ids:
+        scores = ExamScore.query.filter(
+            ExamScore.exam_id.in_(exam_ids),
+            ExamScore.student_id.in_(student_ids),
+        ).order_by(ExamScore.submitted_at.desc()).all()
+
+    students_by_id = {}
+    if users_col is not None and student_ids:
+        valid_ids = [ObjectId(sid) for sid in student_ids if ObjectId.is_valid(sid)]
+        students_by_id = {str(u['_id']): u for u in users_col.find({"_id": {"$in": valid_ids}})}
+
+    student_rows = {}
+    for sid in student_ids:
+        user = students_by_id.get(sid)
+        student_rows[sid] = {
+            "name": user.get("full_name", "Unknown") if user else "Unknown",
+            "attempts": 0, "passed": 0, "failed": 0, "best_percent": 0,
+        }
+    for score in scores:
+        row = student_rows.get(score.student_id)
+        if not row:
+            continue
+        row["attempts"] += 1
+        if score.passed:
+            row["passed"] += 1
+        else:
+            row["failed"] += 1
+        row["best_percent"] = max(row["best_percent"], float(score.score_percent))
+
+    return render_template(
+        'dashboard/class_performance.html', cls=cls, overall=overall,
+        exam_rows=exam_rows, student_rows=list(student_rows.values()),
+    )
+
 
 @dashboard_bp.route('/exams/<slug>')
 @require_auth()
@@ -804,12 +972,23 @@ def manage_class(class_id):
         can_message = get_plan_limit(user_plan, "can_message_1on1")
         can_see_reactions = get_plan_limit(user_plan, "can_see_broadcast_reactions")
 
+        # Same "Get organization name" lookup class_chat() does below - was
+        # missing here, so this page only ever showed the "Remove
+        # Organization" button with no name to say which org it was.
+        org_name = None
+        if class_obj.get("organization_id"):
+            orgs_col = get_collection("organizations")
+            org = orgs_col.find_one({"_id": class_obj["organization_id"]}) if orgs_col is not None else None
+            if org:
+                org_name = org.get("name")
+
         return render_template('dashboard/manage_class.html',
                                class_obj=class_obj,
                                is_teacher=is_teacher,
                                is_owner_or_org=is_owner_or_org,
                                can_message=can_message,
-                               can_see_reactions=can_see_reactions)
+                               can_see_reactions=can_see_reactions,
+                               org_name=org_name)
     except Exception as e:
         return str(e), 400
 

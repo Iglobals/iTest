@@ -241,10 +241,15 @@
     <!-- Members Tab -->
     <div id="tab-members" class="tab-content">
         <div class="mc-card">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem; margin-bottom:1rem;">
                 <h3 style="margin:0;">Active Class Members</h3>
                 {% if class_obj.organization_id and is_teacher %}
-                <button onclick="removeOrg()" class="mc-btn mc-btn-danger" style="font-size: 0.85rem; padding: 0.5rem 1rem;"><i data-lucide="building" style="width:14px;height:14px;"></i> Remove Organization</button>
+                <div style="display:flex; align-items:center; flex-wrap:wrap; gap:0.75rem;">
+                    <span style="display:inline-flex; align-items:center; gap:0.35rem; font-size:0.85rem; font-weight:600; color:var(--gray-700); background:var(--purple-bg); padding:0.4rem 0.75rem; border-radius:0.5rem;">
+                        <i data-lucide="building" style="width:14px;height:14px;color:var(--purple);"></i> {{ org_name or 'Unknown Organization' }}
+                    </span>
+                    <button onclick="removeOrg()" class="mc-btn mc-btn-danger" style="font-size: 0.85rem; padding: 0.5rem 1rem;"><i data-lucide="x" style="width:14px;height:14px;"></i> Remove Organization</button>
+                </div>
                 {% endif %}
             </div>
             

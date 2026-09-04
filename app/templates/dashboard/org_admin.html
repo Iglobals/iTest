@@ -30,26 +30,26 @@
             <div class="hero-yellow-circle"></div>
             <div class="hero-dots"></div>
             <div class="hero-person">
-                <img src="{{ url_for('static', filename='public/dashboard1.png') }}" alt="Admin">
+                <img src="https://res.cloudinary.com/dicut7e2y/image/upload/v1781626476/dashboard1_zov2he.png" alt="Admin">
             </div>
         </div>
 
-        <!-- Class Folders (org-only organizational view - classes/examiners/
-             students never see this, they just see their own flat classes) -->
+        <!-- Quick links - the actual class/folder browser lives on the
+             Classes page now, not here (this is the org's home dashboard). -->
         {% if org %}
         <div class="section-card">
             <div class="section-header">
                 <h2>Classes</h2>
-                <a href="#" class="view-all" onclick="event.preventDefault(); openNewFolderPrompt();">+ New Folder</a>
+                <a href="{{ url_for('dashboard.classes') }}" class="view-all">Go to Classes</a>
             </div>
-
-            <div id="folderBreadcrumb" class="folder-breadcrumb"></div>
-            <div id="folderGrid" class="folder-grid"></div>
-            <div id="classGrid" class="exam-list" style="margin-top: 1rem;"></div>
-            <div id="foldersEmptyState" class="empty-state hidden">
-                <i data-lucide="folder"></i>
-                <h3>No Classes Here</h3>
-                <p>Move or copy a class into this folder, or create a new one.</p>
+            <div class="overview-stat" style="border: none; padding: 0;">
+                <div class="overview-stat-icon" style="background:var(--purple-bg);color:var(--purple);">
+                    <i data-lucide="folder-tree"></i>
+                </div>
+                <div class="overview-stat-info">
+                    <h4>{{ classes | length }}</h4>
+                    <p>Browse, organize into folders, move or copy classes from the Classes page.</p>
+                </div>
             </div>
         </div>
         {% endif %}
@@ -115,199 +115,4 @@
 
 </div>
 
-<style>
-    /* Trick 1: auto-fit + minmax - adapts to any screen without per-breakpoint rules */
-    .folder-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
-        gap: clamp(0.5rem, 2vw, 0.75rem);
-        margin-bottom: clamp(0.5rem, 2vw, 1rem);
-    }
-    .folder-card {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 0.35rem;
-        /* Trick 3: clamp for padding that scales instead of a fixed value */
-        padding: clamp(0.75rem, 3vw, 1rem);
-        border: 1px solid var(--gray-200);
-        border-radius: 0.75rem;
-        cursor: pointer;
-        background: var(--white);
-        text-align: center;
-        min-width: 0;
-    }
-    .folder-card:hover { border-color: var(--purple); background: var(--purple-bg); }
-    .folder-card i { color: var(--purple); }
-    .folder-card span {
-        font-size: clamp(0.75rem, 2vw, 0.85rem);
-        font-weight: 600;
-        color: var(--gray-700);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        max-width: 100%;
-    }
-
-    .folder-breadcrumb {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 0.35rem;
-        font-size: clamp(0.8rem, 2vw, 0.9rem);
-        color: var(--gray-500);
-        margin-bottom: clamp(0.75rem, 3vw, 1rem);
-    }
-    .folder-breadcrumb a { color: var(--purple); font-weight: 600; text-decoration: none; cursor: pointer; }
-    .folder-breadcrumb a:hover { text-decoration: underline; }
-
-    /* Trick 2: width 100% + max-width instead of a fixed pixel width */
-    .class-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.4rem;
-        width: 100%;
-        max-width: 16rem;
-        justify-content: flex-end;
-    }
-    .class-actions button {
-        width: auto;
-        height: auto;
-        padding: 0.35em 0.7em;
-        font-size: 0.75em;
-        border: 1px solid var(--gray-300);
-        border-radius: 0.4em;
-        background: var(--white);
-        cursor: pointer;
-        white-space: nowrap;
-    }
-    .class-actions button:hover { background: var(--gray-100); }
-
-    @media (max-width: 640px) {
-        .exam-item { flex-wrap: wrap; }
-        .class-actions { max-width: 100%; justify-content: flex-start; }
-    }
-</style>
-
-<script>
-{% if org %}
-const orgId = "{{ org._id }}";
-const allClasses = {{ classes_json | safe }};
-let allFolders = [];
-let currentFolderId = null; // null = root
-
-async function apiCall(url, method='GET', data=null) {
-    const options = { method, headers: { 'Content-Type': 'application/json' } };
-    if (data) options.body = JSON.stringify(data);
-    const res = await fetch(url, options);
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) showToast(json.error || 'Something went wrong', 'error');
-    return json;
-}
-
-async function loadFolders() {
-    const res = await apiCall(`/api/organizations/${orgId}/folders`);
-    allFolders = res.data || [];
-    renderFolderView();
-}
-
-function renderBreadcrumb() {
-    const el = document.getElementById('folderBreadcrumb');
-    const trail = [];
-    let cur = currentFolderId;
-    while (cur) {
-        const f = allFolders.find(x => x._id === cur);
-        if (!f) break;
-        trail.unshift(f);
-        cur = f.parent_folder_id;
-    }
-    let html = `<a onclick="goToFolder(null)">All Classes</a>`;
-    trail.forEach(f => { html += ` <i data-lucide="chevron-right" style="width:12px;height:12px;"></i> <a onclick="goToFolder('${f._id}')">${f.name}</a>`; });
-    el.innerHTML = html;
-    lucide.createIcons();
-}
-
-function goToFolder(folderId) {
-    currentFolderId = folderId;
-    renderFolderView();
-}
-
-function renderFolderView() {
-    renderBreadcrumb();
-
-    const childFolders = allFolders.filter(f => (f.parent_folder_id || null) === currentFolderId);
-    const folderGrid = document.getElementById('folderGrid');
-    folderGrid.innerHTML = childFolders.map(f => `
-        <div class="folder-card" onclick="goToFolder('${f._id}')">
-            <i data-lucide="folder"></i>
-            <span>${f.name}</span>
-        </div>
-    `).join('');
-
-    const classesHere = allClasses.filter(c => (c.folder_id || null) === currentFolderId);
-    const classGrid = document.getElementById('classGrid');
-    document.getElementById('foldersEmptyState').classList.toggle('hidden', classesHere.length > 0 || childFolders.length > 0);
-
-    classGrid.innerHTML = classesHere.map(c => `
-        <div class="exam-item">
-            <div class="exam-icon"><i data-lucide="book-open"></i></div>
-            <div class="exam-details">
-                <h4>${c.name}</h4>
-                <p>${c.student_count} Students</p>
-            </div>
-            <div class="exam-meta class-actions">
-                <button onclick="window.location.href='/dashboard/classes/${c._id}/manage'">Manage</button>
-                <button onclick="openMovePrompt('${c._id}')">Move</button>
-                <button onclick="copyClass('${c._id}')">Copy</button>
-            </div>
-        </div>
-    `).join('');
-
-    lucide.createIcons();
-}
-
-function openNewFolderPrompt() {
-    showPrompt('Name this folder:', async (name) => {
-        const res = await apiCall(`/api/organizations/${orgId}/folders`, 'POST', {
-            name, parent_folder_id: currentFolderId,
-        });
-        if (res.success) { showToast('Folder created'); loadFolders(); }
-    }, { title: 'New Folder', placeholder: 'e.g. Science Department', confirmText: 'Create' });
-}
-
-function openMovePrompt(classId) {
-    // Root ("All Classes") is always offered as the first choice, alongside
-    // every existing folder except the class's current one.
-    const cls = allClasses.find(c => c._id === classId);
-    const choices = [{ id: '', label: '📂 All Classes (ungrouped)' }]
-        .concat(allFolders.filter(f => f._id !== cls?.folder_id).map(f => ({ id: f._id, label: `📁 ${f.name}` })));
-
-    showChoice('Move this class to:', choices, async (folderId) => {
-        if (folderId === null) return; // confirmed with nothing selected
-        const res = await apiCall(`/api/classes/${classId}/folder`, 'PATCH', { folder_id: folderId || null });
-        if (res.success) {
-            if (cls) cls.folder_id = folderId || null;
-            showToast('Class moved');
-            renderFolderView();
-        }
-    }, { title: 'Move Class', confirmText: 'Move', emptyText: 'No folders yet - create one first.' });
-}
-
-function copyClass(classId) {
-    const cls = allClasses.find(c => c._id === classId);
-    showPrompt('Name for the copy:', async (name) => {
-        const res = await apiCall(`/api/classes/${classId}/copy`, 'POST', {
-            name, folder_id: currentFolderId,
-        });
-        if (res.success) {
-            allClasses.push({ _id: res.data._id, name: res.data.name, folder_id: currentFolderId, student_count: 0 });
-            showToast('Class copied');
-            renderFolderView();
-        }
-    }, { title: 'Copy Class', defaultValue: cls ? `${cls.name} (Copy)` : 'Class (Copy)', confirmText: 'Copy' });
-}
-
-loadFolders();
-{% endif %}
-</script>
 {% endblock %}

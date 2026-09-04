@@ -192,8 +192,13 @@ versions, since a real modal can't block script execution.
     };
 
     // choices: [{id, label}], picked by clicking a row - no native <select>.
+    // Clicking a row confirms immediately (single click, like a native
+    // <select>) - it used to require picking a row THEN pressing a separate
+    // "Confirm" button, and pressing Confirm with nothing picked yet silently
+    // did nothing, which read as the whole action being broken.
     window.showChoice = function (message, choices, onConfirm, opts = {}) {
-        openDialog({ title: opts.title || '', message, confirmText: opts.confirmText || 'Confirm' });
+        openDialog({ title: opts.title || '', message, showCancel: true });
+        confirmBtn.classList.add('hidden');
         choicesEl.classList.remove('hidden');
         messageEl.insertAdjacentElement('afterend', choicesEl);
 
@@ -203,18 +208,15 @@ versions, since a real modal can't block script execution.
             choicesEl.innerHTML = choices.map(c => `<button type="button" class="cd-choice" data-id="${c.id}">${c.label}</button>`).join('');
             choicesEl.querySelectorAll('.cd-choice').forEach(btn => {
                 btn.addEventListener('click', () => {
-                    choicesEl.querySelectorAll('.cd-choice').forEach(b => b.classList.remove('cd-choice-selected'));
-                    btn.classList.add('cd-choice-selected');
                     activeChoice = btn.dataset.id;
+                    const picked = activeChoice;
+                    confirmBtn.classList.remove('hidden');
+                    closeDialog();
+                    onConfirm(picked);
                 });
             });
         }
 
-        confirmBtn.onclick = () => {
-            const picked = activeChoice;
-            closeDialog();
-            onConfirm(picked);
-        };
         cancelBtn.onclick = () => { closeDialog(); if (opts.onCancel) opts.onCancel(); };
     };
 })();

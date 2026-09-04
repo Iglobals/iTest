@@ -1,0 +1,297 @@
+{% extends "dashboard/base.html" %}
+
+{% block page_title %}Classes{% endblock %}
+{% block page_subtitle %}Organize your organization's classes into folders - move or copy them in, file-explorer style.{% endblock %}
+
+{% block dashboard_content %}
+<div class="dashboard-body" style="grid-template-columns: 1fr; display: block;">
+
+    {% if not org %}
+    <div class="empty-state" style="margin-top: 2rem;">
+        <i data-lucide="building" style="width: 48px; height: 48px; color: var(--gray-400); margin-bottom: 1rem;"></i>
+        <h3>No Organization Found</h3>
+        <p>Your account isn't linked to an organization yet.</p>
+    </div>
+    {% else %}
+
+    <div class="manage-controls">
+        <div id="folderBreadcrumb" class="folder-breadcrumb"></div>
+        <a href="#" class="btn-primary" style="padding: 0.6em 1.2em; font-size: 0.9em; width: auto; height: auto;" onclick="event.preventDefault(); openNewFolderPrompt();">
+            <i data-lucide="folder-plus" style="width: 1em; height: 1em; margin-right: 0.5em;"></i> New Folder
+        </a>
+    </div>
+
+    <div id="folderGrid" class="folder-grid"></div>
+    <div id="classGrid" class="class-grid"></div>
+
+    <div id="foldersEmptyState" class="empty-state hidden" style="margin-top: 2rem;">
+        <i data-lucide="folder" style="width: 48px; height: 48px; color: var(--gray-400); margin-bottom: 1rem;"></i>
+        <h3>Nothing Here Yet</h3>
+        <p>Move or copy a class into this folder, or ask an examiner to add this organization to their class.</p>
+    </div>
+
+    {% endif %}
+</div>
+
+<style>
+    .manage-controls {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1em;
+        margin-bottom: clamp(1rem, 4vw, 2rem);
+        background: var(--white);
+        padding: 1em 1.5em;
+        border-radius: 1em;
+        border: 1px solid var(--gray-200);
+    }
+
+    /* Trick 1: auto-fit + minmax - adapts to any screen without per-breakpoint rules */
+    .folder-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+        gap: clamp(0.5rem, 2vw, 0.75rem);
+        margin-bottom: clamp(1rem, 3vw, 1.5rem);
+    }
+    .folder-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.35rem;
+        /* Trick 3: clamp instead of a fixed padding value */
+        padding: clamp(0.75rem, 3vw, 1rem);
+        border: 1px solid var(--gray-200);
+        border-radius: 0.75rem;
+        cursor: pointer;
+        background: var(--white);
+        text-align: center;
+        min-width: 0;
+    }
+    .folder-card:hover { border-color: var(--purple); background: var(--purple-bg); }
+    .folder-card i { color: var(--purple); }
+    .folder-card span {
+        font-size: clamp(0.75rem, 2vw, 0.85rem);
+        font-weight: 600;
+        color: var(--gray-700);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 100%;
+    }
+
+    .folder-breadcrumb {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.35rem;
+        font-size: clamp(0.9rem, 2vw, 1.05rem);
+        font-weight: 700;
+        color: var(--gray-900);
+    }
+    .folder-breadcrumb a { color: var(--gray-500); font-weight: 600; text-decoration: none; cursor: pointer; }
+    .folder-breadcrumb a:last-child { color: var(--gray-900); }
+    .folder-breadcrumb a:hover { color: var(--purple); }
+
+    /* Trick 1 again, for the class cards themselves */
+    .class-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+        gap: clamp(1rem, 3vw, 1.5rem);
+    }
+    .class-card {
+        background: var(--white);
+        border: 1px solid var(--gray-200);
+        border-radius: 1rem;
+        padding: clamp(1rem, 4vw, 1.5rem);
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+    }
+    .class-card-header {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.85rem;
+        margin-bottom: 0.75rem;
+    }
+    .class-card-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 0.75rem;
+        background: var(--purple-bg);
+        color: var(--purple);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+    .class-card-title h4 {
+        margin: 0 0 0.15rem;
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: var(--gray-900);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .class-card-title p { margin: 0; font-size: 0.8rem; color: var(--gray-500); }
+
+    /* Trick 2: width 100% + max-width instead of a fixed pixel width, and it
+       wraps on narrow screens instead of stretching full-width buttons */
+    .class-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        width: 100%;
+        max-width: 100%;
+        margin-top: auto;
+        padding-top: 0.85rem;
+        border-top: 1px solid var(--gray-100);
+    }
+    .class-actions button, .class-actions a {
+        width: auto;
+        height: auto;
+        padding: 0.4em 0.8em;
+        font-size: 0.78em;
+        font-weight: 600;
+        border: 1px solid var(--gray-300);
+        border-radius: 0.4em;
+        background: var(--white);
+        color: var(--gray-700);
+        cursor: pointer;
+        white-space: nowrap;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3em;
+    }
+    .class-actions button:hover, .class-actions a:hover { background: var(--gray-100); }
+    .class-actions .performance-link { border-color: var(--purple); color: var(--purple); background: var(--purple-bg); }
+    .class-actions .performance-link:hover { background: var(--purple); color: var(--white); }
+</style>
+
+<script>
+{% if org %}
+const orgId = "{{ org._id }}";
+const allClasses = {{ classes_json | safe }};
+let allFolders = [];
+let currentFolderId = null; // null = root
+
+async function apiCall(url, method='GET', data=null) {
+    const options = { method, headers: { 'Content-Type': 'application/json' } };
+    if (data) options.body = JSON.stringify(data);
+    const res = await fetch(url, options);
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) showToast(json.error || 'Something went wrong', 'error');
+    return json;
+}
+
+async function loadFolders() {
+    const res = await apiCall(`/api/organizations/${orgId}/folders`);
+    allFolders = res.data || [];
+    renderFolderView();
+}
+
+function renderBreadcrumb() {
+    const el = document.getElementById('folderBreadcrumb');
+    const trail = [];
+    let cur = currentFolderId;
+    while (cur) {
+        const f = allFolders.find(x => x._id === cur);
+        if (!f) break;
+        trail.unshift(f);
+        cur = f.parent_folder_id;
+    }
+    let html = `<a onclick="goToFolder(null)">All Classes</a>`;
+    trail.forEach(f => { html += ` <i data-lucide="chevron-right" style="width:12px;height:12px;"></i> <a onclick="goToFolder('${f._id}')">${f.name}</a>`; });
+    el.innerHTML = html;
+    lucide.createIcons();
+}
+
+function goToFolder(folderId) {
+    currentFolderId = folderId;
+    renderFolderView();
+}
+
+function renderFolderView() {
+    renderBreadcrumb();
+
+    const childFolders = allFolders.filter(f => (f.parent_folder_id || null) === currentFolderId);
+    const folderGrid = document.getElementById('folderGrid');
+    folderGrid.innerHTML = childFolders.map(f => `
+        <div class="folder-card" onclick="goToFolder('${f._id}')">
+            <i data-lucide="folder"></i>
+            <span>${f.name}</span>
+        </div>
+    `).join('');
+
+    const classesHere = allClasses.filter(c => (c.folder_id || null) === currentFolderId);
+    const classGrid = document.getElementById('classGrid');
+    document.getElementById('foldersEmptyState').classList.toggle('hidden', classesHere.length > 0 || childFolders.length > 0);
+
+    classGrid.innerHTML = classesHere.map(c => `
+        <div class="class-card">
+            <div class="class-card-header">
+                <div class="class-card-icon"><i data-lucide="book-open"></i></div>
+                <div class="class-card-title">
+                    <h4>${c.name}</h4>
+                    <p>${c.student_count} Student${c.student_count === 1 ? '' : 's'}</p>
+                </div>
+            </div>
+            <div class="class-actions">
+                <a href="/dashboard/classes/${c._id}/manage">Manage</a>
+                <a href="/dashboard/organizations/classes/${c._id}/performance" class="performance-link">Performance</a>
+                <button onclick="openMovePrompt('${c._id}')">Move</button>
+                <button onclick="copyClass('${c._id}')">Copy</button>
+            </div>
+        </div>
+    `).join('');
+
+    lucide.createIcons();
+}
+
+function openNewFolderPrompt() {
+    showPrompt('Name this folder:', async (name) => {
+        const res = await apiCall(`/api/organizations/${orgId}/folders`, 'POST', {
+            name, parent_folder_id: currentFolderId,
+        });
+        if (res.success) { showToast('Folder created'); loadFolders(); }
+    }, { title: 'New Folder', placeholder: 'e.g. Science Department', confirmText: 'Create' });
+}
+
+function openMovePrompt(classId) {
+    // Root ("All Classes") is always offered as the first choice, alongside
+    // every existing folder except the class's current one. Picking a row
+    // moves it immediately (see the single-click showChoice behavior).
+    const cls = allClasses.find(c => c._id === classId);
+    const choices = [{ id: '', label: 'All Classes (ungrouped)' }]
+        .concat(allFolders.filter(f => f._id !== cls?.folder_id).map(f => ({ id: f._id, label: f.name })));
+
+    showChoice('Move this class to:', choices, async (folderId) => {
+        const res = await apiCall(`/api/classes/${classId}/folder`, 'PATCH', { folder_id: folderId || null });
+        if (res.success) {
+            if (cls) cls.folder_id = folderId || null;
+            showToast('Class moved');
+            renderFolderView();
+        }
+    }, { title: 'Move Class', emptyText: 'No folders yet - create one first.' });
+}
+
+function copyClass(classId) {
+    const cls = allClasses.find(c => c._id === classId);
+    showPrompt('Name for the copy:', async (name) => {
+        const res = await apiCall(`/api/classes/${classId}/copy`, 'POST', {
+            name, folder_id: currentFolderId,
+        });
+        if (res.success) {
+            allClasses.push({ _id: res.data._id, name: res.data.name, folder_id: currentFolderId, student_count: 0 });
+            showToast('Class copied');
+            renderFolderView();
+        }
+    }, { title: 'Copy Class', defaultValue: cls ? `${cls.name} (Copy)` : 'Class (Copy)', confirmText: 'Copy' });
+}
+
+loadFolders();
+{% endif %}
+</script>
+{% endblock %}

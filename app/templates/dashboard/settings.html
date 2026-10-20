@@ -61,7 +61,7 @@
     <div id="tab-verification" class="tab-content">
         <div class="settings-card">
             <h2 class="settings-card-title">Identity Verification</h2>
-            <p class="settings-card-desc">Required once before you can take any AI-proctored exam. This is a one-time step and can't be redone once completed.</p>
+            <p class="settings-card-desc">Required once before you can take any proctored exam. This is a one-time step and can't be redone once completed.</p>
 
             {% if user.liveness_verification and user.liveness_verification.status == 'completed' %}
             <div style="display:flex; align-items:center; gap:0.5rem; color: var(--success); font-weight: 700;">
@@ -140,12 +140,26 @@
 </style>
 
 <script>
-    function switchSettingsTab(tab) {
+    function switchSettingsTab(tab, btn) {
+        const panel = document.getElementById('tab-' + tab);
+        if (!panel) return;
         document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
         document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
-        document.getElementById('tab-' + tab).classList.add('active');
-        event.target.classList.add('active');
+        panel.classList.add('active');
+        btn = btn || (window.event && window.event.target) ||
+            document.querySelector(`.tab-btn[onclick*="'${tab}'"]`);
+        if (btn) btn.classList.add('active');
     }
+
+    // ?tab=verification&next=/dashboard/exams/<id>/take - sent here from a
+    // proctored exam's pre-exam page; go straight back once verified.
+    const settingsParams = new URLSearchParams(location.search);
+    const VERIFY_NEXT = (settingsParams.get('next') || '').startsWith('/') && !(settingsParams.get('next') || '').startsWith('//')
+        ? settingsParams.get('next') : null;
+    document.addEventListener('DOMContentLoaded', () => {
+        const tab = settingsParams.get('tab');
+        if (tab) switchSettingsTab(tab, document.querySelector(`.tab-btn[onclick*="'${tab}'"]`));
+    });
 
     const LIVENESS_STEPS = [
         { key: 'front', label: 'Look straight at the camera' },
@@ -327,9 +341,10 @@
             if (livenessStream) livenessStream.getTracks().forEach(t => t.stop());
             document.getElementById('livenessFlow').innerHTML = `
                 <div style="display:flex; align-items:center; gap:0.5rem; color: var(--success); font-weight: 700;">
-                    <i data-lucide="check-circle"></i> Verification completed
+                    <i data-lucide="check-circle"></i> Verification completed${VERIFY_NEXT ? ' - taking you back to your exam...' : ''}
                 </div>`;
             lucide.createIcons();
+            if (VERIFY_NEXT) setTimeout(() => { location.href = VERIFY_NEXT; }, 1500);
         } catch (e) {
             document.getElementById('livenessError').textContent = e.message;
         }

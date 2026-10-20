@@ -138,7 +138,7 @@
                             <span class="sub-text"><i data-lucide="clock" style="width:14px; height:14px; vertical-align:middle; margin-right:4px;"></i> {{ exam.settings.duration_minutes if exam.settings else 60 }} mins</span>
                         </td>
                         <td>
-                            <span class="sub-text">{{ exam.attempts_made|default(0) }} / {{ exam.settings.max_attempts|default(1) }}</span>
+                            <span class="sub-text" title="{% if exam.attempts_left is none %}Unlimited attempts{% else %}{{ exam.attempts_left }} attempt(s) left{% endif %}">{{ exam.attempts_made|default(0) }} / {{ exam.settings|attempt_limit_label }}</span>
                         </td>
                         <td>
                             <a href="{{ url_for('dashboard.take_exam', exam_id=exam._id) }}" class="btn-primary" style="width:auto; padding:0.4em 0.8em; font-size:0.85em; border-radius:0.5em; text-decoration:none; display:inline-block;" onclick="event.stopPropagation();">

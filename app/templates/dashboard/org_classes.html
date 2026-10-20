@@ -16,18 +16,53 @@
 
     <div class="manage-controls">
         <div id="folderBreadcrumb" class="folder-breadcrumb"></div>
-        <a href="#" class="btn-primary" style="padding: 0.6em 1.2em; font-size: 0.9em; width: auto; height: auto;" onclick="event.preventDefault(); openNewFolderPrompt();">
-            <i data-lucide="folder-plus" style="width: 1em; height: 1em; margin-right: 0.5em;"></i> New Folder
-        </a>
+        <div class="manage-buttons">
+            <a href="#" class="btn-secondary manage-btn" onclick="event.preventDefault(); openNewFolderPrompt();">
+                <i data-lucide="folder-plus" style="width: 1em; height: 1em; margin-right: 0.5em;"></i> New Folder
+            </a>
+            <a href="#" class="btn-primary manage-btn" onclick="event.preventDefault(); openNewClassPrompt();">
+                <i data-lucide="plus-circle" style="width: 1em; height: 1em; margin-right: 0.5em;"></i> New Class
+            </a>
+        </div>
     </div>
 
-    <div id="folderGrid" class="folder-grid"></div>
-    <div id="classGrid" class="class-grid"></div>
+    <div class="org-classes-layout">
+        <!-- Linux `tree`-style overview of the whole folder hierarchy. A side
+             panel on desktop; stacked above the grid and collapsed by default
+             on narrow screens (see the initial toggle at the bottom). -->
+        <aside id="treePanel" class="tree-panel">
+            <button type="button" class="tree-panel-toggle" onclick="toggleTreePanel()" aria-controls="folderTree">
+                <i data-lucide="list-tree" style="width: 1em; height: 1em;"></i>
+                <span>Folder Tree</span>
+                <i data-lucide="chevron-down" class="tree-panel-chevron" style="width: 1em; height: 1em;"></i>
+            </button>
+            <div id="folderTree" class="folder-tree"></div>
+        </aside>
 
-    <div id="foldersEmptyState" class="empty-state hidden" style="margin-top: 2rem;">
-        <i data-lucide="folder" style="width: 48px; height: 48px; color: var(--gray-400); margin-bottom: 1rem;"></i>
-        <h3>Nothing Here Yet</h3>
-        <p>Move or copy a class into this folder, or ask an examiner to add this organization to their class.</p>
+        <section class="org-classes-main">
+            <div id="folderGrid" class="folder-grid"></div>
+            <div id="classGrid" class="class-grid"></div>
+
+            <div id="foldersEmptyState" class="empty-state hidden" style="margin-top: 2rem;">
+                <i data-lucide="folder" style="width: 48px; height: 48px; color: var(--gray-400); margin-bottom: 1rem;"></i>
+                <h3>Nothing Here Yet</h3>
+                <p>Create a class here, move or copy one in, or ask an examiner to add this organization to their class.</p>
+            </div>
+        </section>
+    </div>
+
+    <!-- Tree-shaped destination picker for Move (classes and folders). Reuses
+         the cd-* look from _custom_dialogs.html, but showChoice() only takes a
+         flat list, so this one is local to the page. -->
+    <div id="destPickerBackdrop" class="cd-backdrop hidden">
+        <div class="cd-box">
+            <h3 id="destPickerTitle" class="cd-title"></h3>
+            <p id="destPickerMessage" class="cd-message"></p>
+            <div id="destPickerChoices" class="cd-choices dest-picker-choices"></div>
+            <div class="cd-actions">
+                <button type="button" class="cd-btn cd-btn-cancel" onclick="closeDestinationPicker()">Cancel</button>
+            </div>
+        </div>
     </div>
 
     {% endif %}
@@ -42,10 +77,125 @@
         gap: 1em;
         margin-bottom: clamp(1rem, 4vw, 2rem);
         background: var(--white);
-        padding: 1em 1.5em;
+        padding: 1em clamp(1em, 3vw, 1.5em);
         border-radius: 1em;
         border: 1px solid var(--gray-200);
     }
+    .manage-buttons { display: flex; flex-wrap: wrap; gap: 0.5em; }
+    .manage-buttons .manage-btn { /* beats .btn-primary's fixed width */
+        padding: 0.6em 1.2em;
+        font-size: 0.9em;
+        width: auto;
+        height: auto;
+        display: inline-flex;
+        align-items: center;
+        text-decoration: none;
+        white-space: nowrap;
+    }
+
+    /* Sidebar tree + main content. minmax(0, 1fr) keeps long names from
+       forcing the grid wider than the viewport. */
+    .org-classes-layout {
+        display: grid;
+        grid-template-columns: minmax(14rem, 18rem) minmax(0, 1fr);
+        gap: clamp(1rem, 3vw, 1.5rem);
+        align-items: start;
+    }
+    .org-classes-main { min-width: 0; }
+
+    .tree-panel {
+        background: var(--white);
+        border: 1px solid var(--gray-200);
+        border-radius: 1rem;
+        padding: 0.75rem;
+        min-width: 0;
+        position: sticky;
+        top: 1rem;
+        max-height: calc(100vh - 2rem);
+        overflow-y: auto;
+    }
+    .tree-panel-toggle {
+        display: flex;
+        align-items: center;
+        gap: 0.5em;
+        width: 100%;
+        height: auto;
+        padding: 0.25em 0.35em 0.6em;
+        background: none;
+        border: none;
+        border-bottom: 1px solid var(--gray-100);
+        margin-bottom: 0.5rem;
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: var(--gray-700);
+        cursor: pointer;
+        text-align: left;
+    }
+    .tree-panel-toggle span { flex: 1; }
+    .tree-panel-chevron { transition: transform 0.15s ease; }
+    .tree-panel.collapsed .tree-panel-chevron { transform: rotate(-90deg); }
+    .tree-panel.collapsed .folder-tree { display: none; }
+    .tree-panel.collapsed .tree-panel-toggle { border-bottom: none; margin-bottom: 0; padding-bottom: 0.25em; }
+
+    /* The tree itself: nested lists with dashed guide lines, like `tree` */
+    .folder-tree { font-size: 0.85rem; }
+    .tree-list { list-style: none; margin: 0; padding: 0; }
+    .tree-list .tree-list {
+        margin-left: 0.7rem;
+        padding-left: 0.45rem;
+        border-left: 1px dashed var(--gray-300);
+    }
+    .tree-row {
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+        padding: 0.25rem 0.35rem;
+        border-radius: 0.4rem;
+        cursor: pointer;
+        color: var(--gray-700);
+        min-width: 0;
+    }
+    .tree-row:hover { background: var(--gray-100); }
+    .tree-row.is-current { background: var(--purple-bg); color: var(--purple); font-weight: 700; }
+    .tree-row .tree-icon { width: 15px; height: 15px; flex-shrink: 0; color: var(--purple); }
+    .tree-row.tree-leaf { color: var(--gray-500); }
+    .tree-row.tree-leaf .tree-icon { color: var(--gray-400); }
+    .tree-name {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .tree-caret, .tree-caret-spacer {
+        width: 18px;
+        height: 18px;
+        flex-shrink: 0;
+    }
+    .tree-caret {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        border: none;
+        background: none;
+        border-radius: 0.25rem;
+        color: var(--gray-500);
+        cursor: pointer;
+    }
+    .tree-caret:hover { background: var(--gray-200); }
+    .tree-caret i { width: 14px; height: 14px; transition: transform 0.15s ease; }
+    .tree-caret.is-collapsed i { transform: rotate(-90deg); }
+    .tree-count {
+        flex-shrink: 0;
+        font-size: 0.7rem;
+        font-weight: 600;
+        padding: 0.05rem 0.45rem;
+        border-radius: 999px;
+        background: var(--gray-100);
+        color: var(--gray-500);
+    }
+    .tree-row.is-current .tree-count { background: var(--white); color: var(--purple); }
 
     /* Trick 1: auto-fit + minmax - adapts to any screen without per-breakpoint rules */
     .folder-grid {
@@ -79,6 +229,20 @@
         white-space: nowrap;
         max-width: 100%;
     }
+    .folder-card small { font-size: 0.7rem; color: var(--gray-500); }
+    .folder-card-actions button {
+        width: auto;
+        height: auto;
+        padding: 0.25em 0.7em;
+        font-size: 0.72rem;
+        font-weight: 600;
+        border: 1px solid var(--gray-300);
+        border-radius: 0.4em;
+        background: var(--white);
+        color: var(--gray-700);
+        cursor: pointer;
+    }
+    .folder-card-actions button:hover { background: var(--gray-100); }
 
     .folder-breadcrumb {
         display: flex;
@@ -88,8 +252,9 @@
         font-size: clamp(0.9rem, 2vw, 1.05rem);
         font-weight: 700;
         color: var(--gray-900);
+        min-width: 0;
     }
-    .folder-breadcrumb a { color: var(--gray-500); font-weight: 600; text-decoration: none; cursor: pointer; }
+    .folder-breadcrumb a { color: var(--gray-500); font-weight: 600; text-decoration: none; cursor: pointer; overflow-wrap: anywhere; }
     .folder-breadcrumb a:last-child { color: var(--gray-900); }
     .folder-breadcrumb a:hover { color: var(--purple); }
 
@@ -107,7 +272,10 @@
         display: flex;
         flex-direction: column;
         min-width: 0;
+        transition: box-shadow 0.3s ease, border-color 0.3s ease;
     }
+    /* Brief highlight when a class is picked from the tree */
+    .class-card.is-flashing { border-color: var(--purple); box-shadow: 0 0 0 3px var(--purple-bg); }
     .class-card-header {
         display: flex;
         align-items: flex-start;
@@ -125,6 +293,7 @@
         justify-content: center;
         flex-shrink: 0;
     }
+    .class-card-title { min-width: 0; }
     .class-card-title h4 {
         margin: 0 0 0.15rem;
         font-size: 1.05rem;
@@ -168,14 +337,39 @@
     .class-actions button:hover, .class-actions a:hover { background: var(--gray-100); }
     .class-actions .performance-link { border-color: var(--purple); color: var(--purple); background: var(--purple-bg); }
     .class-actions .performance-link:hover { background: var(--purple); color: var(--white); }
+
+    /* Destination picker rows - indented by depth so it reads as a tree */
+    .dest-picker-choices .cd-choice {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        min-width: 0;
+    }
+    .dest-picker-choices .cd-choice i { width: 15px; height: 15px; flex-shrink: 0; color: var(--purple); }
+    .dest-picker-choices .cd-choice .tree-name { flex: 1; }
+    .dest-picker-choices .cd-choice small { flex-shrink: 0; font-size: 0.72rem; color: var(--gray-400); }
+    .dest-picker-choices .cd-choice:disabled { cursor: not-allowed; opacity: 0.55; background: var(--gray-100); }
+    .dest-picker-choices .cd-choice:disabled:hover { border-color: var(--gray-200); }
+    .dest-picker-choices .dest-guide { color: var(--gray-300); flex-shrink: 0; font-family: monospace; }
+
+    /* Stack the tree above the grid on tablets/phones */
+    @media (max-width: 900px) {
+        .org-classes-layout { grid-template-columns: minmax(0, 1fr); }
+        .tree-panel { position: static; max-height: none; }
+        .folder-tree { max-height: 50vh; overflow-y: auto; }
+    }
 </style>
 
 <script>
 {% if org %}
 const orgId = "{{ org._id }}";
 const allClasses = {{ classes_json | safe }};
+// Mirrors MAX_FOLDER_DEPTH in app/organizations/routes.py - the server
+// enforces it either way; this just greys out impossible destinations.
+const MAX_FOLDER_DEPTH = 4;
 let allFolders = [];
 let currentFolderId = null; // null = root
+const collapsedFolders = new Set(); // tree nodes the user folded; default is fully expanded
 
 async function apiCall(url, method='GET', data=null) {
     const options = { method, headers: { 'Content-Type': 'application/json' } };
@@ -186,11 +380,69 @@ async function apiCall(url, method='GET', data=null) {
     return json;
 }
 
+// Names are user-entered and go into innerHTML below.
+function escapeHtml(str) {
+    return String(str ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+}
+
 async function loadFolders() {
     const res = await apiCall(`/api/organizations/${orgId}/folders`);
-    allFolders = res.data || [];
+    allFolders = (res.data || []).sort((a, b) => a.name.localeCompare(b.name));
     renderFolderView();
 }
+
+// --- Hierarchy helpers (all in memory - folder counts per org are small) ---
+
+function childFoldersOf(parentId) {
+    return allFolders.filter(f => (f.parent_folder_id || null) === parentId);
+}
+
+function classesIn(folderId) {
+    return allClasses.filter(c => (c.folder_id || null) === folderId);
+}
+
+// 0 for root, 1 for a top-level folder - same scale as _folder_depth() server-side.
+function folderDepth(folderId) {
+    let depth = 0;
+    const seen = new Set();
+    let cur = folderId;
+    while (cur && !seen.has(cur)) {
+        seen.add(cur);
+        const f = allFolders.find(x => x._id === cur);
+        if (!f) break;
+        depth++;
+        cur = f.parent_folder_id;
+    }
+    return depth;
+}
+
+// Every folder id underneath folderId (not including itself).
+function descendantIds(folderId) {
+    const found = new Set();
+    const stack = [folderId];
+    while (stack.length) {
+        childFoldersOf(stack.pop()).forEach(f => {
+            if (!found.has(f._id)) { found.add(f._id); stack.push(f._id); }
+        });
+    }
+    return found;
+}
+
+// Levels this folder occupies including its sub-folders (1 = no sub-folders).
+function subtreeHeight(folderId, seen = new Set()) {
+    if (seen.has(folderId)) return 0;
+    seen.add(folderId);
+    return 1 + Math.max(0, ...childFoldersOf(folderId).map(f => subtreeHeight(f._id, seen)));
+}
+
+// Classes in this folder and all of its sub-folders.
+function totalClassCount(folderId) {
+    const ids = descendantIds(folderId);
+    ids.add(folderId);
+    return allClasses.filter(c => c.folder_id && ids.has(c.folder_id)).length;
+}
+
+// --- Rendering ---
 
 function renderBreadcrumb() {
     const el = document.getElementById('folderBreadcrumb');
@@ -203,39 +455,128 @@ function renderBreadcrumb() {
         cur = f.parent_folder_id;
     }
     let html = `<a onclick="goToFolder(null)">All Classes</a>`;
-    trail.forEach(f => { html += ` <i data-lucide="chevron-right" style="width:12px;height:12px;"></i> <a onclick="goToFolder('${f._id}')">${f.name}</a>`; });
+    trail.forEach(f => { html += ` <i data-lucide="chevron-right" style="width:12px;height:12px;"></i> <a onclick="goToFolder('${f._id}')">${escapeHtml(f.name)}</a>`; });
     el.innerHTML = html;
+}
+
+function renderTreeBranch(parentId) {
+    // Folders first, then the classes filed directly at this level - like `tree`.
+    const folders = childFoldersOf(parentId);
+    const classes = classesIn(parentId);
+    if (!folders.length && !classes.length) return '';
+
+    let html = '<ul class="tree-list">';
+    folders.forEach(f => {
+        const hasChildren = childFoldersOf(f._id).length > 0 || classesIn(f._id).length > 0;
+        const collapsed = collapsedFolders.has(f._id);
+        const direct = classesIn(f._id).length;
+        const total = totalClassCount(f._id);
+        html += `<li>
+            <div class="tree-row ${f._id === currentFolderId ? 'is-current' : ''}" onclick="goToFolder('${f._id}')" title="${escapeHtml(f.name)} - ${direct} class${direct === 1 ? '' : 'es'} here, ${total} including sub-folders">
+                ${hasChildren
+                    ? `<button type="button" class="tree-caret ${collapsed ? 'is-collapsed' : ''}" onclick="event.stopPropagation(); toggleTreeNode('${f._id}')" aria-label="${collapsed ? 'Expand' : 'Collapse'} folder"><i data-lucide="chevron-down"></i></button>`
+                    : '<span class="tree-caret-spacer"></span>'}
+                <i data-lucide="${hasChildren && !collapsed ? 'folder-open' : 'folder'}" class="tree-icon"></i>
+                <span class="tree-name">${escapeHtml(f.name)}</span>
+                <span class="tree-count">${total}</span>
+            </div>
+            ${collapsed ? '' : renderTreeBranch(f._id)}
+        </li>`;
+    });
+    classes.forEach(c => {
+        html += `<li>
+            <div class="tree-row tree-leaf" onclick="goToClass('${c._id}')" title="${escapeHtml(c.name)}">
+                <span class="tree-caret-spacer"></span>
+                <i data-lucide="book-open" class="tree-icon"></i>
+                <span class="tree-name">${escapeHtml(c.name)}</span>
+            </div>
+        </li>`;
+    });
+    return html + '</ul>';
+}
+
+function renderTree() {
+    // Root is always expanded - it's the "." line at the top of `tree`.
+    document.getElementById('folderTree').innerHTML = `
+        <ul class="tree-list">
+            <li>
+                <div class="tree-row ${currentFolderId === null ? 'is-current' : ''}" onclick="goToFolder(null)" title="All classes in the organization">
+                    <span class="tree-caret-spacer"></span>
+                    <i data-lucide="building" class="tree-icon"></i>
+                    <span class="tree-name">All Classes</span>
+                    <span class="tree-count">${allClasses.length}</span>
+                </div>
+                ${renderTreeBranch(null)}
+            </li>
+        </ul>`;
+}
+
+function toggleTreeNode(folderId) {
+    if (collapsedFolders.has(folderId)) collapsedFolders.delete(folderId);
+    else collapsedFolders.add(folderId);
+    renderTree();
     lucide.createIcons();
+}
+
+function toggleTreePanel() {
+    document.getElementById('treePanel').classList.toggle('collapsed');
 }
 
 function goToFolder(folderId) {
     currentFolderId = folderId;
+    // Make sure the folder we navigated into is visible in the tree.
+    let cur = folderId;
+    while (cur) {
+        const f = allFolders.find(x => x._id === cur);
+        if (!f) break;
+        if (f.parent_folder_id) collapsedFolders.delete(f.parent_folder_id);
+        cur = f.parent_folder_id;
+    }
     renderFolderView();
+}
+
+function goToClass(classId) {
+    const cls = allClasses.find(c => c._id === classId);
+    if (!cls) return;
+    goToFolder(cls.folder_id || null);
+    const card = document.querySelector(`.class-card[data-id="${classId}"]`);
+    if (card) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        card.classList.add('is-flashing');
+        setTimeout(() => card.classList.remove('is-flashing'), 1200);
+    }
 }
 
 function renderFolderView() {
     renderBreadcrumb();
+    renderTree();
 
-    const childFolders = allFolders.filter(f => (f.parent_folder_id || null) === currentFolderId);
+    const childFolders = childFoldersOf(currentFolderId);
     const folderGrid = document.getElementById('folderGrid');
-    folderGrid.innerHTML = childFolders.map(f => `
+    folderGrid.innerHTML = childFolders.map(f => {
+        const total = totalClassCount(f._id);
+        return `
         <div class="folder-card" onclick="goToFolder('${f._id}')">
             <i data-lucide="folder"></i>
-            <span>${f.name}</span>
-        </div>
-    `).join('');
+            <span title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</span>
+            <small>${total} class${total === 1 ? '' : 'es'}</small>
+            <div class="folder-card-actions">
+                <button type="button" onclick="event.stopPropagation(); openMoveFolderPrompt('${f._id}')">Move</button>
+            </div>
+        </div>`;
+    }).join('');
 
-    const classesHere = allClasses.filter(c => (c.folder_id || null) === currentFolderId);
+    const classesHere = classesIn(currentFolderId);
     const classGrid = document.getElementById('classGrid');
     document.getElementById('foldersEmptyState').classList.toggle('hidden', classesHere.length > 0 || childFolders.length > 0);
 
     classGrid.innerHTML = classesHere.map(c => `
-        <div class="class-card">
+        <div class="class-card" data-id="${c._id}">
             <div class="class-card-header">
                 <div class="class-card-icon"><i data-lucide="book-open"></i></div>
                 <div class="class-card-title">
-                    <h4>${c.name}</h4>
-                    <p>${c.student_count} Student${c.student_count === 1 ? '' : 's'}</p>
+                    <h4 title="${escapeHtml(c.name)}">${escapeHtml(c.name)}</h4>
+                    <p>${c.student_count} Student${c.student_count === 1 ? '' : 's'} &middot; ${c.examiner_count || 0} Examiner${c.examiner_count === 1 ? '' : 's'}</p>
                 </div>
             </div>
             <div class="class-actions">
@@ -250,6 +591,66 @@ function renderFolderView() {
     lucide.createIcons();
 }
 
+// --- Destination picker (tree-shaped) ---
+
+let destPickerOnPick = null;
+
+// isDisabled(folderId|null) returns a short reason string to grey a row out,
+// or null if it's a valid destination. Picking a row moves immediately, same
+// single-click behavior as showChoice().
+function openDestinationPicker({ title, message, isDisabled, onPick }) {
+    const rows = [];
+    const walk = (parentId, depth) => {
+        childFoldersOf(parentId).forEach(f => {
+            rows.push({ id: f._id, label: f.name, depth, icon: 'folder' });
+            walk(f._id, depth + 1);
+        });
+    };
+    rows.push({ id: null, label: 'All Classes (root)', depth: 0, icon: 'building' });
+    walk(null, 1);
+
+    document.getElementById('destPickerTitle').textContent = title;
+    document.getElementById('destPickerMessage').textContent = message;
+    const choicesEl = document.getElementById('destPickerChoices');
+    choicesEl.innerHTML = rows.map(r => {
+        const reason = isDisabled(r.id);
+        return `<button type="button" class="cd-choice" data-id="${r.id || ''}" ${reason ? 'disabled' : ''} style="padding-left: calc(0.85em + ${Math.max(0, r.depth - 1)} * 1.1em);">
+            ${r.depth > 0 ? '<span class="dest-guide">└</span>' : ''}
+            <i data-lucide="${r.icon}"></i>
+            <span class="tree-name">${escapeHtml(r.label)}</span>
+            ${reason ? `<small>${escapeHtml(reason)}</small>` : ''}
+        </button>`;
+    }).join('');
+    choicesEl.querySelectorAll('.cd-choice:not([disabled])').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const picked = btn.dataset.id || null;
+            const cb = destPickerOnPick;
+            closeDestinationPicker();
+            if (cb) cb(picked);
+        });
+    });
+
+    destPickerOnPick = onPick;
+    document.getElementById('destPickerBackdrop').classList.remove('hidden');
+    lucide.createIcons();
+}
+
+function closeDestinationPicker() {
+    document.getElementById('destPickerBackdrop').classList.add('hidden');
+    document.getElementById('destPickerChoices').innerHTML = '';
+    destPickerOnPick = null;
+}
+
+// Backdrop click / Escape cancel, matching _custom_dialogs.html.
+document.getElementById('destPickerBackdrop').addEventListener('click', (e) => {
+    if (e.target.id === 'destPickerBackdrop') closeDestinationPicker();
+});
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !document.getElementById('destPickerBackdrop').classList.contains('hidden')) closeDestinationPicker();
+});
+
+// --- Actions ---
+
 function openNewFolderPrompt() {
     showPrompt('Name this folder:', async (name) => {
         const res = await apiCall(`/api/organizations/${orgId}/folders`, 'POST', {
@@ -259,22 +660,73 @@ function openNewFolderPrompt() {
     }, { title: 'New Folder', placeholder: 'e.g. Science Department', confirmText: 'Create' });
 }
 
-function openMovePrompt(classId) {
-    // Root ("All Classes") is always offered as the first choice, alongside
-    // every existing folder except the class's current one. Picking a row
-    // moves it immediately (see the single-click showChoice behavior).
-    const cls = allClasses.find(c => c._id === classId);
-    const choices = [{ id: '', label: 'All Classes (ungrouped)' }]
-        .concat(allFolders.filter(f => f._id !== cls?.folder_id).map(f => ({ id: f._id, label: f.name })));
-
-    showChoice('Move this class to:', choices, async (folderId) => {
-        const res = await apiCall(`/api/classes/${classId}/folder`, 'PATCH', { folder_id: folderId || null });
+function openNewClassPrompt() {
+    // Created straight into the folder being viewed (or root), already part
+    // of the org - see create_class() in app/classes/routes.py.
+    const folderId = currentFolderId;
+    const where = folderId ? allFolders.find(f => f._id === folderId)?.name : null;
+    showPrompt(where ? `Name the new class (created in "${where}"):` : 'Name the new class:', async (name) => {
+        const res = await apiCall('/api/classes/', 'POST', {
+            name, organization_id: orgId, folder_id: folderId,
+        });
         if (res.success) {
-            if (cls) cls.folder_id = folderId || null;
-            showToast('Class moved');
+            // The org admin is added as the class's owner, hence 1 examiner.
+            allClasses.push({ _id: res.data._id, name: res.data.name, folder_id: folderId, student_count: 0, examiner_count: 1 });
+            showToast('Class created');
             renderFolderView();
         }
-    }, { title: 'Move Class', emptyText: 'No folders yet - create one first.' });
+    }, { title: 'New Class', placeholder: 'e.g. Computer Science 101', confirmText: 'Create' });
+}
+
+function openMovePrompt(classId) {
+    const cls = allClasses.find(c => c._id === classId);
+    if (!cls) return;
+    const fromId = cls.folder_id || null;
+
+    openDestinationPicker({
+        title: 'Move Class',
+        message: `Move "${cls.name}" to:`,
+        isDisabled: (id) => id === fromId ? 'current' : null,
+        onPick: async (folderId) => {
+            const res = await apiCall(`/api/classes/${classId}/folder`, 'PATCH', { folder_id: folderId });
+            if (res.success) {
+                cls.folder_id = folderId;
+                showToast('Class moved');
+                renderFolderView();
+            }
+        },
+    });
+}
+
+function openMoveFolderPrompt(folderId) {
+    const folder = allFolders.find(f => f._id === folderId);
+    if (!folder) return;
+    const fromId = folder.parent_folder_id || null;
+    const inside = descendantIds(folderId);
+    const height = subtreeHeight(folderId);
+
+    // Same rules update_folder() enforces server-side: not into itself, not
+    // into its own sub-folders, and its deepest sub-folder must still fit.
+    openDestinationPicker({
+        title: 'Move Folder',
+        message: `Move "${folder.name}" (with everything inside it) to:`,
+        isDisabled: (id) => {
+            if (id === folderId) return 'this folder';
+            if (id && inside.has(id)) return 'inside it';
+            if (id === fromId) return 'current';
+            if (folderDepth(id) + height > MAX_FOLDER_DEPTH) return 'too deep';
+            return null;
+        },
+        onPick: async (parentId) => {
+            const res = await apiCall(`/api/organizations/${orgId}/folders/${folderId}`, 'PATCH', { parent_folder_id: parentId });
+            if (res.success) {
+                folder.parent_folder_id = parentId;
+                if (parentId) collapsedFolders.delete(parentId);
+                showToast('Folder moved');
+                renderFolderView();
+            }
+        },
+    });
 }
 
 function copyClass(classId) {
@@ -284,11 +736,16 @@ function copyClass(classId) {
             name, folder_id: currentFolderId,
         });
         if (res.success) {
-            allClasses.push({ _id: res.data._id, name: res.data.name, folder_id: currentFolderId, student_count: 0 });
+            allClasses.push({ _id: res.data._id, name: res.data.name, folder_id: currentFolderId, student_count: 0, examiner_count: 1 });
             showToast('Class copied');
             renderFolderView();
         }
     }, { title: 'Copy Class', defaultValue: cls ? `${cls.name} (Copy)` : 'Class (Copy)', confirmText: 'Copy' });
+}
+
+// Phones/tablets start with the tree folded so the classes are visible first.
+if (window.matchMedia('(max-width: 900px)').matches) {
+    document.getElementById('treePanel').classList.add('collapsed');
 }
 
 loadFolders();

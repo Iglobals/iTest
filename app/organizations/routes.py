@@ -88,6 +88,49 @@ def _folder_depth(folder_id):
     return depth
 
 
+def _descendant_ids(org_id, folder_id):
+    """Every folder id (as str) underneath folder_id, at any depth - NOT
+    including folder_id itself. One query for the org's folders, then walked
+    in memory, since folder counts per org are small."""
+    folders = list(get_collection('org_folders').find(
+        {"organization_id": ObjectId(org_id)}, {"parent_folder_id": 1}
+    ))
+    children = {}
+    for f in folders:
+        parent = str(f["parent_folder_id"]) if f.get("parent_folder_id") else None
+        children.setdefault(parent, []).append(str(f["_id"]))
+
+    found = set()
+    stack = [str(folder_id)]
+    while stack:
+        for child in children.get(stack.pop(), []):
+            if child not in found:  # guards a corrupted cycle
+                found.add(child)
+                stack.append(child)
+    return found
+
+
+def _subtree_height(org_id, folder_id):
+    """Levels a folder occupies including its own sub-folders - 1 for a
+    folder with no sub-folders. Used so moving a folder can't push its
+    deepest descendant past MAX_FOLDER_DEPTH."""
+    folders = list(get_collection('org_folders').find(
+        {"organization_id": ObjectId(org_id)}, {"parent_folder_id": 1}
+    ))
+    children = {}
+    for f in folders:
+        parent = str(f["parent_folder_id"]) if f.get("parent_folder_id") else None
+        children.setdefault(parent, []).append(str(f["_id"]))
+
+    def height(fid, seen):
+        if fid in seen:
+            return 0
+        seen = seen | {fid}
+        return 1 + max((height(c, seen) for c in children.get(fid, [])), default=0)
+
+    return height(str(folder_id), frozenset())
+
+
 @org_bp.route('/<org_id>/folders', methods=['GET'])
 @require_role('org_admin', 'platform_admin')
 def list_folders(org_id):
@@ -141,9 +184,15 @@ def create_folder(org_id):
 @org_bp.route('/<org_id>/folders/<folder_id>', methods=['PATCH'])
 @require_role('org_admin', 'platform_admin')
 def update_folder(org_id, folder_id):
-    """Rename and/or move (re-parent) a folder."""
+    """Rename and/or move (re-parent) a folder. Body: {name?, parent_folder_id?}
+    - parent_folder_id null/"" moves it to the root. A move carries the
+    folder's whole subtree (sub-folders + their classes) along with it,
+    since children only point at their parent."""
     if not _is_org_admin(org_id, g.current_user):
         return jsonify({"error": "Not your organization"}), 403
+
+    if not ObjectId.is_valid(folder_id):
+        return jsonify({"error": "Invalid folder_id"}), 400
 
     folders_col = get_collection('org_folders')
     folder = folders_col.find_one({"_id": ObjectId(folder_id), "organization_id": ObjectId(org_id)})
@@ -162,12 +211,19 @@ def update_folder(org_id, folder_id):
     if "parent_folder_id" in data:
         new_parent_id = data.get("parent_folder_id")
         if new_parent_id:
+            if not ObjectId.is_valid(str(new_parent_id)):
+                return jsonify({"error": "Invalid parent_folder_id"}), 400
             if str(new_parent_id) == str(folder_id):
-                return jsonify({"error": "A folder cannot be its own parent"}), 400
+                return jsonify({"error": "A folder cannot be moved into itself"}), 400
+            # Moving into one of its own sub-folders would detach the whole
+            # branch into a cycle that no longer hangs off the root.
+            if str(new_parent_id) in _descendant_ids(org_id, folder_id):
+                return jsonify({"error": "A folder cannot be moved into one of its own sub-folders"}), 400
             parent = folders_col.find_one({"_id": ObjectId(new_parent_id), "organization_id": ObjectId(org_id)})
             if not parent:
                 return jsonify({"error": "Parent folder not found"}), 404
-            if _folder_depth(new_parent_id) >= MAX_FOLDER_DEPTH:
+            # The deepest descendant must still fit, not just the folder itself.
+            if _folder_depth(new_parent_id) + _subtree_height(org_id, folder_id) > MAX_FOLDER_DEPTH:
                 return jsonify({"error": f"Folders can only be nested {MAX_FOLDER_DEPTH} levels deep"}), 400
             update["parent_folder_id"] = ObjectId(new_parent_id)
         else:

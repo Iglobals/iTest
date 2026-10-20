@@ -163,19 +163,23 @@ def start_session():
 
     settings = exam.get("settings", {})
 
-    # One-time identity check required before any AI-proctored attempt -
-    # see app/users/service.py's save_liveness_photos() / dashboard/settings.html.
-    if settings.get("ai_proctoring_enabled"):
-        liveness = g.current_user.get("liveness_verification", {})
-        if liveness.get("status") != "completed":
+    # One-time identity check required before ANY proctored attempt (basic
+    # or AI) - see app/users/service.py's save_liveness_photos() and
+    # dashboard/settings.html. Checked against the DB, not just the cached
+    # g.current_user, so a student who just finished verifying isn't
+    # bounced on a stale copy.
+    from app.utils.exam_rules import attempt_limit, is_proctored, liveness_completed
+    if is_proctored(settings):
+        fresh_user = get_collection('users').find_one({"_id": student_id}, {"liveness_verification": 1})
+        if not liveness_completed(fresh_user):
             return jsonify({
-                "error": "This exam requires identity verification before you can start. Complete it once in Settings.",
+                "error": "This exam is proctored and requires a one-time identity verification before you can start.",
                 "liveness_required": True,
             }), 403
 
-    # Check max attempts
-    allow_retake = settings.get("allow_retake", False)
-    max_attempts = settings.get("max_attempts", 1)
+    # Attempt limit - 1 when retakes are off, the examiner's chosen limit
+    # (2, 3, ...) when on, or unlimited (see app/utils/exam_rules.py).
+    max_attempts = attempt_limit(settings)
 
     previous_attempts = sessions_col.count_documents({
         "exam_id": exam_obj_id,
@@ -183,8 +187,8 @@ def start_session():
         "status": {"$in": ["submitted", "timed_out"]}
     })
 
-    if not allow_retake and previous_attempts >= max_attempts:
-        return jsonify({"error": f"Max attempts ({max_attempts}) reached"}), 403
+    if max_attempts is not None and previous_attempts >= max_attempts:
+        return jsonify({"error": f"You have used all {max_attempts} attempt(s) allowed for this exam."}), 403
 
     duration = settings.get("duration_minutes", 60)
 

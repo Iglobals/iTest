@@ -101,30 +101,77 @@ def list_classes():
 @classes_bp.route('/', methods=['POST'])
 @require_role('teacher', 'org_admin')
 def create_class():
-    data = request.json
+    data = request.json or {}
     classes_col = get_collection('classes')
-    
+
     if classes_col is None:
         return jsonify({"error": "Database error"}), 500
-        
+
+    name = (data.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "Class name is required"}), 400
+
+    user = g.current_user
+    org_id = data.get("organization_id")
+    org = None
+
+    # An org_admin's classes belong to their organization - they never have a
+    # personal plan (onboarding skips plan selection for them), so a class
+    # they made used to land with organization_id None, invisible on the
+    # org classes page and counted against the "free" personal limit of 3.
+    if user.get("role") == "org_admin" and not org_id:
+        own_org = get_collection('organizations').find_one({"admin_user_id": user["_id"]})
+        if own_org:
+            org_id = str(own_org["_id"])
+
+    if org_id:
+        if not ObjectId.is_valid(str(org_id)):
+            return jsonify({"error": "Invalid organization_id"}), 400
+        org = get_collection('organizations').find_one({"_id": ObjectId(org_id)})
+        if not org:
+            return jsonify({"error": "Organization not found"}), 404
+
+    from app.organizations.routes import _is_org_admin
+    created_by_org = bool(org) and _is_org_admin(org["_id"], user)
+    if user.get("role") == "org_admin" and org and not created_by_org:
+        return jsonify({"error": "Not your organization"}), 403
+
     from app.utils.plans import get_plan_limit
-    user_plan = g.current_user.get("plan", {}).get("type", "free")
-    max_classes = get_plan_limit(user_plan, "max_classes")
-    
-    current_count = classes_col.count_documents({"teachers.user_id": g.current_user["_id"]})
+    if created_by_org:
+        # Org billing is org.limits (set at onboarding / create_org), counted
+        # over the org's classes - not the admin's personal plan.
+        max_classes = (org.get("limits") or {}).get("max_classes") or get_plan_limit("free", "max_classes")
+        current_count = classes_col.count_documents({"organization_id": org["_id"], "is_active": {"$ne": False}})
+    else:
+        user_plan = user.get("plan", {}).get("type", "free")
+        max_classes = get_plan_limit(user_plan, "max_classes")
+        current_count = classes_col.count_documents({"teachers.user_id": user["_id"]})
     if current_count >= max_classes:
         return jsonify({"error": f"Plan limit reached: Max {max_classes} classes allowed.", "limit_reached": True}), 403
-        
+
+    # folder_id only means something for the org admin's own folder tree.
+    folder_id = data.get("folder_id")
+    if folder_id:
+        if not created_by_org:
+            return jsonify({"error": "Only the organization admin can file classes into folders"}), 403
+        if not ObjectId.is_valid(str(folder_id)) or not get_collection('org_folders').find_one(
+                {"_id": ObjectId(folder_id), "organization_id": org["_id"]}):
+            return jsonify({"error": "Folder not found"}), 404
+
     new_class = {
-        "name": data.get("name"),
+        "name": name,
         "description": data.get("description", ""),
         "cover_image_url": data.get("cover_image_url", ""),
-        "organization_id": ObjectId(data["organization_id"]) if data.get("organization_id") else None,
-        "organization_status": "pending" if data.get("organization_id") else "none",
+        "organization_id": org["_id"] if org else None,
+        # A teacher attaching an org still needs the org to accept it; the
+        # org admin creating it inside their own org is accepted already.
+        "organization_status": ("active" if created_by_org else "pending") if org else "none",
+        "folder_id": ObjectId(folder_id) if folder_id else None,
         "teachers": [
             {
-                "user_id": g.current_user["_id"],
+                "user_id": user["_id"],
                 "role": "owner",
+                "status": "active",
                 "added_at": datetime.utcnow()
             }
         ],
@@ -140,7 +187,12 @@ def create_class():
     result = classes_col.insert_one(new_class)
     return jsonify({
         "success": True,
-        "data": {"_id": str(result.inserted_id), "name": new_class["name"]}
+        "data": {
+            "_id": str(result.inserted_id),
+            "name": new_class["name"],
+            "organization_id": str(org["_id"]) if org else None,
+            "folder_id": str(folder_id) if folder_id else None,
+        }
     }), 201
 
 @classes_bp.route('/<class_id>', methods=['GET'])

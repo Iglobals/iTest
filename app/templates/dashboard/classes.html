@@ -192,7 +192,7 @@
                 </div>
                 <div class="class-title">
                     <h3>{{ cls.name }}</h3>
-                    <p><i data-lucide="users" style="width:14px; height:14px;"></i> {{ cls.students | rejectattr('status', 'equalto', 'removed') | list | length }} Students Enrolled</p>
+                    <p><i data-lucide="users" style="width:14px; height:14px;"></i> {% set sc = cls | active_students %}{% set ec = cls | active_examiners %}{{ sc }} Student{{ '' if sc == 1 else 's' }} &middot; {{ ec }} Examiner{{ '' if ec == 1 else 's' }}</p>
                 </div>
             </div>
             

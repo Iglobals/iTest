@@ -56,4 +56,23 @@ def create_app(config_name='default'):
     def health():
         return {'status': 'ok'}
 
+    from app.utils import exam_rules
+    app.add_template_filter(exam_rules.attempt_limit_label, 'attempt_limit_label')
+    app.add_template_filter(exam_rules.is_proctored, 'is_proctored')
+    app.add_template_filter(exam_rules.is_ai_proctored, 'is_ai_proctored')
+    app.add_template_filter(exam_rules.liveness_completed, 'liveness_completed')
+
+    @app.context_processor
+    def _plan_flags():
+        # Lets exam create/edit pages gate the AI proctoring checkbox (send
+        # the user to upgrade instead of letting them tick it) - the API
+        # enforces the same rule in exams/routes.py.
+        from flask import g
+        user = getattr(g, 'current_user', None)
+        if not user:
+            return {}
+        from app.utils.plans import get_plan_limit
+        plan = (user.get('plan') or {}).get('type', 'free')
+        return {'can_use_ai_proctoring': bool(get_plan_limit(plan, 'can_use_ai_proctoring'))}
+
     return app

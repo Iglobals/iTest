@@ -52,6 +52,8 @@ def create_exam():
         "show_result_immediately": grading_mode == "objective"
     }
     settings.update(data.get("settings", {}))
+    from app.utils.exam_rules import normalize_attempt_settings
+    normalize_attempt_settings(settings)
     # Instant results only ever make sense when there's no essay component to manually grade.
     settings["show_result_immediately"] = grading_mode == "objective" and bool(settings.get("show_result_immediately"))
 
@@ -278,6 +280,8 @@ def update_exam(exam_id):
 
             update_data["settings"] = existing_exam.get("settings", {})
             update_data["settings"].update(data["settings"])
+            from app.utils.exam_rules import normalize_attempt_settings
+            normalize_attempt_settings(update_data["settings"])
             effective_grading_mode = update_data.get("grading_mode", existing_exam.get("grading_mode", "hybrid"))
             update_data["settings"]["show_result_immediately"] = (
                 effective_grading_mode == "objective" and bool(update_data["settings"].get("show_result_immediately"))
@@ -297,6 +301,19 @@ def update_exam(exam_id):
             update_data["schedule"] = existing_exam.get("schedule", {})
             update_data["schedule"]["available_from"] = sched.get("available_from", update_data["schedule"].get("available_from"))
             update_data["schedule"]["available_until"] = sched.get("available_until", update_data["schedule"].get("available_until"))
+
+            def _as_dt(v):
+                if isinstance(v, datetime):
+                    return v
+                try:
+                    return datetime.fromisoformat(str(v)[:16]) if v else None
+                except ValueError:
+                    return None
+            start_dt = _as_dt(update_data["schedule"].get("available_from"))
+            end_dt = _as_dt(update_data["schedule"].get("available_until"))
+            if start_dt and end_dt and end_dt <= start_dt:
+                return jsonify({"error": "The end date/time must be after the start date/time."}), 400
+
             if "is_published" in sched:
                 update_data["schedule"]["is_published"] = sched["is_published"]
                 update_data["status"] = "published" if sched["is_published"] else "draft"

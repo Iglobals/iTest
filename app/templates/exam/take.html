@@ -472,6 +472,10 @@
     }
 </style>
 <script src="https://unpkg.com/lucide@latest"></script>
+<!-- Formulas in questions/options are stored as Quill .ql-formula spans; render them with KaTeX -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+<script src="{{ url_for('static', filename='js/math-render.js') }}"></script>
 {% endblock %}
 
 {% block content %}
@@ -609,7 +613,7 @@
 
     <!-- Palette Sidebar -->
     <div class="palette-sidebar">
-        {% if exam.settings.ai_proctoring_enabled %}
+        {% if exam.settings|is_proctored %}
         <div class="proctor-box">
             <video id="proctorVideo" autoplay muted playsinline></video>
             <div class="proctor-badge"><i data-lucide="video" style="width:12px;height:12px;"></i> Recording</div>
@@ -642,7 +646,8 @@
 
     const sessionId = "{{ session_id }}";
     const totalQ = {{ questions| length }};
-    const isProctored = {{ 'true' if exam.settings.ai_proctoring_enabled else 'false' }};
+    const isProctored = {{ 'true' if exam.settings|is_proctored else 'false' }};
+    const isAiProctored = {{ 'true' if exam.settings|is_ai_proctored else 'false' }};
     let currentQ = 0;
 
     // Check if exam is empty
@@ -728,8 +733,12 @@
                 proctorStream = stream;
                 const video = document.getElementById('proctorVideo');
                 if (video) video.srcObject = stream;
-                startVisionCaptureLoop();
-                startAudioLoudnessWatch(stream);
+                // AI checks only on AI-proctored exams (paid plan); basic
+                // proctoring just needs camera/mic on + tab-switch flags.
+                if (isAiProctored) {
+                    startVisionCaptureLoop();
+                    startAudioLoudnessWatch(stream);
+                }
             })
             .catch(err => {
                 showAlert("Camera and microphone access are required for this proctored exam. Please allow access and refresh.", { title: 'Camera Access Needed' });

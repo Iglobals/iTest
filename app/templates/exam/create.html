@@ -344,9 +344,10 @@
                         <label>Pass Mark (%)</label>
                         <input type="number" id="pass_mark" class="form-control" value="50" min="0" max="100">
                     </div>
-                    <div class="form-group" id="max_attempts_group" style="display: flex;">
+                    <div class="form-group" id="max_attempts_group" style="display: none;">
                         <label>Max Attempts</label>
-                        <input type="number" id="max_attempts" class="form-control" value="1" min="1">
+                        <input type="number" id="max_attempts" class="form-control" value="3" min="0">
+                        <small style="color: var(--gray-500);">Total attempts per student, e.g. 2, 3, 4. Use 0 for unlimited.</small>
                     </div>
                 </div>
                 
@@ -376,11 +377,15 @@
             </div>
 
             <div class="form-section">
-                <h3><i data-lucide="shield-alert" style="width: 1em; height: 1em; vertical-align: middle; margin-right: 4px;"></i> Proctoring (Paid Feature)</h3>
-                <p style="font-size: 0.875em; color: var(--gray-500); margin-top: 0; margin-bottom: 1em;">Enable AI Proctoring to require camera access and flag tab-switching in real time.</p>
+                <h3><i data-lucide="shield-alert" style="width: 1em; height: 1em; vertical-align: middle; margin-right: 4px;"></i> Proctoring</h3>
+                <p style="font-size: 0.875em; color: var(--gray-500); margin-top: 0; margin-bottom: 1em;">Either option requires students to complete a one-time identity verification before they can start.</p>
                 <div class="form-row">
-                    <input type="checkbox" id="ai_proctoring">
-                    <label for="ai_proctoring"><strong>Enable AI Proctoring</strong></label>
+                    <input type="checkbox" id="proctoring">
+                    <label for="proctoring"><strong>Enable Proctoring</strong> <span style="font-weight:400; color: var(--gray-500);">- camera &amp; microphone access, flags tab switching</span></label>
+                </div>
+                <div class="form-row">
+                    <input type="checkbox" id="ai_proctoring" onchange="onAiProctoringToggle(this)">
+                    <label for="ai_proctoring"><strong>Enable AI Proctoring</strong> <span style="font-weight:400; color: var(--gray-500);">- AI also watches the camera &amp; listens for cheating{% if not can_use_ai_proctoring %} (Pro plan){% endif %}</span></label>
                 </div>
             </div>
 
@@ -702,11 +707,22 @@
     function toggleMaxAttempts() {
         const allowRetake = document.getElementById('allow_retake').checked;
         const maxAttemptsGroup = document.getElementById('max_attempts_group');
-        if(allowRetake) {
-            maxAttemptsGroup.style.display = 'none';
-        } else {
-            maxAttemptsGroup.style.display = 'flex';
+        // Without retakes it's always exactly 1 attempt, so the limit input
+        // only matters (and only shows) once retakes are on.
+        maxAttemptsGroup.style.display = allowRetake ? 'flex' : 'none';
+    }
+
+    const CAN_USE_AI_PROCTORING = {{ 'true' if can_use_ai_proctoring else 'false' }};
+    function onAiProctoringToggle(box) {
+        if (box.checked && !CAN_USE_AI_PROCTORING) {
+            box.checked = false;
+            showConfirm('AI proctoring is available on the Pro plan. Upgrade now? (Basic proctoring is free.)', () => {
+                window.location.href = "{{ url_for('billing.select_plan') }}";
+            }, { title: 'Upgrade Required', confirmText: 'View Plans' });
+            return;
         }
+        // AI proctoring builds on basic proctoring.
+        if (box.checked) document.getElementById('proctoring').checked = true;
     }
 
     function toggleVisibilityFields() {
@@ -805,11 +821,14 @@
             settings: {
                 duration_minutes: parseInt(document.getElementById('duration').value) || 60,
                 allow_retake: document.getElementById('allow_retake').checked,
-                max_attempts: parseInt(document.getElementById('max_attempts').value) || 1,
+                max_attempts: document.getElementById('allow_retake').checked
+                    ? (parseInt(document.getElementById('max_attempts').value) || 0)
+                    : 1,
                 randomize_questions: document.getElementById('randomize_questions').checked,
                 randomize_options: document.getElementById('randomize_options').checked,
                 show_result_immediately: gradingMode === 'objective' && document.getElementById('show_result_immediately').checked,
                 pass_mark_percent: parseInt(document.getElementById('pass_mark').value) || 50,
+                proctoring_enabled: document.getElementById('proctoring').checked || document.getElementById('ai_proctoring').checked,
                 ai_proctoring_enabled: document.getElementById('ai_proctoring').checked
             },
             schedule: {

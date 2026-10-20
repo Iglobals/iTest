@@ -119,6 +119,15 @@
     .tag-badge.email-badge { background: #e3f2fd; color: #1565c0; border-color: #2196f3; }
     .tag-badge.excluded-badge { background: #ffebee; color: #c62828; border-color: #f44336; }
     
+    /* Long class names / emails truncate instead of stretching the pill. */
+    .tag-badge { max-width: 100%; min-width: 0; }
+    .tag-badge span {
+        max-width: 16em;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
     .tag-badge button {
         background: none; border: none; color: inherit; cursor: pointer;
         font-size: 1.2em; line-height: 1; padding: 0 0 0 4px; opacity: 0.7;
@@ -387,13 +396,23 @@
                         <label>Instant Results (objective-only exams)</label>
                     </div>
                     <div style="display:flex; align-items:center; gap:0.5em;">
-                        <input type="checkbox" id="exam_allow_retake" {% if exam.settings and exam.settings.allow_retake %}checked{% endif %}>
-                        <label>Allow Retakes</label>
+                        <input type="checkbox" id="exam_allow_retake" onchange="toggleMaxAttemptsField()" {% if exam.settings and exam.settings.allow_retake %}checked{% endif %}>
+                        <label for="exam_allow_retake">Allow Retakes</label>
+                    </div>
+                    {% set _limit = exam.settings|attempt_limit_label %}
+                    <div id="exam_max_attempts_group" style="display:{{ 'flex' if exam.settings and exam.settings.allow_retake else 'none' }}; flex-direction:column; gap:0.25em;">
+                        <label for="exam_max_attempts" style="font-size:0.875em;">Max Attempts <span style="color:var(--gray-500); font-weight:400;">(0 = unlimited)</span></label>
+                        <input type="number" class="form-control" id="exam_max_attempts" min="0" style="max-width:8em;" value="{{ 0 if _limit == 'Unlimited' else _limit }}">
                     </div>
                     <div style="display:flex; align-items:center; gap:0.5em;">
-                        <input type="checkbox" id="exam_ai_proctoring" {% if exam.settings and exam.settings.ai_proctoring_enabled %}checked{% endif %}>
-                        <label>Enable AI Proctoring</label>
+                        <input type="checkbox" id="exam_proctoring" {% if exam.settings|is_proctored %}checked{% endif %}>
+                        <label for="exam_proctoring">Enable Proctoring <span style="color:var(--gray-500); font-weight:400;">(camera/mic, tab-switch flags)</span></label>
                     </div>
+                    <div style="display:flex; align-items:center; gap:0.5em;">
+                        <input type="checkbox" id="exam_ai_proctoring" onchange="onAiProctoringToggle(this)" {% if exam.settings and exam.settings.ai_proctoring_enabled %}checked{% endif %}>
+                        <label for="exam_ai_proctoring">Enable AI Proctoring{% if not can_use_ai_proctoring %} <span style="color:var(--gray-500); font-weight:400;">(Pro plan)</span>{% endif %}</label>
+                    </div>
+                    <p style="grid-column: 1 / -1; margin:0; font-size:0.8em; color:var(--gray-500);">Proctored exams require students to complete a one-time identity verification first.</p>
                 </div>
                 
                 <!-- Instructions -->
@@ -430,7 +449,7 @@ For urgent academic questions, please reach out to the examiner via [e.g., inter
         <div class="section-title">
             <span>Questions</span>
         </div>
-        <p style="color: var(--gray-500); margin-top: 0;">
+        <p style="color: var(--gray-500); margin-top: 0; margin-bottom: 1.25em;">
             {{ exam.total_questions or 0 }} question(s), {{ exam.total_marks or 0 }} total marks.
             Questions are added and edited from the question builder.
         </p>
@@ -521,7 +540,7 @@ For urgent academic questions, please reach out to the examiner via [e.g., inter
     let selectedClasses = [
         {% if exam.visibility and exam.visibility.class_ids %}
             {% for cid in exam.visibility.class_ids %}
-                { _id: "{{ cid }}", name: "{{ cid }}" },
+                { _id: "{{ cid }}", name: {{ (class_names.get(cid|string) or 'Unknown class') | tojson }} },
             {% endfor %}
         {% endif %}
     ];
@@ -648,6 +667,7 @@ For urgent academic questions, please reach out to the examiner via [e.g., inter
         selectedClasses.forEach(c => {
             const badge = document.createElement('div');
             badge.className = 'tag-badge';
+            badge.title = c.name;
             badge.innerHTML = `<span>${c.name}</span> <button type="button" onclick="removeClassTag('${c._id}')">&times;</button>`;
             container.appendChild(badge);
         });
@@ -666,6 +686,7 @@ For urgent academic questions, please reach out to the examiner via [e.g., inter
             arrayRef.forEach(email => {
                 const badge = document.createElement('div');
                 badge.className = 'tag-badge ' + (inputId === 'inc_email_input' ? 'email-badge' : 'excluded-badge');
+                badge.title = email;
                 badge.innerHTML = `<span>${email}</span> <button type="button" onclick="removeEmailTag('${inputId}', '${email}')">&times;</button>`;
                 wrapper.appendChild(badge);
             });
@@ -731,7 +752,33 @@ For urgent academic questions, please reach out to the examiner via [e.g., inter
         }
     }
 
+    function toggleMaxAttemptsField() {
+        document.getElementById('exam_max_attempts_group').style.display =
+            document.getElementById('exam_allow_retake').checked ? 'flex' : 'none';
+    }
+
+    const CAN_USE_AI_PROCTORING = {{ 'true' if can_use_ai_proctoring else 'false' }};
+    const AI_PROCTORING_ALREADY_ON = {{ 'true' if exam.settings and exam.settings.ai_proctoring_enabled else 'false' }};
+    function onAiProctoringToggle(box) {
+        if (box.checked && !CAN_USE_AI_PROCTORING && !AI_PROCTORING_ALREADY_ON) {
+            box.checked = false;
+            showConfirm('AI proctoring is available on the Pro plan. Upgrade now? (Basic proctoring is free.)', () => {
+                window.location.href = "{{ url_for('billing.select_plan') }}";
+            }, { title: 'Upgrade Required', confirmText: 'View Plans' });
+            return;
+        }
+        if (box.checked) document.getElementById('exam_proctoring').checked = true;
+    }
+
     async function saveSettings() {
+        const availFrom = document.getElementById('exam_avail_from').value;
+        const availUntil = document.getElementById('exam_avail_until').value;
+        if (availFrom && availUntil && new Date(availUntil) <= new Date(availFrom)) {
+            showToast("The end date/time must be after the start date/time.", "error");
+            document.getElementById('exam_avail_until').focus();
+            return;
+        }
+
         const gradingModeEl = document.getElementById('exam_grading_mode');
         const payload = {
             title: document.getElementById('exam_title').value,
@@ -747,6 +794,10 @@ For urgent academic questions, please reach out to the examiner via [e.g., inter
                 randomize_options: document.getElementById('exam_randomize_o').checked,
                 show_result_immediately: document.getElementById('exam_show_results').checked,
                 allow_retake: document.getElementById('exam_allow_retake').checked,
+                max_attempts: document.getElementById('exam_allow_retake').checked
+                    ? (parseInt(document.getElementById('exam_max_attempts').value) || 0)
+                    : 1,
+                proctoring_enabled: document.getElementById('exam_proctoring').checked || document.getElementById('exam_ai_proctoring').checked,
                 ai_proctoring_enabled: document.getElementById('exam_ai_proctoring').checked
             },
             visibility: {

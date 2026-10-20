@@ -5,6 +5,24 @@ from app.utils.grading import is_answer_correct, resolve_correct_text, resolve_o
 
 dashboard_bp = Blueprint('dashboard', __name__, url_prefix='/dashboard')
 
+
+# Member counts for class list views. Must use the same rules as the Manage
+# Class "Members" tab (classes/routes.py get_members): pending invites,
+# declined/removed entries are NOT members. The old inline count only
+# excluded "removed", so pending invitations showed up as enrolled students.
+def active_student_count(cls):
+    return len([s for s in (cls or {}).get("students", [])
+                if s.get("status", "pending") not in ("pending", "declined", "removed")])
+
+
+def active_examiner_count(cls):
+    return len([t for t in (cls or {}).get("teachers", [])
+                if t.get("status", "active") not in ("pending", "rejected", "removed")])
+
+
+dashboard_bp.add_app_template_filter(active_student_count, 'active_students')
+dashboard_bp.add_app_template_filter(active_examiner_count, 'active_examiners')
+
 @dashboard_bp.route('/')
 @require_auth()
 def index():
@@ -103,8 +121,9 @@ def classes():
             "_id": str(c["_id"]),
             "name": c.get("name", "Untitled"),
             "folder_id": str(c["folder_id"]) if c.get("folder_id") else None,
-            "student_count": len([s for s in c.get("students", []) if s.get("status", "active") not in ("removed",)]),
-        } for c in org_classes])
+            "student_count": active_student_count(c),
+            "examiner_count": active_examiner_count(c),
+        } for c in org_classes]).replace("</", "<\\/")  # safe inside the page's <script>
         return render_template('dashboard/org_classes.html', org=org, classes_json=classes_json)
 
     if role == 'teacher':
@@ -372,8 +391,24 @@ def exam_details(slug):
                         exam["schedule"][date_field] = ""
                 elif isinstance(val, str) and len(val) >= 16:
                     exam["schedule"][date_field] = val[:16]
-                    
-    return render_template('exam/details.html', exam=exam)
+
+    # Resolve visibility class ids -> names server-side so the class pills
+    # never fall back to showing raw ids (the client-side /api/classes/
+    # lookup only knows classes the *viewer* belongs to).
+    class_names = {}
+    class_ids = (exam.get("visibility") or {}).get("class_ids") or []
+    if class_ids:
+        from bson import ObjectId
+        oids = []
+        for cid in class_ids:
+            try:
+                oids.append(ObjectId(str(cid)))
+            except Exception:
+                pass
+        for cls in get_collection('classes').find({"_id": {"$in": oids}}, {"name": 1}):
+            class_names[str(cls["_id"])] = cls.get("name") or "Untitled class"
+
+    return render_template('exam/details.html', exam=exam, class_names=class_names)
 
 @dashboard_bp.route('/exams/<slug>/builder')
 @require_auth()
@@ -461,7 +496,17 @@ def take_exam(exam_id):
         flash("You do not have access to this exam.", "error")
         return redirect(url_for('dashboard.index'))
 
-    return render_template('exam/pre_exam.html', exam_id=exam_id, exam=exam)
+    # Proctored (basic or AI) exams are blocked up front until the student's
+    # one-time identity verification is done - the page then links to
+    # Settings with ?next= so they land straight back here afterwards. Read
+    # fresh from the DB in case they verified a moment ago in another tab.
+    from app.utils.exam_rules import is_proctored, liveness_completed
+    needs_liveness = False
+    if is_proctored(exam.get('settings')):
+        fresh_user = get_collection('users').find_one({"_id": g.current_user['_id']}, {"liveness_verification": 1})
+        needs_liveness = not liveness_completed(fresh_user)
+
+    return render_template('exam/pre_exam.html', exam_id=exam_id, exam=exam, needs_liveness=needs_liveness)
 
 @dashboard_bp.route('/sessions/<session_id>/take')
 @require_auth()
@@ -608,24 +653,16 @@ def my_exams():
             exam['_id'] = exam_id_str  # Ensure _id is string for template
 
             attempts = sum(1 for sid in taken_exam_ids if sid == exam_id_str)
-            max_attempts = exam.get('settings', {}).get('max_attempts', 1)
-            allow_retake = exam.get('settings', {}).get('allow_retake', False)
-
-            # Show exam if:
-            # 1. Student hasn't taken it yet (attempts == 0), OR
-            # 2. Retakes are allowed (allow_retake=True means unlimited, max_attempts is just a guideline)
-            # 3. If retakes NOT allowed, only show if attempts < max_attempts
-            if attempts == 0:
-                # Never taken - always show
+            # Same limit session start enforces (app/utils/exam_rules.py):
+            # 1 without retakes, the examiner's limit with them, or None =
+            # unlimited. The old check treated allow_retake as "always show"
+            # while the column still printed max_attempts (usually 1), so a
+            # retake exam read "1 / 1" yet stayed takeable.
+            from app.utils.exam_rules import attempt_limit
+            limit = attempt_limit(exam.get('settings'))
+            if limit is None or attempts < limit:
                 exam['attempts_made'] = attempts
-                filtered_available.append(exam)
-            elif allow_retake:
-                # Retakes allowed - show regardless of max_attempts (it's just a counter)
-                exam['attempts_made'] = attempts
-                filtered_available.append(exam)
-            elif attempts < max_attempts:
-                # Retakes not allowed - only show if under limit
-                exam['attempts_made'] = attempts
+                exam['attempts_left'] = None if limit is None else limit - attempts
                 filtered_available.append(exam)
 
         return render_template('dashboard/my_exams.html', available_exams=filtered_available, taken_exams=taken_exams)

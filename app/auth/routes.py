@@ -94,6 +94,14 @@ def get_ica_client():
 def login():
     from flask import session, make_response
     session.permanent = True  # Make session persistent
+
+    # Where to go after login (e.g. pricing -> /billing/select-plan). Only
+    # same-site relative paths, so this can't be used as an open redirect.
+    next_url = request.args.get('next', '')
+    if next_url.startswith('/') and not next_url.startswith('//'):
+        session['post_login_next'] = next_url
+    else:
+        session.pop('post_login_next', None)
     
     client = get_ica_client()
     # 1. Generate PKCE
@@ -196,8 +204,10 @@ def callback():
         
         print(f"[AUTH DEBUG] Authentication successful! Redirecting to dashboard...")
         
-        # 6. Redirect to dashboard
-        return redirect(url_for('dashboard.index'))
+        # 6. Redirect to where the user was headed (see login()), else the
+        # dashboard. Onboarding/plan-selection redirects in require_auth()
+        # still take priority on that page if they apply.
+        return redirect(session.pop('post_login_next', None) or url_for('dashboard.index'))
         
     except Exception as e:
         import traceback

@@ -119,7 +119,18 @@
     </div>
 
     <div class="setup-steps">
-        {% if exam.settings and exam.settings.ai_proctoring_enabled %}
+        {% if needs_liveness %}
+        <!-- Blocking step: proctored exams need the one-time identity check. -->
+        <div class="step-card active" id="step-liveness">
+            <h2><i data-lucide="scan-face"></i> Identity Verification Required</h2>
+            <p>This is a proctored exam. Before you can start it, you need to complete a one-time identity verification (a few quick photos with your camera). You'll be brought right back here when you're done.</p>
+            <div class="action-row">
+                <button class="btn btn-outline" onclick="window.location.href='/dashboard'">Cancel</button>
+                <a class="btn btn-primary" style="text-decoration:none;" href="{{ url_for('dashboard.settings', tab='verification', next=request.path) }}">Verify My Identity <i data-lucide="arrow-right"></i></a>
+            </div>
+        </div>
+        {% else %}
+        {% if exam.settings|is_proctored %}
         
         <!-- Step 1: Camera & Mic -->
         <div class="step-card active" id="step-camera">
@@ -160,7 +171,7 @@
         {% endif %}
 
         <!-- Step 3: Instructions -->
-        <div class="step-card {% if not exam.settings or not exam.settings.ai_proctoring_enabled %}active{% endif %}" id="step-instructions">
+        <div class="step-card {% if not exam.settings|is_proctored %}active{% endif %}" id="step-instructions">
             <h2><i data-lucide="file-text"></i> Exam Instructions</h2>
             
             <div class="instructions-content">{{ exam.instructions if exam.instructions else 'Online Exam Guidelines & Instructions\nWelcome to your online exam. Please read all instructions carefully before you begin.\n\nExam Details & Timing\nDuration: 60 mins\nTime Limit: Once you click "Start," the timer will begin counting down immediately. You cannot pause the timer.\n\nTechnical Requirements\nBrowser: Use the latest version of your browser.\nConnection: Ensure you have a stable internet connection.\nBackup Plan: If you lose connection, don\'t panic. Reconnect immediately and refresh the page. Your progress is auto-saved.\n\nExam Rules & Academic Integrity\nClosed-Book Policy: Unless otherwise specified, this is a closed-book exam. Do not use notes, textbooks, or unauthorized websites.\nProctoring: Ensure your face is clearly visible at all times.\nNo Communication: Do not communicate with other students, tutors, or use any messaging apps during the exam.\n\nSupport & Troubleshooting\nEncountering technical issues? Contact the IT helpdesk immediately.\nFor urgent academic questions, please reach out to the examiner via internal chat or email.' }}</div>
@@ -169,6 +180,7 @@
                 <button class="btn btn-primary" id="btnStartExam" onclick="startExam()" style="background-color: var(--success); font-size: 1.1em;">Begin Exam <i data-lucide="play-circle"></i></button>
             </div>
         </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}
@@ -177,7 +189,7 @@
 <script>
     lucide.createIcons();
     
-    const isProctored = {{ 'true' if exam.settings and exam.settings.ai_proctoring_enabled else 'false' }};
+    const isProctored = {{ 'true' if (exam.settings|is_proctored) and not needs_liveness else 'false' }};
     const examId = "{{ exam._id }}";
     
     // Globals for streams
@@ -291,8 +303,8 @@
                 window.location.href = `/dashboard/sessions/${result.data._id}/take`;
             } else if (result.liveness_required) {
                 showConfirm(result.error, () => {
-                    window.location.href = '/dashboard/settings';
-                }, { title: 'Verification Required', confirmText: 'Go to Settings', onCancel: resetStartButton });
+                    window.location.href = "{{ url_for('dashboard.settings', tab='verification', next=request.path) }}";
+                }, { title: 'Verification Required', confirmText: 'Verify Now', onCancel: resetStartButton });
             } else {
                 showAlert(result.error, { title: 'Could Not Start Exam', onClose: resetStartButton });
             }

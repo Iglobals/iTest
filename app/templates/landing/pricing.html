@@ -40,7 +40,18 @@
                     <li style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;"><i data-lucide="check" style="color: var(--success); width: 20px; height: 20px;"></i> AI proctoring</li>
                     <li style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;"><i data-lucide="check" style="color: var(--success); width: 20px; height: 20px;"></i> Custom branding</li>
                 </ul>
-                <a href="/auth/login" style="display: block; width: 100%; background: var(--primary); color: white; padding: 0.875rem; border-radius: 0.5rem; text-decoration: none; font-weight: 600; box-sizing: border-box;">Subscribe Now</a>
+                {% if session.get('access_token') %}
+                {# Straight into checkout (billing.select_plan POST -> Paystack). These
+                   used to link to /auth/login, so a logged-in user just got silently
+                   re-authenticated and dropped on the dashboard. #}
+                <form method="POST" action="{{ url_for('billing.select_plan') }}" style="margin: 0;">
+                    <input type="hidden" name="tier" value="pro">
+                    <input type="hidden" name="interval" value="monthly">
+                    <button type="submit" style="display: block; width: 100%; background: var(--primary); color: white; border: none; padding: 0.875rem; border-radius: 0.5rem; text-decoration: none; font-weight: 600; box-sizing: border-box; font-size: 1rem; cursor: pointer; font-family: inherit;">Subscribe Now</button>
+                </form>
+                {% else %}
+                <a href="{{ url_for('auth.login', next=url_for('billing.select_plan')) }}" style="display: block; width: 100%; background: var(--primary); color: white; border: none; padding: 0.875rem; border-radius: 0.5rem; text-decoration: none; font-weight: 600; box-sizing: border-box; font-size: 1rem; cursor: pointer; font-family: inherit;">Subscribe Now</a>
+                {% endif %}
             </div>
             
             <div style="background: var(--card-bg); border: 1px solid var(--border); border-radius: 1rem; padding: 2.5rem 2rem; border-top: 4px solid var(--gray-600); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
@@ -53,7 +64,18 @@
                     <li style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;"><i data-lucide="check" style="color: var(--success); width: 20px; height: 20px;"></i> Priority Support</li>
                     <li style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;"><i data-lucide="check" style="color: var(--success); width: 20px; height: 20px;"></i> Dedicated Account Manager</li>
                 </ul>
-                <a href="/auth/login" style="display: block; width: 100%; background: var(--surface-2); color: var(--text-heading); border: 1px solid var(--border); padding: 0.875rem; border-radius: 0.5rem; text-decoration: none; font-weight: 600; box-sizing: border-box;">Subscribe Now</a>
+                {% if session.get('access_token') %}
+                {# Straight into checkout (billing.select_plan POST -> Paystack). These
+                   used to link to /auth/login, so a logged-in user just got silently
+                   re-authenticated and dropped on the dashboard. #}
+                <form method="POST" action="{{ url_for('billing.select_plan') }}" style="margin: 0;">
+                    <input type="hidden" name="tier" value="enterprise">
+                    <input type="hidden" name="interval" value="monthly">
+                    <button type="submit" style="display: block; width: 100%; background: var(--surface-2); color: var(--text-heading); border: 1px solid var(--border); padding: 0.875rem; border-radius: 0.5rem; text-decoration: none; font-weight: 600; box-sizing: border-box; font-size: 1rem; cursor: pointer; font-family: inherit;">Subscribe Now</button>
+                </form>
+                {% else %}
+                <a href="{{ url_for('auth.login', next=url_for('billing.select_plan')) }}" style="display: block; width: 100%; background: var(--surface-2); color: var(--text-heading); border: 1px solid var(--border); padding: 0.875rem; border-radius: 0.5rem; text-decoration: none; font-weight: 600; box-sizing: border-box; font-size: 1rem; cursor: pointer; font-family: inherit;">Subscribe Now</a>
+                {% endif %}
             </div>
         </div>
     </div>

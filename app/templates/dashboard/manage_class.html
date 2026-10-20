@@ -23,6 +23,60 @@
         color: var(--gray-500);
         margin: 0;
     }
+
+    /* Edit mode: the page becomes just the edit form - title row, tabs and
+       tab panels are hidden until Save/Cancel, instead of the form being
+       stacked on top of them and pushing everything down. */
+    .mc-container.editing #class-header-row,
+    .mc-container.editing .mc-tabs,
+    .mc-container.editing .mc-tab-content,
+    .mc-container.editing .mc-permission-note {
+        display: none !important;
+    }
+    .mc-container.editing #edit-class-form { margin-top: 0 !important; }
+
+    #class-header-row { flex-wrap: wrap; }
+    #class-header-row > div:first-child { flex: 1 1 14rem; min-width: 0; }
+    #class-header-row h1, #class-header-row p { overflow-wrap: anywhere; }
+
+    /* Member rows: name/email left, role + toggles + delete right on wide
+       screens. On phones/tablets the actions always drop to their own line
+       under the email (left-aligned) - flex-wrap alone only wrapped them for
+       long emails, so short-email rows squeezed everything onto one line. */
+    .mc-member-row {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.5rem 1rem;
+    }
+    .mc-member-id { min-width: 0; }
+    .mc-member-id p { overflow-wrap: anywhere; }
+    .mc-member-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        text-align: right;
+        flex-shrink: 0;
+    }
+    @media (max-width: 1024px) {
+        .mc-member-row { flex-direction: column; align-items: flex-start; }
+        .mc-member-actions { justify-content: flex-start; text-align: left; flex-shrink: 1; }
+    }
+
+    .mc-permission-note {
+        display: flex;
+        gap: 0.5rem;
+        align-items: flex-start;
+        font-size: 0.85rem;
+        color: var(--gray-600);
+        background: var(--gray-50);
+        border: 1px solid var(--gray-200);
+        border-radius: 0.5rem;
+        padding: 0.6rem 0.8rem;
+        margin-top: 0.5rem;
+    }
     
     .mc-tabs {
         display: flex;
@@ -199,7 +253,7 @@
 
 <div class="mc-container">
     <div class="mc-header">
-        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem;">
+        <div id="class-header-row" style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem;">
             <div>
                 <h1 id="class-name-display">{{ class_obj.name }}</h1>
                 <p id="class-desc-display">{{ class_obj.description or "No description provided." }}</p>
@@ -211,6 +265,13 @@
             </div>
             {% endif %}
         </div>
+
+        {% if not is_teacher and g.current_user.role != 'student' %}
+        <div class="mc-permission-note">
+            <i data-lucide="info" style="width:16px;height:16px;flex-shrink:0;margin-top:1px;"></i>
+            <span>You're an examiner in this class. Only the class owner (or examiners they give edit access) can edit or delete the class, remove members, manage broadcast access or generate invite links.</span>
+        </div>
+        {% endif %}
 
         {% if is_teacher %}
         <div id="edit-class-form" class="mc-card hidden" style="margin-top:1rem;">
@@ -334,7 +395,7 @@
         </div>
         {% else %}
         <div class="mc-card">
-            <p style="color:var(--gray-500); margin: 0;">Only examiners can invite members or generate links.</p>
+            <p style="color:var(--gray-500); margin: 0;">Only the class owner (or examiners they give edit access) can invite members or generate links.</p>
         </div>
         {% endif %}
     </div>
@@ -434,7 +495,7 @@ async function loadMembersData() {
                 let orgStr = i.organization ? ` &bull; Org: ${i.organization}` : '';
                 let removeBtn = '';
                 if(isTeacher && i.user_id !== currentUserId) {
-                    removeBtn = `<button onclick="removeMember('${i.user_id}', '${i.role}')" class="mc-btn mc-btn-danger" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; margin-left: 1rem;"><i data-lucide="trash-2" style="width:12px;height:12px;"></i></button>`;
+                    removeBtn = `<button onclick="removeMember('${i.user_id}', '${i.role}')" class="mc-btn mc-btn-danger" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;"><i data-lucide="trash-2" style="width:12px;height:12px;"></i></button>`;
                 }
 
                 // Membership isn't management anymore - a collaborator only
@@ -443,24 +504,24 @@ async function loadMembersData() {
                 // can manage the class). See _can_manage_class()/_can_broadcast().
                 let accessToggle = '';
                 if (i.role === 'examiner' && !i.is_owner && isOwnerOrOrg) {
-                    accessToggle = `<label style="display:flex; align-items:center; gap:0.35rem; font-size:0.8rem; color:var(--gray-600); margin-left:1rem; cursor:pointer;">
+                    accessToggle = `<label style="display:flex; align-items:center; gap:0.35rem; font-size:0.8rem; color:var(--gray-600); cursor:pointer;">
                         <input type="checkbox" ${i.can_edit ? 'checked' : ''} onchange="toggleEditAccess('${i.user_id}', this.checked)"> Edit access
                     </label>`;
                 } else if (i.role === 'examiner' && i.is_owner) {
-                    accessToggle = `<span style="font-size:0.8rem; color:var(--gray-400); margin-left:1rem;">Owner</span>`;
+                    accessToggle = `<span style="font-size:0.8rem; color:var(--gray-400);">Owner</span>`;
                 } else if (i.role === 'student' && isTeacher) {
-                    accessToggle = `<label style="display:flex; align-items:center; gap:0.35rem; font-size:0.8rem; color:var(--gray-600); margin-left:1rem; cursor:pointer;">
+                    accessToggle = `<label style="display:flex; align-items:center; gap:0.35rem; font-size:0.8rem; color:var(--gray-600); cursor:pointer;">
                         <input type="checkbox" ${i.can_broadcast ? 'checked' : ''} onchange="toggleBroadcastAccess('${i.user_id}', this.checked)"> Broadcast access
                     </label>`;
                 }
 
                 html += `<div class="mc-list-item">
-                    <div class="mc-list-info" style="width:100%; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:0.5rem;">
-                        <div>
+                    <div class="mc-list-info mc-member-row">
+                        <div class="mc-member-id">
                             <p class="name">${i.name || i.email}</p>
                             <p class="role" style="text-transform:none;">${i.email}</p>
                         </div>
-                        <div style="text-align:right; display:flex; align-items:center; flex-wrap:wrap;">
+                        <div class="mc-member-actions">
                             <div>
                                 <span style="font-weight:600; color:var(--gray-700); font-size: 0.9rem; text-transform:capitalize;">${i.role}</span>
                                 <div style="font-size: 0.8rem; color: var(--gray-500);">${orgStr}</div>
@@ -545,11 +606,19 @@ async function respondJoinRequest(studentId, action) {
 
 // Edit / Delete Class
 function openEditClass() {
+    // Start from what's currently saved, so a cancelled edit never lingers.
+    document.getElementById('edit-class-name').value = document.getElementById('class-name-display').textContent.trim();
+    const desc = document.getElementById('class-desc-display').textContent.trim();
+    document.getElementById('edit-class-desc').value = desc === 'No description provided.' ? '' : desc;
+    document.querySelector('.mc-container').classList.add('editing');
     document.getElementById('edit-class-form').classList.remove('hidden');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    document.getElementById('edit-class-name').focus();
 }
 
 function closeEditClass() {
     document.getElementById('edit-class-form').classList.add('hidden');
+    document.querySelector('.mc-container').classList.remove('editing');
 }
 
 async function saveEditClass() {

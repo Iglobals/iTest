@@ -15,6 +15,7 @@
     <meta property="og:type" content="website">
     <meta name="twitter:card" content="summary_large_image">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/global.css') }}">
+    <script src="{{ url_for('static', filename='js/auth-fetch.js') }}"></script>
     <style>
         /* Main Header - the bar itself has no background of its own (it floats
            directly over the hero/whatever section is scrolled beneath it);
@@ -91,6 +92,16 @@
             white-space: nowrap;
         }
 
+        /* Was an inline style="display:flex" on the element, which beat the
+           mobile media query's display:none - so logged-out visitors still
+           saw Log In / Get Started in the collapsed mobile/tablet header
+           (logged-in users only escaped it via an !important rule). */
+        .header-cta-group {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
         .header-menu-toggle {
             display: none;
             align-items: center;
@@ -129,7 +140,7 @@
         .hamburger-bars .bar-2 { width: 0.8rem; }
         .hamburger-bars .bar-3 { width: 0.55rem; }
 
-        @media (max-width: 43.75rem) {
+        @media (max-width: 64rem) {
             .header-nav-links,
             .header-cta-group {
                 display: none;
@@ -140,6 +151,8 @@
             }
 
             .main-floating-header.mobile-open {
+                /* Small gap from the top edge of the screen when expanded. */
+                top: 0.75rem;
                 flex-wrap: wrap;
                 background: var(--card-bg);
                 border-radius: 1rem;
@@ -233,8 +246,7 @@
             <a href="{{ url_for('landing.pricing') }}">Pricing</a>
         </nav>
 
-        <div class="header-cta-group{{ ' header-cta-loggedin' if session.get('access_token') }}"
-            style="display: flex; align-items: center; gap: 1rem;">
+        <div class="header-cta-group{{ ' header-cta-loggedin' if session.get('access_token') }}">
             {% if session.get('access_token') %}
             <a href="{{ url_for('dashboard.index') }}" class="btn"
                 style="background: var(--surface-2); color: var(--text-heading); border: 1px solid var(--border); padding: 0.5rem 1rem; border-radius: 0.5rem; text-decoration: none; font-weight: 600;">Dashboard</a>

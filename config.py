@@ -14,7 +14,11 @@ class Config:
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = 'Lax'
     SESSION_COOKIE_NAME = 'itest_session'
-    PERMANENT_SESSION_LIFETIME = 3600  # 1 hour
+    # Sliding window: each request pushes expiry forward. Must outlive the
+    # 15-min ICA access token by a lot, otherwise the cookie (and with it the
+    # refresh_token) disappears after an hour idle and the user has to log in
+    # again even though their refresh token is still good for 30 days.
+    PERMANENT_SESSION_LIFETIME = 7 * 24 * 3600  # 7 days
     SESSION_REFRESH_EACH_REQUEST = True
     
     # MongoDB setup (primary data storage)

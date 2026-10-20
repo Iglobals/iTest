@@ -8,6 +8,7 @@
 <!-- Include KaTeX -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+<script src="{{ url_for('static', filename='js/math-render.js') }}"></script>
 
 <!-- Include Quill Theme -->
 <link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
@@ -213,6 +214,54 @@
         gap: 0.5rem;
     }
 
+    /* Quill inserts its toolbar as a sibling *before* the element it's
+       mounted on. Mounting on .option-editor (inside the wrap) keeps toolbar
+       + text box stacked in one flex column; mounting on the wrap itself made
+       the toolbar its own flex item and squeezed the text box to ~1 char wide
+       on phones (text rendered one letter per line). */
+    .option-editor-wrap {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .option-editor .ql-editor {
+        min-height: 2.75rem;
+        padding: 0.5rem 0.75rem;
+    }
+
+    .option-editor-wrap .ql-toolbar.ql-snow {
+        padding: 4px;
+    }
+
+    .option-editor.ql-container {
+        border-bottom-left-radius: 0.5rem;
+        border-bottom-right-radius: 0.5rem;
+    }
+
+    /* Formula entry popup: keep it on-screen inside narrow option boxes. */
+    .ql-snow .ql-tooltip {
+        max-width: calc(100vw - 2rem);
+        z-index: 20;
+        white-space: normal;
+    }
+
+    .ql-snow .ql-tooltip[data-mode=formula] input[type=text] {
+        width: 220px;
+        max-width: 60vw;
+    }
+
+    @media (max-width: 600px) {
+        .editor-section { padding: 1rem; }
+        .question-card { padding: 1rem; gap: 0.5rem; }
+        .header-actions { flex-wrap: wrap; gap: 0.75rem; }
+        .header-actions > div:last-child { flex-wrap: wrap; }
+        .option-row { gap: 0.35rem; }
+        .option-row .btn-icon { padding: 0.25rem; }
+        .ql-snow .ql-tooltip { left: 0 !important; }
+    }
+
     .add-option-btn {
         background: none;
         border: 1px dashed var(--gray-300);
@@ -310,17 +359,34 @@
     .bottom-actions .btn-secondary {
         width: auto;
         height: auto;
-        min-height: 2.75em;
-        padding: 0.6em 1.25em;
+        min-height: 2.25rem;
+        padding: 0.45rem 0.9rem;
+        font-size: 0.8125rem;
+        border-radius: 0.5rem;
         white-space: nowrap;
+        box-shadow: none;
     }
 
+    /* Lucide replaces <i data-lucide> with <svg class="lucide">, so the
+       selector has to match the svg too or icons stay at the 24px default. */
     .header-actions button i[data-lucide],
+    .header-actions button svg,
     .bottom-actions button i[data-lucide],
-    .bottom-actions a i[data-lucide] {
-        width: 16px;
-        height: 16px;
+    .bottom-actions button svg,
+    .bottom-actions a i[data-lucide],
+    .bottom-actions a svg {
+        width: 15px;
+        height: 15px;
         flex-shrink: 0;
+    }
+
+    @media (max-width: 600px) {
+        .header-actions { flex-direction: column; align-items: stretch !important; }
+        .header-actions > div:last-child { width: 100%; }
+        .header-actions > div:last-child button { flex: 1; }
+        .bottom-actions { gap: 0.5rem; }
+        .bottom-actions .btn-primary,
+        .bottom-actions .btn-secondary { font-size: 0.75rem; padding: 0.4rem 0.7rem; }
     }
 </style>
 {% endblock %}
@@ -485,6 +551,24 @@
     ];
     let selectedImageFile = null;
 
+    // The fx button only understood raw LaTeX, so typing "3/4" or
+    // "(x-3)/(x-4)" just showed the slash. Run whatever the examiner types
+    // through iTestMath.toLatex (static/js/math-render.js) first - it leaves
+    // real LaTeX alone, so saved formulas reload unchanged.
+    const BaseFormula = Quill.import('formats/formula');
+    class SmartFormula extends BaseFormula {
+        static create(value) {
+            return super.create(iTestMath.toLatex(value));
+        }
+    }
+    Quill.register(SmartFormula, true);
+
+    const FORMULA_HINT = 'e.g. 3/4, (x-3)/(x-4), x^2, sqrt(x), int_0^1 x dx, d/dx(x^2)';
+    function setFormulaHint(editor) {
+        const input = editor.theme && editor.theme.tooltip && editor.theme.tooltip.textbox;
+        if (input) input.setAttribute('data-formula', FORMULA_HINT);
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
         // Init Quill with Formula
         quill = new Quill('#quill-editor', {
@@ -494,6 +578,7 @@
             },
             theme: 'snow'
         });
+        setFormulaHint(quill);
 
         applyGradingModeRestrictions();
 
@@ -682,16 +767,17 @@
         row.dataset.optionId = id;
         row.innerHTML = `
             <input type="radio" name="correct_option" value="${id}" ${isCorrect ? 'checked' : ''} style="accent-color: var(--purple); width: 1.2rem; height: 1.2rem;">
-            <div class="option-editor-wrap" style="flex: 1; min-width: 0;" data-id="${id}"></div>
+            <div class="option-editor-wrap" data-id="${id}"><div class="option-editor"></div></div>
             <button class="btn-icon danger" type="button" onclick="removeOptionRow('${id}')"><i data-lucide="trash-2"></i></button>
         `;
         builder.appendChild(row);
 
-        const editorEl = row.querySelector('.option-editor-wrap');
+        const editorEl = row.querySelector('.option-editor');
         const editor = new Quill(editorEl, {
             theme: 'snow',
             modules: { formula: true, toolbar: OPTION_TOOLBAR },
         });
+        setFormulaHint(editor);
         // `text` may be plain text (new row default like "Option 1") or
         // already-saved HTML (editing an existing question) - Quill's
         // clipboard handles both the same way the question editor already does.
@@ -905,7 +991,8 @@
             `;
             list.appendChild(card);
         });
-        
+
+        iTestMath.renderAll(list);
         lucide.createIcons();
     }
 

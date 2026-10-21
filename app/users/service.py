@@ -113,3 +113,90 @@ def save_liveness_photos(user_id: str, photos: dict) -> dict:
         'updated_at': datetime.utcnow(),
     }})
     return users.find_one({'_id': _id})
+
+
+# ---------------------------------------------------------------- Didit KYC
+# liveness_verification doubles as the Didit record so the proctoring gate
+# (exam_rules.liveness_completed -> status == 'completed') needs no change:
+#   {status: not_started|pending|under_review|completed|rejected|expired,
+#    provider: 'didit', didit_session_id, verification_url, reason, ...}
+
+def start_didit_verification(user: dict, callback_url: str) -> dict:
+    """Create (or resume) a Didit session for this user. Returns
+    {'verification_url', 'status'}; raises ValueError if already verified."""
+    from app.utils import didit_client
+    users = get_collection('users')
+    current = user.get('liveness_verification') or {}
+    if current.get('status') == 'completed':
+        raise ValueError('Your identity is already verified.')
+
+    # Resume an unfinished session rather than creating duplicates (same as
+    # HelpSend's initiateKYC) - Didit sessions stay usable until they expire.
+    if current.get('provider') == 'didit' and current.get('status') in ('pending', 'under_review') and current.get('verification_url'):
+        return {'verification_url': current['verification_url'], 'status': current['status']}
+
+    session = didit_client.create_session(user['_id'], user.get('email'), user.get('full_name'), callback_url)
+    users.update_one({'_id': user['_id']}, {'$set': {
+        'liveness_verification.provider': 'didit',
+        'liveness_verification.status': 'pending',
+        'liveness_verification.didit_session_id': session['session_id'],
+        'liveness_verification.verification_url': session['verification_url'],
+        'liveness_verification.reason': None,
+        'liveness_verification.started_at': datetime.utcnow(),
+        'updated_at': datetime.utcnow(),
+    }})
+    return {'verification_url': session['verification_url'], 'status': 'pending'}
+
+
+def apply_didit_result(parsed: dict) -> dict:
+    """Apply a parsed Didit result (didit_client.parse_result) to the
+    matching user - looked up by session id first, then vendor_data (our
+    user id), like HelpSend's handleProviderWebhook. Returns the user (or
+    None if no match). A completed verification is never downgraded."""
+    users = get_collection('users')
+    user = None
+    if parsed.get('session_id'):
+        user = users.find_one({'liveness_verification.didit_session_id': parsed['session_id']})
+    if not user and parsed.get('user_id'):
+        user = users.find_one({'_id': build_object_id(parsed['user_id'])})
+    if not user:
+        return None
+
+    current = user.get('liveness_verification') or {}
+    if not parsed.get('update') or current.get('status') == 'completed':
+        return user
+
+    now = datetime.utcnow()
+    fields = {
+        'liveness_verification.provider': 'didit',
+        'liveness_verification.status': parsed['status'],
+        'liveness_verification.didit_status': parsed.get('didit_status'),
+        'liveness_verification.reason': parsed.get('reason'),
+        'updated_at': now,
+    }
+    if parsed.get('session_id'):
+        fields['liveness_verification.didit_session_id'] = parsed['session_id']
+    if parsed['status'] == 'completed':
+        fields['liveness_verification.completed_at'] = now
+    if parsed['status'] in ('rejected', 'expired'):
+        # Let them start over with a fresh session next time.
+        fields['liveness_verification.verification_url'] = None
+    users.update_one({'_id': user['_id']}, {'$set': fields})
+    return users.find_one({'_id': user['_id']})
+
+
+def refresh_didit_status(user: dict) -> dict:
+    """Ask Didit directly - backstop for a late/missed webhook, used by the
+    return page and the status endpoint. Never raises; returns the user."""
+    from app.utils import didit_client
+    lv = user.get('liveness_verification') or {}
+    if lv.get('provider') != 'didit' or lv.get('status') not in ('pending', 'under_review') or not lv.get('didit_session_id'):
+        return user
+    try:
+        data = didit_client.get_session(lv['didit_session_id'])
+    except didit_client.DiditError as e:
+        print(f"[DIDIT] status refresh failed: {e}")
+        return user
+    data.setdefault('session_id', lv['didit_session_id'])
+    data.setdefault('vendor_data', str(user['_id']))
+    return apply_didit_result(didit_client.parse_result(data)) or user

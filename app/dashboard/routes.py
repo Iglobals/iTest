@@ -718,6 +718,30 @@ def settings():
     return render_template('dashboard/settings.html', user=g.current_user, ica_account_url=ica_account_url)
 
 
+@dashboard_bp.route('/verification/complete')
+@require_auth()
+def verification_complete():
+    """Where Didit sends the student back to. The webhook is the source of
+    truth, but it can lag a few seconds - so ask Didit directly too, then go
+    back to the exam they came from (?next=) or to Settings."""
+    from flask import flash, redirect, request, url_for
+    from app.users.service import refresh_didit_status
+    user = refresh_didit_status(g.current_user)
+    status = (user.get('liveness_verification') or {}).get('status')
+    nxt = request.args.get('next') or ''
+    nxt = nxt if nxt.startswith('/') and not nxt.startswith('//') else None
+    if status == 'completed':
+        flash("Identity verified - you're all set.", "success")
+        return redirect(nxt or url_for('dashboard.settings', tab='verification'))
+    if status == 'rejected':
+        flash("Your identity verification was declined. Please try again with a valid document.", "error")
+    elif status == 'under_review':
+        flash("Your verification is under review. We'll update it as soon as it's decided.", "info")
+    else:
+        flash("We're still processing your verification - this usually takes under a minute.", "info")
+    return redirect(url_for('dashboard.settings', tab='verification', **({'next': nxt} if nxt else {})))
+
+
 @dashboard_bp.route('/sessions/<session_id>/result')
 @require_auth()
 def view_result(session_id):

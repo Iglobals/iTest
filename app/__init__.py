@@ -73,6 +73,11 @@ def create_app(config_name='default'):
             return {}
         from app.utils.plans import get_plan_limit
         plan = (user.get('plan') or {}).get('type', 'free')
-        return {'can_use_ai_proctoring': bool(get_plan_limit(plan, 'can_use_ai_proctoring'))}
+        from app.utils import didit_client
+        return {
+            'can_use_ai_proctoring': bool(get_plan_limit(plan, 'can_use_ai_proctoring')),
+            # Didit replaces the manual photo flow once its env vars are set.
+            'didit_enabled': didit_client.is_configured(),
+        }
 
     return app

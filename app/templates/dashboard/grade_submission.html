@@ -272,20 +272,23 @@
             <div class="score-overview">
                 <div class="score-item">
                     <div class="score-label">Current Score</div>
-                    <div class="score-value">{{ score_record.score_percent|int }}%</div>
+                    <div class="score-value">{{ (score_record.score_percent|int ~ "%") if score_record else "—" }}</div>
                 </div>
                 <div class="score-item">
                     <div class="score-label">Correct</div>
-                    <div class="score-value" style="color:var(--success);">{{ score_record.correct_count }}</div>
+                    <div class="score-value" style="color:var(--success);">{{ score_record.correct_count if score_record else "—" }}</div>
                 </div>
                 <div class="score-item">
                     <div class="score-label">Incorrect</div>
-                    <div class="score-value" style="color:var(--danger);">{{ score_record.incorrect_count }}</div>
+                    <div class="score-value" style="color:var(--danger);">{{ score_record.incorrect_count if score_record else "—" }}</div>
                 </div>
                 <div class="score-item">
                     <div class="score-label">Status</div>
                     <div class="score-value" style="font-size: clamp(0.8rem, 2vw, 0.9rem);">
-                        {% if score_record.results_published %}
+                        {# No ExamScore row yet (still in progress, or scoring failed on submit) - used to 500 here. #}
+                        {% if not score_record %}
+                        <span style="color:var(--gray-500);">Not scored yet</span>
+                        {% elif score_record.results_published %}
                         <span style="color:var(--info);">Published</span>
                         {% elif score_record.is_graded %}
                         <span style="color:var(--success);">Graded</span>

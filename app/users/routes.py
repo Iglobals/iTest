@@ -78,3 +78,40 @@ def post_liveness():
         return jsonify({'error': str(e)}), 409
 
     return jsonify(_jsonable(updated))
+
+
+def _safe_next(value):
+    value = value or ''
+    return value if value.startswith('/') and not value.startswith('//') else None
+
+
+@users_bp.route('/me/kyc/didit', methods=['POST'])
+@require_auth(redirect_on_fail=False)
+def start_didit():
+    """Start (or resume) Didit identity verification. Returns the URL to send
+    the student to; Didit redirects back to /dashboard/verification/complete."""
+    from flask import url_for
+    from app.utils import didit_client
+    from app.users.service import start_didit_verification
+    if not didit_client.is_configured():
+        return jsonify({'error': 'Automatic verification is not available yet.'}), 503
+    nxt = _safe_next((request.get_json(silent=True) or {}).get('next'))
+    callback = url_for('dashboard.verification_complete', _external=True, **({'next': nxt} if nxt else {}))
+    try:
+        result = start_didit_verification(g.current_user, callback)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 409
+    except didit_client.DiditError as e:
+        print(f"[DIDIT] start failed for {g.current_user['_id']}: {e}")
+        return jsonify({'error': 'The verification service is unavailable right now. Please try again shortly.'}), 502
+    return jsonify({'success': True, **result})
+
+
+@users_bp.route('/me/kyc', methods=['GET'])
+@require_auth(redirect_on_fail=False)
+def kyc_status():
+    from app.users.service import refresh_didit_status
+    user = refresh_didit_status(g.current_user)
+    lv = user.get('liveness_verification') or {}
+    return jsonify({'status': lv.get('status', 'not_started'), 'provider': lv.get('provider', 'manual'),
+                    'reason': lv.get('reason')})

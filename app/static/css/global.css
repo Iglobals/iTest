@@ -645,9 +645,10 @@ body {
 }
 
 .footer-brand .logo-icon {
+    /* The logo image carries its own purple tile, so no backdrop here. */
     width: 2rem;
     height: 2rem;
-    background: var(--primary);
+    background: none;
     border-radius: 0.5rem;
     display: flex;
     align-items: center;

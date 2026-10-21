@@ -106,3 +106,28 @@ def grant_access():
         "message": f"Access granted for {email} to exam {exam_id_str}",
         "user_created": user.get('placeholder', False)
     }), 200
+
+
+@webhooks_bp.route('/didit', methods=['POST'])
+def didit_webhook():
+    """Didit verification results. Signature-checked against
+    DIDIT_WEBHOOK_SECRET (see app/utils/didit_client.verify_webhook); after
+    that, always 200 so Didit doesn't retry on our own processing errors -
+    same policy as HelpSend's handleDiditWebhook."""
+    from app.utils import didit_client
+    from app.users.service import apply_didit_result
+
+    raw = request.get_data()
+    if not didit_client.verify_webhook(raw, request.headers):
+        return jsonify({"error": "Invalid signature"}), 401
+    try:
+        import json as _json
+        payload = _json.loads(raw or b'{}')
+        parsed = didit_client.parse_result(payload)
+        user = apply_didit_result(parsed)
+        if not user:
+            print(f"[DIDIT] webhook: no user for session={parsed.get('session_id')} vendor={parsed.get('user_id')}")
+        return jsonify({"success": bool(user)}), 200
+    except Exception as e:
+        print(f"[DIDIT] webhook processing failed: {e}")
+        return jsonify({"success": False}), 200

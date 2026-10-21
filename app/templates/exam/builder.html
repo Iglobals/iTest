@@ -686,7 +686,13 @@
             const q = questions.find(x => x._id === qId);
             document.getElementById('editingId').value = q._id;
             document.getElementById('qType').value = q.type;
-            quill.root.innerHTML = q.text;
+            // Load through Quill's clipboard (like the option editors do), not
+            // root.innerHTML: that bypassed blot creation, so formulas saved as
+            // plain "3/4" never got converted/rendered, and Quill's model only
+            // caught up asynchronously (a formula inserted right after could
+            // land at the start of the text).
+            quill.setContents([]);
+            quill.clipboard.dangerouslyPasteHTML(q.text || '');
             document.getElementById('qMarks').value = q.marks || 1;
             
             // Image - reset upload widget state (button/status text/pending
@@ -722,7 +728,7 @@
             // Reset
             document.getElementById('editingId').value = '';
             document.getElementById('qType').value = gradingMode === 'essay' ? 'essay' : 'mcq';
-            quill.root.innerHTML = '';
+            quill.setContents([]);
             document.getElementById('qMarks').value = 1;
             document.getElementById('qImageUrl').value = '';
             document.getElementById('qImage').value = '';

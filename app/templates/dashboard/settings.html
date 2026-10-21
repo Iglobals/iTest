@@ -67,6 +67,24 @@
             <div style="display:flex; align-items:center; gap:0.5rem; color: var(--success); font-weight: 700;">
                 <i data-lucide="check-circle"></i> Verification completed
             </div>
+            {% elif didit_enabled %}
+            {# Didit (automatic ID + liveness check) - see app/utils/didit_client.py.
+               The manual photo flow below is only used until Didit is configured. #}
+            {% set lv = user.liveness_verification or {} %}
+            {% if lv.status == 'under_review' %}
+            <p style="color: var(--warning); font-weight: 600; margin: 0 0 0.75rem;">Your verification is under review. We'll update this page once it's decided.</p>
+            {% elif lv.status == 'rejected' %}
+            <p style="color: var(--danger); font-weight: 600; margin: 0 0 0.75rem;">Your last verification was declined{% if lv.reason %}: {{ lv.reason }}{% endif %}. Please try again with a valid ID.</p>
+            {% elif lv.status == 'expired' %}
+            <p style="color: var(--gray-600); margin: 0 0 0.75rem;">Your last verification session expired. Start a new one below.</p>
+            {% endif %}
+            {% if lv.status != 'under_review' %}
+            <p style="color: var(--gray-600); font-size: 0.9rem; margin: 0 0 1rem;">You'll be taken to our verification partner, Didit, to scan your ID and take a quick selfie. It takes about two minutes.</p>
+            <button class="btn-primary" id="diditStartBtn" style="width: auto; padding: 0.6em 1.5em;" onclick="startDidit()">
+                {{ 'Continue Verification' if lv.status == 'pending' and lv.provider == 'didit' else 'Verify My Identity' }}
+            </button>
+            <p id="diditError" style="color: var(--danger); margin-top: 0.5rem;"></p>
+            {% endif %}
             {% else %}
             <div id="livenessIntro">
                 <button class="btn-primary" style="width: auto; padding: 0.6em 1.5em;" onclick="startLiveness()">Start Verification</button>
@@ -160,6 +178,26 @@
         const tab = settingsParams.get('tab');
         if (tab) switchSettingsTab(tab, document.querySelector(`.tab-btn[onclick*="'${tab}'"]`));
     });
+
+    async function startDidit() {
+        const btn = document.getElementById('diditStartBtn');
+        const errorEl = document.getElementById('diditError');
+        btn.disabled = true;
+        errorEl.textContent = '';
+        try {
+            const res = await fetch('/api/users/me/kyc/didit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ next: VERIFY_NEXT }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.verification_url) throw new Error(data.error || 'Could not start verification.');
+            window.location.href = data.verification_url;
+        } catch (e) {
+            errorEl.textContent = e.message;
+            btn.disabled = false;
+        }
+    }
 
     const LIVENESS_STEPS = [
         { key: 'front', label: 'Look straight at the camera' },

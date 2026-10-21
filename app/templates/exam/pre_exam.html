@@ -123,7 +123,7 @@
         <!-- Blocking step: proctored exams need the one-time identity check. -->
         <div class="step-card active" id="step-liveness">
             <h2><i data-lucide="scan-face"></i> Identity Verification Required</h2>
-            <p>This is a proctored exam. Before you can start it, you need to complete a one-time identity verification (a few quick photos with your camera). You'll be brought right back here when you're done.</p>
+            <p>This is a proctored exam. Before you can start it, you need to complete a one-time identity verification{% if didit_enabled %} (a quick ID scan and selfie){% else %} (a few quick photos with your camera){% endif %}. You'll be brought right back here when you're done.</p>
             <div class="action-row">
                 <button class="btn btn-outline" onclick="window.location.href='/dashboard'">Cancel</button>
                 <a class="btn btn-primary" style="text-decoration:none;" href="{{ url_for('dashboard.settings', tab='verification', next=request.path) }}">Verify My Identity <i data-lucide="arrow-right"></i></a>

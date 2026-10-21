@@ -123,11 +123,15 @@ def _verify_with_refresh(token):
     token never surfaces as a login redirect / failed API call while the
     refresh token is still valid."""
     client = get_ica_client()
+    refreshed = False
     if _token_expired(token):
+        refreshed = True
         token = _refresh_session_tokens() or token
     try:
         return client.verify_token(token)
     except Exception:
+        if refreshed:
+            raise  # already tried once this request - don't hit ICA again
         new_token = _refresh_session_tokens()
         if not new_token or new_token == token:
             raise
@@ -148,17 +152,19 @@ def require_auth(redirect_on_fail=True):
             # fetch() calls must get a JSON 401 (the page then sends the user
             # to login) rather than a redirect to the login HTML, which made
             # res.json() blow up as an "unexpected error".
-            redirect_on_fail = redirect_on_fail and not _is_api_request()
+            # Separate name: assigning to redirect_on_fail itself would make it
+            # local to decorated() and raise UnboundLocalError on every request.
+            should_redirect = redirect_on_fail and not _is_api_request()
             token = session.get("access_token")
             if not token:
-                if redirect_on_fail:
+                if should_redirect:
                     return redirect(url_for("auth.login"))
                 return jsonify({"error": "Unauthorized", "login_required": True}), 401
             try:
                 ica_payload = _verify_with_refresh(token)
                 user = get_user_by_ica_sub(ica_payload.get("sub"))
                 if not user:
-                    if redirect_on_fail:
+                    if should_redirect:
                         return redirect(url_for("auth.login"))
                     return jsonify({"error": "User not found"}), 401
                 g.current_user = user
@@ -168,7 +174,7 @@ def require_auth(redirect_on_fail=True):
                 if not user.get("onboarded", False):
                     endpoint = request.endpoint or ""
                     if not endpoint.startswith("onboarding.") and not endpoint.startswith("auth.logout") and not endpoint.startswith("static"):
-                        if redirect_on_fail:
+                        if should_redirect:
                             return redirect(url_for("onboarding.index"))
                         return jsonify({"error": "Onboarding required"}), 403
                 else:
@@ -185,7 +191,7 @@ def require_auth(redirect_on_fail=True):
                     if not user.get("plan_selected", True):
                         endpoint = request.endpoint or ""
                         if not endpoint.startswith("billing.") and not endpoint.startswith("auth.logout") and not endpoint.startswith("static"):
-                            if redirect_on_fail:
+                            if should_redirect:
                                 return redirect(url_for("billing.select_plan"))
                             return jsonify({"error": "Plan selection required"}), 403
 
@@ -194,7 +200,7 @@ def require_auth(redirect_on_fail=True):
                 traceback.print_exc()
                 print(f"Exception in verify_token: {e}")
                 session.clear()
-                if redirect_on_fail:
+                if should_redirect:
                     return redirect(url_for("auth.login"))
                 return jsonify({"error": "Your session has expired. Please log in again.", "login_required": True}), 401
             return f(*args, **kwargs)

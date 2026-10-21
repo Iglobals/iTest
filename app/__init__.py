@@ -50,6 +50,10 @@ def create_app(config_name='default'):
     from app.users.routes import users_bp
     app.register_blueprint(users_bp)
 
+    # iGlobal Educational Services admin (platform_admin) pages
+    from app.admin.routes import admin_bp
+    app.register_blueprint(admin_bp)
+
     # TODO: Register other blueprints here
     
     @app.route('/health')
@@ -72,7 +76,8 @@ def create_app(config_name='default'):
         if not user:
             return {}
         from app.utils.plans import get_plan_limit
-        plan = (user.get('plan') or {}).get('type', 'free')
+        from app.utils.admin import effective_plan_type
+        plan = effective_plan_type(user)  # admins: never limited
         from app.utils import didit_client
         return {
             'can_use_ai_proctoring': bool(get_plan_limit(plan, 'can_use_ai_proctoring')),

@@ -167,6 +167,10 @@ def require_auth(redirect_on_fail=True):
                     if should_redirect:
                         return redirect(url_for("auth.login"))
                     return jsonify({"error": "User not found"}), 401
+                # Emails in ITEST_ADMIN_EMAILS run the built-in iGlobal
+                # Educational Services org (no DB write unless it changes).
+                from app.utils.admin import promote_if_admin
+                user = promote_if_admin(user)
                 g.current_user = user
                 g.ica_payload = ica_payload
                 
@@ -223,7 +227,8 @@ def require_plan(*plans):
         @wraps(f)
         @require_auth()
         def decorated(*args, **kwargs):
-            user_plan = g.current_user.get("plan", {}).get("type", "free")
+            from app.utils.admin import effective_plan_type
+            user_plan = effective_plan_type(g.current_user)
             if user_plan not in plans:
                 return jsonify({"error": "Upgrade required", "upgrade_url": "/pricing"}), 402
             return f(*args, **kwargs)
@@ -236,7 +241,8 @@ def require_feature(feature_key):
         @require_auth()
         def decorated(*args, **kwargs):
             from app.utils.plans import get_plan_limit
-            user_plan = g.current_user.get("plan", {}).get("type", "free")
+            from app.utils.admin import effective_plan_type
+            user_plan = effective_plan_type(g.current_user)
             has_feature = get_plan_limit(user_plan, feature_key)
             if not has_feature:
                 return jsonify({"error": f"This feature requires a premium plan", "limit_reached": True, "upgrade_url": "/pricing"}), 402

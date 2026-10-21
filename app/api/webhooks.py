@@ -17,15 +17,20 @@ def grant_access():
     Header:
         Authorization: Bearer <WEBHOOK_SECRET>
     """
-    # 1. Verify Authorization
+    # 1. Verify Authorization. There used to be a hard-coded fallback secret
+    # ('test_secret_key_123') and WEBHOOK_SECRET was never in config, so
+    # anyone who knew it could grant themselves any exam - refuse instead.
+    import hmac as _hmac
     auth_header = request.headers.get('Authorization')
-    expected_secret = current_app.config.get('WEBHOOK_SECRET', 'test_secret_key_123')
+    expected_secret = current_app.config.get('WEBHOOK_SECRET')
+    if not expected_secret:
+        return jsonify({"error": "Webhook not configured"}), 503
     
     if not auth_header or not auth_header.startswith('Bearer '):
         return jsonify({"error": "Unauthorized. Missing or invalid Authorization header"}), 401
     
-    token = auth_header.split(' ')[1]
-    if token != expected_secret:
+    token = auth_header.split(' ', 1)[1]
+    if not _hmac.compare_digest(token, expected_secret):
         return jsonify({"error": "Unauthorized. Invalid token"}), 401
 
     data = request.json
@@ -131,3 +136,67 @@ def didit_webhook():
     except Exception as e:
         print(f"[DIDIT] webhook processing failed: {e}")
         return jsonify({"success": False}), 200
+
+@webhooks_bp.route('/igs/exam-access', methods=['POST'])
+def igs_exam_access():
+    """iGlobal e-library -> iTest: a buyer paid for a book + exam package (or
+    an exam upgrade), so grant their email the matching catalog exams.
+
+    Headers: X-IGS-Timestamp (unix seconds), X-IGS-Signature = hex
+    HMAC-SHA256(IGS_WEBHOOK_SECRET, f"{timestamp}." + raw body).
+    Body: {event_id, action: grant|revoke, email, full_name, exam_keys: [...],
+    reference, book_id, book_title}. Idempotent on event_id.
+    """
+    import hashlib, hmac as _hmac, json as _json, time as _time
+    from app.utils import exam_grants
+
+    secret = current_app.config.get('IGS_WEBHOOK_SECRET')
+    if not secret:
+        return jsonify({"error": "Webhook not configured"}), 503
+    raw = request.get_data()
+    ts = request.headers.get('X-IGS-Timestamp', '')
+    sig = (request.headers.get('X-IGS-Signature') or '').strip()
+    try:
+        fresh = abs(_time.time() - int(ts)) <= 300
+    except ValueError:
+        fresh = False
+    expected = _hmac.new(secret.encode(), ts.encode() + b'.' + raw, hashlib.sha256).hexdigest()
+    if not fresh or not sig or not _hmac.compare_digest(expected, sig):
+        return jsonify({"error": "Invalid or expired signature"}), 401
+
+    try:
+        data = _json.loads(raw or b'{}')
+    except ValueError:
+        return jsonify({"error": "Invalid JSON"}), 400
+    event_id = str(data.get('event_id') or '').strip()
+    email = (data.get('email') or '').strip().lower()
+    keys = [k for k in (data.get('exam_keys') or []) if isinstance(k, str)]
+    action = data.get('action', 'grant')
+    if not event_id or '@' not in email or not keys or action not in ('grant', 'revoke'):
+        return jsonify({"error": "event_id, email, exam_keys and action (grant|revoke) are required"}), 400
+
+    # Idempotency: replaying an event returns the stored result untouched.
+    events = get_collection('webhook_events')
+    seen = events.find_one({'_id': f'igs:{event_id}'})
+    if seen:
+        return jsonify({**seen.get('result', {}), "duplicate": True}), 200
+
+    exams_col = get_collection('exams')
+    done, unknown = [], []
+    for key in dict.fromkeys(keys):
+        exam = exams_col.find_one({'catalog_key': key, 'status': {'$ne': 'deleted'}})
+        if not exam:
+            unknown.append(key)
+            continue
+        if action == 'grant':
+            exam_grants.grant(email, exam, source='igs-elibrary', reference=data.get('reference'), event_id=event_id)
+        else:
+            exam_grants.revoke(email, exam, source='igs-elibrary', reference=data.get('reference'))
+        done.append(key)
+
+    result = {"success": True, "action": action,
+              ("granted" if action == 'grant' else "revoked"): done, "unknown_keys": unknown}
+    events.insert_one({'_id': f'igs:{event_id}', 'payload': data, 'result': result, 'received_at': datetime.utcnow()})
+    if unknown:
+        print(f"[IGS] event {event_id}: unknown exam keys {unknown}")
+    return jsonify(result), 200

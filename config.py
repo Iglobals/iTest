@@ -67,6 +67,14 @@ class Config:
     # inbound calls to /billing/webhook, which now come from ICA, not Paystack.
     ICA_WEBHOOK_RELAY_SECRET = os.environ.get('ICA_WEBHOOK_RELAY_SECRET', '')
 
+    # Bearer secret for /api/webhooks/grant-access (one email -> one exam id).
+    # Empty = that endpoint refuses every call (it used to fall back to a
+    # hard-coded test secret).
+    WEBHOOK_SECRET = os.environ.get('WEBHOOK_SECRET', '')
+    # HMAC secret shared with the iGlobal e-library (its ITEST_WEBHOOK_SECRET)
+    # for /api/webhooks/igs/exam-access - book + exam purchases.
+    IGS_WEBHOOK_SECRET = os.environ.get('IGS_WEBHOOK_SECRET', '')
+
     # Flutterwave
     FLUTTERWAVE_PUBLIC_KEY = os.environ.get('FLUTTERWAVE_PUBLIC_KEY')
     FLUTTERWAVE_SECRET_KEY = os.environ.get('FLUTTERWAVE_SECRET_KEY')

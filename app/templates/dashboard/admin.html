@@ -1,0 +1,161 @@
+{% extends "dashboard/base.html" %}
+
+{% block page_title %}{{ org.name if org else 'iGlobal Educational Services' }}{% endblock %}
+{% block page_subtitle %}Admin - national exam catalog, e-library access, classes and exams.{% endblock %}
+
+{% block dashboard_head %}
+<style>
+    .adm { display: flex; flex-direction: column; gap: 1.25rem; }
+    .adm-card { background: var(--white); border: 1px solid var(--gray-200); border-radius: 1rem; padding: 1.25rem; }
+    .adm-card h3 { margin: 0 0 0.25rem; font-size: 1.05rem; }
+    .adm-card > p.sub { margin: 0 0 1rem; color: var(--gray-500); font-size: 0.85rem; }
+    .adm-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); gap: 0.75rem; }
+    .adm-stat { background: var(--white); border: 1px solid var(--gray-200); border-radius: 0.875rem; padding: 0.9rem 1rem; }
+    .adm-stat strong { display: block; font-size: 1.4rem; color: var(--gray-900); }
+    .adm-stat span { font-size: 0.8rem; color: var(--gray-500); }
+    .adm-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    .adm-btn { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.45rem 0.85rem; border-radius: 0.5rem;
+               font-size: 0.8125rem; font-weight: 600; border: 1px solid var(--gray-300); background: var(--white);
+               color: var(--gray-800); text-decoration: none; cursor: pointer; }
+    .adm-btn.primary { background: var(--purple); border-color: var(--purple); color: #fff; }
+    .adm-btn.danger { color: var(--danger, #dc2626); border-color: #fecaca; }
+    .adm-btn svg { width: 14px; height: 14px; }
+    .adm-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+    .adm-table th { text-align: left; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.03em;
+                    color: var(--gray-500); padding: 0.5rem; border-bottom: 1px solid var(--gray-200); }
+    .adm-table td { padding: 0.65rem 0.5rem; border-bottom: 1px solid var(--gray-100); vertical-align: middle; }
+    .adm-key { font-family: ui-monospace, monospace; font-size: 0.75rem; color: var(--gray-500); }
+    .adm-badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 1rem; font-size: 0.72rem; font-weight: 600; }
+    .adm-badge.ok { background: #e8f5e9; color: #2e7d32; }
+    .adm-badge.warn { background: #fff7ed; color: #c2410c; }
+    .adm-badge.muted { background: var(--gray-100); color: var(--gray-600); }
+    .adm-banner { display: flex; gap: 0.6rem; align-items: flex-start; padding: 0.75rem 1rem; border-radius: 0.75rem;
+                  font-size: 0.85rem; background: #fff7ed; color: #9a3412; border: 1px solid #fed7aa; }
+    .adm-banner.ok { background: #f0fdf4; color: #166534; border-color: #bbf7d0; }
+    .adm-banner code { font-size: 0.78rem; overflow-wrap: anywhere; }
+    .adm-form { display: grid; gap: 0.75rem; }
+    .adm-form textarea { width: 100%; box-sizing: border-box; padding: 0.6rem 0.75rem; border: 1px solid var(--gray-300);
+                         border-radius: 0.5rem; font: inherit; font-size: 0.875rem; }
+    .adm-checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr)); gap: 0.35rem 1rem; font-size: 0.85rem; }
+    .adm-checks label { display: flex; align-items: center; gap: 0.4rem; }
+    .adm-email { overflow-wrap: anywhere; }
+
+    @media (max-width: 760px) {
+        .adm-table thead { display: none; }
+        .adm-table, .adm-table tbody, .adm-table tr, .adm-table td { display: block; width: 100%; box-sizing: border-box; }
+        .adm-table tr { border: 1px solid var(--gray-200); border-radius: 0.75rem; padding: 0.5rem 0.75rem; margin-bottom: 0.6rem; }
+        .adm-table td { border: none; padding: 0.3rem 0; display: flex; justify-content: space-between; gap: 1rem; }
+        .adm-table td::before { content: attr(data-label); font-size: 0.72rem; text-transform: uppercase; color: var(--gray-500); }
+        .adm-table td.adm-actions-cell { justify-content: flex-start; }
+        .adm-table td.adm-actions-cell::before { content: none; }
+    }
+</style>
+{% endblock %}
+
+{% block dashboard_content %}
+<div class="adm">
+
+    <div class="adm-stats">
+        <div class="adm-stat"><strong>{{ stats.catalog_ready }}/{{ stats.catalog_total }}</strong><span>JUPEB exams set up</span></div>
+        <div class="adm-stat"><strong>{{ stats.buyers }}</strong><span>Students with access</span></div>
+        <div class="adm-stat"><strong>{{ stats.active_grants }}</strong><span>Active exam grants</span></div>
+        <div class="adm-stat"><strong>{{ stats.classes }}</strong><span>Classes</span></div>
+    </div>
+
+    {% if webhook_configured %}
+    <div class="adm-banner ok"><i data-lucide="plug-zap" style="width:16px;height:16px;flex-shrink:0;"></i>
+        <span>E-library connection is configured. Book + exam purchases grant access automatically via <code>{{ webhook_url }}</code>.</span></div>
+    {% else %}
+    <div class="adm-banner"><i data-lucide="plug" style="width:16px;height:16px;flex-shrink:0;"></i>
+        <span>E-library connection isn't configured yet: set <code>IGS_WEBHOOK_SECRET</code> here and the same value as <code>ITEST_WEBHOOK_SECRET</code> in the e-library. Until then, add buyers manually below.</span></div>
+    {% endif %}
+
+    <div class="adm-card">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; flex-wrap:wrap;">
+            <div>
+                <h3>JUPEB exam catalog</h3>
+                <p class="sub" style="margin:0;">Sold with e-library books. Each exam's key links it to the books that include it.</p>
+            </div>
+            <div class="adm-actions">
+                {% if stats.catalog_ready < stats.catalog_total %}
+                <form method="POST" action="{{ url_for('admin_bp.ensure_catalog') }}" style="margin:0;">
+                    <button class="adm-btn primary" type="submit"><i data-lucide="sparkles"></i> Create missing exams</button>
+                </form>
+                {% endif %}
+                <a class="adm-btn" href="{{ url_for('dashboard.create_exam') }}"><i data-lucide="plus"></i> New exam</a>
+                <a class="adm-btn" href="{{ url_for('dashboard.manage_exams') }}"><i data-lucide="file-text"></i> All exams</a>
+            </div>
+        </div>
+        {% if stats.placeholder_exams %}
+        <p style="margin:0.75rem 0 0; font-size:0.82rem; color:#c2410c;">{{ stats.placeholder_exams }} exam(s) still contain placeholder questions - open "Questions" to replace them.</p>
+        {% endif %}
+        <table class="adm-table" style="margin-top:0.75rem;">
+            <thead><tr><th>Subject</th><th>Status</th><th>Questions</th><th>Students</th><th></th></tr></thead>
+            <tbody>
+            {% for r in rows %}
+            <tr>
+                <td data-label="Subject"><div><strong>{{ r.subject }}</strong><div class="adm-key">{{ r.key }}</div></div></td>
+                {% if r.exam %}
+                <td data-label="Status"><span class="adm-badge {{ 'ok' if r.exam.status == 'published' else 'muted' }}">{{ r.exam.status|capitalize }}</span></td>
+                <td data-label="Questions">{{ r.questions }}{% if r.placeholders %} <span class="adm-badge warn" title="Placeholder questions to replace">{{ r.placeholders }} placeholder</span>{% endif %}</td>
+                <td data-label="Students">{{ r.buyers }}</td>
+                <td class="adm-actions-cell"><div class="adm-actions">
+                    <a class="adm-btn" href="{{ url_for('dashboard.exam_builder', slug=r.exam.slug) }}"><i data-lucide="list-checks"></i> Questions</a>
+                    <a class="adm-btn" href="{{ url_for('dashboard.exam_details', slug=r.exam.slug) }}"><i data-lucide="settings"></i> Settings</a>
+                </div></td>
+                {% else %}
+                <td data-label="Status"><span class="adm-badge muted">Not created</span></td>
+                <td data-label="Questions">-</td><td data-label="Students">-</td><td></td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="adm-card">
+        <h3>Grant access manually</h3>
+        <p class="sub">For buyers paid outside the e-library, or corrections. Separate multiple emails with commas or new lines. They'll see the exam once they sign in to iTest with that email.</p>
+        <form class="adm-form" method="POST" action="{{ url_for('admin_bp.add_grant') }}">
+            <textarea name="emails" rows="2" placeholder="student@example.com, another@example.com" required></textarea>
+            <div class="adm-checks">
+                {% for r in rows if r.exam %}
+                <label><input type="checkbox" name="exam_keys" value="{{ r.key }}"> {{ r.subject }}</label>
+                {% endfor %}
+            </div>
+            <div><button class="adm-btn primary" type="submit"><i data-lucide="user-plus"></i> Grant access</button></div>
+        </form>
+    </div>
+
+    <div class="adm-card">
+        <h3>Recent access grants</h3>
+        <p class="sub">From e-library purchases and manual grants. Revoking removes access unless another grant still covers that exam.</p>
+        {% if recent %}
+        <table class="adm-table">
+            <thead><tr><th>Email</th><th>Exam</th><th>Source</th><th>When</th><th></th></tr></thead>
+            <tbody>
+            {% for gr in recent %}
+            <tr>
+                <td data-label="Email" class="adm-email">{{ gr.email }}</td>
+                <td data-label="Exam">{{ gr.exam_title or gr.catalog_key }}</td>
+                <td data-label="Source"><span class="adm-badge {{ 'ok' if gr.source == 'igs-elibrary' else 'muted' }}">{{ 'E-library' if gr.source == 'igs-elibrary' else 'Manual' }}</span>{% if gr.revoked_at %} <span class="adm-badge warn">Revoked</span>{% endif %}</td>
+                <td data-label="When">{{ gr.granted_at.strftime('%d %b %Y, %H:%M') if gr.granted_at else '' }}</td>
+                <td class="adm-actions-cell">
+                    {% if not gr.revoked_at %}
+                    <form method="POST" action="{{ url_for('admin_bp.revoke_grant', grant_id=gr._id) }}" style="margin:0;"
+                          onsubmit="return confirm('Revoke {{ gr.email }} from {{ (gr.exam_title or gr.catalog_key)|e }}?');">
+                        <button class="adm-btn danger" type="submit"><i data-lucide="user-x"></i> Revoke</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p style="margin:0; color:var(--gray-500); font-size:0.875rem;">No grants yet.</p>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

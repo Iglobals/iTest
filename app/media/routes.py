@@ -25,7 +25,7 @@ def get_signature():
     # Check limits
     users_col = get_collection('users')
     user = users_col.find_one({"_id": g.current_user["_id"]})
-    if user and user.get('image_uploads_count', 0) >= 50:
+    if user and user.get('role') != 'platform_admin' and user.get('image_uploads_count', 0) >= 50:
         return jsonify({"error": "Image limit reached. You have uploaded 50 images. Please upgrade your plan."}), 403
 
     params_to_sign = {

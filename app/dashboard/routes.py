@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, g
 from app.auth.decorators import require_auth
 from app.utils.mongo import get_collection
 from app.utils.grading import is_answer_correct, resolve_correct_text, resolve_option_text
+from app.utils.admin import email_variants  # case-insensitive email grants
 
 dashboard_bp = Blueprint('dashboard', __name__, url_prefix='/dashboard')
 
@@ -28,7 +29,13 @@ dashboard_bp.add_app_template_filter(active_examiner_count, 'active_examiners')
 def index():
     role = g.current_user.get('role', 'student')
     user_id = g.current_user.get('_id')
-    
+
+    # iGlobal Educational Services admin — dedicated admin page with the
+    # JUPEB exam catalog, access grants, and org management.
+    if role == 'platform_admin':
+        from flask import redirect, url_for
+        return redirect(url_for('admin_bp.home'))
+
     classes_col = get_collection('classes')
     exams_col = get_collection('exams')
     
@@ -79,11 +86,11 @@ def index():
         # 3. Matches one of: exam_type='public' OR class_id in classes OR user_email in student_ids
         upcoming_exams = list(exams_col.find({
             "status": "published",
-            "visibility.excluded_student_ids": {"$ne": user_email},
+            "visibility.excluded_student_ids": {"$nin": email_variants(user_email)},
             "$or": [
                 {"exam_type": {"$in": ["public", "platform_standard"]}},
                 {"visibility.class_ids": {"$in": class_ids}},
-                {"visibility.student_ids": user_email}
+                {"visibility.student_ids": {"$in": email_variants(user_email)}}
             ]
         }).sort("schedule.available_from", 1).limit(3)) if exams_col is not None else []
         
@@ -629,7 +636,7 @@ def my_exams():
         if exams_col is not None:
             query = {
                 "status": "published",
-                "visibility.excluded_student_ids": {"$ne": user_email}
+                "visibility.excluded_student_ids": {"$nin": email_variants(user_email)}
             }
 
             # Build OR condition if there are class_ids or student can access public exams
@@ -641,7 +648,7 @@ def my_exams():
                 or_conditions.append({"visibility.class_ids": {"$in": class_ids}})
 
             if user_email:
-                or_conditions.append({"visibility.student_ids": user_email})
+                or_conditions.append({"visibility.student_ids": {"$in": email_variants(user_email)}})
 
             query["$or"] = or_conditions
             available_exams = list(exams_col.find(query).sort("created_at", -1))
@@ -1029,7 +1036,8 @@ def manage_class(class_id):
         is_owner_or_org = _can_manage_class(class_obj, g.current_user, require_owner=True)
 
         from app.utils.plans import get_plan_limit
-        user_plan = g.current_user.get("plan", {}).get("type", "free")
+        from app.utils.admin import effective_plan_type
+        user_plan = effective_plan_type(g.current_user)
         can_message = get_plan_limit(user_plan, "can_message_1on1")
         can_see_reactions = get_plan_limit(user_plan, "can_see_broadcast_reactions")
 
@@ -1074,7 +1082,8 @@ def class_chat(class_id):
                     break
         
         from app.utils.plans import get_plan_limit
-        user_plan = g.current_user.get("plan", {}).get("type", "free")
+        from app.utils.admin import effective_plan_type
+        user_plan = effective_plan_type(g.current_user)
         can_message = get_plan_limit(user_plan, "can_message_1on1")
         can_see_reactions = get_plan_limit(user_plan, "can_see_broadcast_reactions")
         

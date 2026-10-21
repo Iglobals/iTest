@@ -99,7 +99,7 @@ def list_classes():
         return jsonify({"error": str(e)}), 500
 
 @classes_bp.route('/', methods=['POST'])
-@require_role('teacher', 'org_admin')
+@require_role('teacher', 'org_admin', 'platform_admin')
 def create_class():
     data = request.json or {}
     classes_col = get_collection('classes')
@@ -119,8 +119,10 @@ def create_class():
     # personal plan (onboarding skips plan selection for them), so a class
     # they made used to land with organization_id None, invisible on the
     # org classes page and counted against the "free" personal limit of 3.
-    if user.get("role") == "org_admin" and not org_id:
-        own_org = get_collection('organizations').find_one({"admin_user_id": user["_id"]})
+    # (platform_admin's classes go to the built-in iGlobal org the same way.)
+    if user.get("role") in ("org_admin", "platform_admin") and not org_id:
+        from app.utils.admin import get_managed_org
+        own_org = get_managed_org(user)
         if own_org:
             org_id = str(own_org["_id"])
 
@@ -143,7 +145,8 @@ def create_class():
         max_classes = (org.get("limits") or {}).get("max_classes") or get_plan_limit("free", "max_classes")
         current_count = classes_col.count_documents({"organization_id": org["_id"], "is_active": {"$ne": False}})
     else:
-        user_plan = user.get("plan", {}).get("type", "free")
+        from app.utils.admin import effective_plan_type
+        user_plan = effective_plan_type(user)
         max_classes = get_plan_limit(user_plan, "max_classes")
         current_count = classes_col.count_documents({"teachers.user_id": user["_id"]})
     if current_count >= max_classes:
@@ -369,7 +372,8 @@ def invite(class_id):
             
         if role == 'student':
             from app.utils.plans import get_plan_limit
-            user_plan = g.current_user.get("plan", {}).get("type", "free")
+            from app.utils.admin import effective_plan_type
+            user_plan = effective_plan_type(g.current_user)
             max_students = get_plan_limit(user_plan, "max_students_per_class")
             
             current_students = sum(1 for s in class_obj.get("students", []) if s.get("status") != "removed")

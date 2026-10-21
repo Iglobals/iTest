@@ -39,8 +39,11 @@ def can_student_access_exam(exam, user_email, class_ids):
     """Whether this student is granted access via public/platform_standard type,
     class membership, or a direct email grant - and isn't explicitly excluded."""
     visibility = exam.get("visibility", {}) or {}
-    excluded = visibility.get("excluded_student_ids", []) or []
-    if user_email and user_email in excluded:
+    # Emails compare case-insensitively: e-library grants are stored
+    # lowercased, while the login email may carry capitals.
+    email = (user_email or "").strip().lower()
+    excluded = {str(e).strip().lower() for e in (visibility.get("excluded_student_ids", []) or [])}
+    if email and email in excluded:
         return False
 
     if exam.get("exam_type") in ("public", "platform_standard"):
@@ -50,7 +53,7 @@ def can_student_access_exam(exam, user_email, class_ids):
     if any(cid in exam_class_ids for cid in (class_ids or [])):
         return True
 
-    if user_email and user_email in (visibility.get("student_ids", []) or []):
+    if email and email in {str(e).strip().lower() for e in (visibility.get("student_ids", []) or [])}:
         return True
 
     return False

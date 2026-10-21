@@ -168,7 +168,21 @@ def callback():
             
         sub = user_info.get('sub')
         user = users_col.find_one({"ica_sub": sub})
-        
+
+        # A buyer granted exam access (e-library purchase / grant-access
+        # webhook) before ever signing in may already exist as an
+        # account-less placeholder - claim it instead of creating a second
+        # user with the same email.
+        if not user and user_info.get('email'):
+            from app.utils.admin import email_variants
+            placeholder = users_col.find_one({"email": {"$in": email_variants(user_info.get('email'))},
+                                              "ica_sub": {"$exists": False}})
+            if placeholder:
+                users_col.update_one({"_id": placeholder["_id"]}, {"$set": {
+                    "ica_sub": sub, "placeholder": False, "last_login_at": datetime.utcnow(),
+                }})
+                user = users_col.find_one({"_id": placeholder["_id"]})
+
         if not user:
             print(f"[AUTH DEBUG] Creating new user for {user_info.get('email')}")
             user = {

@@ -40,8 +40,8 @@ def create_exam():
     # student necessarily has an account yet), so those are kept as raw strings -
     # matching how update_exam and the visibility queries elsewhere already treat them.
     class_ids = [ObjectId(cid) for cid in visibility.get("class_ids", []) if cid and ObjectId.is_valid(cid)]
-    student_ids = [e.strip() for e in visibility.get("student_emails", []) if isinstance(e, str) and e.strip()]
-    excluded_student_ids = [e.strip() for e in visibility.get("excluded_student_emails", []) if isinstance(e, str) and e.strip()]
+    student_ids = [e.strip().lower() for e in visibility.get("student_emails", []) if isinstance(e, str) and e.strip()]
+    excluded_student_ids = [e.strip().lower() for e in visibility.get("excluded_student_emails", []) if isinstance(e, str) and e.strip()]
 
     settings = {
         "duration_minutes": 60,
@@ -63,7 +63,8 @@ def create_exam():
     # off->on transition on a later edit.
     if settings.get("ai_proctoring_enabled"):
         from app.utils.plans import get_plan_limit
-        user_plan = g.current_user.get("plan", {}).get("type", "free")
+        from app.utils.admin import effective_plan_type
+        user_plan = effective_plan_type(g.current_user)
         if not get_plan_limit(user_plan, "can_use_ai_proctoring"):
             return jsonify({
                 "error": "AI proctoring requires a Pro or Enterprise plan.",
@@ -238,7 +239,9 @@ def update_exam(exam_id):
             return jsonify({"error": "Unauthorized"}), 403
             
         # BUSINESS LOGIC: Private exams cannot be edited if a student has already taken it
-        is_private = existing_exam.get("exam_type") == "private"
+        # (Not for platform_admin: the e-library catalog exams are private
+        # and must stay editable after buyers have sat them.)
+        is_private = existing_exam.get("exam_type") == "private" and g.current_user.get("role") != "platform_admin"
         
         if is_private:
             session_exists = sessions_col.find_one({"exam_id": exam_obj_id})
@@ -270,7 +273,8 @@ def update_exam(exam_id):
             already_enabled = existing_exam.get("settings", {}).get("ai_proctoring_enabled")
             if wants_ai_proctoring and not already_enabled:
                 from app.utils.plans import get_plan_limit
-                user_plan = g.current_user.get("plan", {}).get("type", "free")
+                from app.utils.admin import effective_plan_type
+                user_plan = effective_plan_type(g.current_user)
                 if not get_plan_limit(user_plan, "can_use_ai_proctoring"):
                     return jsonify({
                         "error": "AI proctoring requires a Pro or Enterprise plan.",
@@ -293,8 +297,8 @@ def update_exam(exam_id):
             update_data["visibility"] = existing_exam.get("visibility", {})
             update_data["visibility"]["type"] = vis.get("type", update_data["visibility"].get("type"))
             update_data["visibility"]["class_ids"] = [ObjectId(cid) for cid in vis.get("class_ids", []) if cid and ObjectId.is_valid(cid)]
-            update_data["visibility"]["student_ids"] = vis.get("student_emails", []) # Store emails directly for MVP or convert to object IDs
-            update_data["visibility"]["excluded_student_ids"] = vis.get("excluded_student_emails", [])
+            update_data["visibility"]["student_ids"] = list(dict.fromkeys(e.strip().lower() for e in vis.get("student_emails", []) if isinstance(e, str) and e.strip()))  # emails, lowercased
+            update_data["visibility"]["excluded_student_ids"] = list(dict.fromkeys(e.strip().lower() for e in vis.get("excluded_student_emails", []) if isinstance(e, str) and e.strip()))
             
         if "schedule" in data:
             sched = data["schedule"]

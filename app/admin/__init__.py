@@ -1,3 +1,1 @@
-from flask import Blueprint
-
-admin_bp = Blueprint('admin_bp', __name__, url_prefix='/api/admin')
+from app.admin.routes import admin_bp  # noqa: F401

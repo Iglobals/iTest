@@ -119,7 +119,7 @@ def ensure_catalog_exams(admin_user, org):
         questions = _questions(items)
         exams.insert_one({
             'title': title,
-            'slug': generate_unique_slug(title),
+            'slug': generate_unique_slug(title, exams),
             'description': f'JUPEB {subject} practice exam - included with the matching iGlobal e-library book + exam package.',
             'cover_image_url': '',
             'created_by': admin_user['_id'],

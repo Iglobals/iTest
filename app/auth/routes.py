@@ -38,19 +38,20 @@ def store_oauth_state(state, code_verifier):
     redis_client = get_redis()
     
     if redis_client:
-        # Redis: Store with 10 minute expiration
+        # Redis: Store with 30 minute expiration (extended to accommodate
+        # first-time ICA login flow where user may spend time signing up)
         redis_client.setex(
             f"oauth_state:{state}",
-            timedelta(minutes=10),
+            timedelta(minutes=30),
             code_verifier
         )
-        print(f"[AUTH DEBUG] Stored state in Redis with 10min TTL")
+        print(f"[AUTH DEBUG] Stored state in Redis with 30min TTL")
     else:
         _memory_store[state] = {
             'code_verifier': code_verifier,
-            'expires_at': datetime.utcnow() + timedelta(minutes=10)
+            'expires_at': datetime.utcnow() + timedelta(minutes=30)
         }
-        print(f"[AUTH DEBUG] Stored state in Memory with 10min TTL")
+        print(f"[AUTH DEBUG] Stored state in Memory with 30min TTL")
 
 def get_oauth_state(state):
     """Retrieve OAuth state from Redis or memory"""

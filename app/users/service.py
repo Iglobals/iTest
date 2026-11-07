@@ -132,9 +132,22 @@ def start_didit_verification(user: dict, callback_url: str) -> dict:
 
     # Resume an unfinished session rather than creating duplicates (same as
     # HelpSend's initiateKYC) - Didit sessions stay usable until they expire.
-    if current.get('provider') == 'didit' and current.get('status') in ('pending', 'under_review') and current.get('verification_url'):
-        return {'verification_url': current['verification_url'], 'status': current['status']}
+    # Check if we have a valid session ID and try to get its current status.
+    if current.get('provider') == 'didit' and current.get('didit_session_id'):
+        session_id = current.get('didit_session_id')
+        try:
+            # Poll Didit to check if the existing session is still valid
+            session_info = didit_client.get_session(session_id)
+            didit_status = session_info.get('status')
+            # Reuse if session is active (not in a terminal state)
+            if didit_status not in ('Approved', 'Declined', 'Expired', 'Kyc Expired'):
+                if current.get('verification_url'):
+                    return {'verification_url': current['verification_url'], 'status': current.get('status', 'pending')}
+        except Exception:
+            # Session lookup failed - create a new one below
+            pass
 
+    # Create new session since none exists or the old one expired
     session = didit_client.create_session(user['_id'], user.get('email'), user.get('full_name'), callback_url)
     users.update_one({'_id': user['_id']}, {'$set': {
         'liveness_verification.provider': 'didit',

@@ -25,11 +25,11 @@ class Config:
     MONGO_URI = os.environ.get('MONGODB_URI')
     
     # PostgreSQL setup (for reporting, scoring, ranking)
-    # Force pg8000 driver (works on Vercel, psycopg2 doesn't)
+    # Use psycopg2-binary driver (more reliable than pg8000)
     postgres_uri = os.environ.get('POSTGRES_URI', '')
-    if postgres_uri.startswith('postgresql://'):
-        # Replace postgresql:// with postgresql+pg8000://
-        postgres_uri = postgres_uri.replace('postgresql://', 'postgresql+pg8000://', 1)
+    if postgres_uri.startswith('postgresql+pg8000://'):
+        # Migrate from pg8000 to psycopg2
+        postgres_uri = postgres_uri.replace('postgresql+pg8000://', 'postgresql://', 1)
     
     SQLALCHEMY_DATABASE_URI = postgres_uri
     SQLALCHEMY_TRACK_MODIFICATIONS = False

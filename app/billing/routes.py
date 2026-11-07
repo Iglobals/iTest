@@ -70,8 +70,14 @@ def select_plan():
                 },
             )
         except PaystackError as exc:
-            logger.error("Paystack initialize failed for user=%s: %s", g.current_user['_id'], exc)
-            flash("Couldn't start checkout - please try again shortly.", "error")
+            error_msg = str(exc)
+            logger.error("Paystack initialize failed for user=%s tier=%s interval=%s plan_code=%s: %s",
+                        g.current_user['_id'], tier, interval, plan_row.paystack_plan_code, error_msg)
+            # Show detailed error in debug mode to help diagnose plan issues
+            if current_app.debug:
+                flash(f"Paystack error: {error_msg}. Please ensure subscription plans are seeded.", "error")
+            else:
+                flash("Couldn't start checkout - please try again shortly.", "error")
             return redirect(url_for('billing.select_plan'))
 
         return redirect(data["authorization_url"])

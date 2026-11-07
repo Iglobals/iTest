@@ -277,6 +277,17 @@ def _apply_successful_charge(data: dict):
         return
 
     plan_row = SubscriptionPlan.query.filter_by(tier=tier, interval=interval).first()
+    if not plan_row:
+        logger.error("Paystack charge.success for reference=%s had unknown tier/interval.", reference)
+        return
+
+    expected_kobo = int(plan_row.price_ngn * 100)
+    paid_kobo = int(data.get("amount") or 0)
+    if paid_kobo < expected_kobo or (data.get("currency") and data.get("currency") != "NGN"):
+        logger.error("Rejected underpaid subscription charge %s: paid %s %s, expected %s kobo",
+                     reference, paid_kobo, data.get("currency"), expected_kobo)
+        return
+
     expires_at = datetime.utcnow() + timedelta(days=INTERVAL_TO_DAYS.get(interval, 30))
     customer_code = (data.get("customer") or {}).get("customer_code")
 

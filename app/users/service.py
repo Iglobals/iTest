@@ -121,7 +121,7 @@ def save_liveness_photos(user_id: str, photos: dict) -> dict:
 #   {status: not_started|pending|under_review|completed|rejected|expired,
 #    provider: 'didit', didit_session_id, verification_url, reason, ...}
 
-def start_didit_verification(user: dict, callback_url: str) -> dict:
+def start_didit_verification(user: dict, callback_url: str, force_new: bool = False) -> dict:
     """Create (or resume) a Didit session for this user. Returns
     {'verification_url', 'status'}; raises ValueError if already verified."""
     from app.utils import didit_client
@@ -130,19 +130,44 @@ def start_didit_verification(user: dict, callback_url: str) -> dict:
     if current.get('status') == 'completed':
         raise ValueError('Your identity is already verified.')
 
-    # Resume an unfinished session rather than creating duplicates (same as
-    # HelpSend's initiateKYC) - Didit sessions stay usable until they expire.
-    # Check if we have a valid session ID and try to get its current status.
-    if current.get('provider') == 'didit' and current.get('didit_session_id'):
+    # Didit web session links expire after ~20-30 minutes of inactivity.
+    # If the session was started more than 20 minutes ago, or if force_new is requested,
+    # create a fresh new session instead of reusing a link that Didit will show as expired.
+    started_at = current.get('started_at')
+    is_recent = False
+    if isinstance(started_at, datetime):
+        is_recent = (datetime.utcnow() - started_at).total_seconds() < 1200  # 20 minutes
+
+    if not force_new and is_recent and current.get('provider') == 'didit' and current.get('didit_session_id'):
         session_id = current.get('didit_session_id')
         try:
             # Poll Didit to check if the existing session is still valid
             session_info = didit_client.get_session(session_id)
-            didit_status = session_info.get('status')
-            # Reuse if session is active (not in a terminal state)
-            if didit_status not in ('Approved', 'Declined', 'Expired', 'Kyc Expired'):
-                if current.get('verification_url'):
-                    return {'verification_url': current['verification_url'], 'status': current.get('status', 'pending')}
+            didit_status = session_info.get('status') or ''
+            # Terminal / expired statuses - must create a fresh session
+            _TERMINAL = {'Approved', 'Declined', 'Expired', 'Kyc Expired', 'Abandoned'}
+            if didit_status not in _TERMINAL:
+                # Session is still live; Didit may have rotated the URL for us
+                # so prefer the URL from the API response over the stale stored one.
+                fresh_url = didit_client.verification_url(session_info.get('session_token') or '')
+                url = fresh_url if session_info.get('session_token') else current.get('verification_url')
+                if url:
+                    # Persist the refreshed URL in case it changed
+                    if url != current.get('verification_url'):
+                        get_collection('users').update_one(
+                            {'_id': user['_id']},
+                            {'$set': {'liveness_verification.verification_url': url}}
+                        )
+                    return {'verification_url': url, 'status': current.get('status', 'pending')}
+            else:
+                # Clear the stale URL so the new session's URL is returned below
+                get_collection('users').update_one(
+                    {'_id': user['_id']},
+                    {'$set': {
+                        'liveness_verification.status': 'expired',
+                        'liveness_verification.verification_url': None,
+                    }}
+                )
         except Exception:
             # Session lookup failed - create a new one below
             pass

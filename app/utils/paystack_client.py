@@ -60,6 +60,11 @@ def create_plan(name: str, amount_kobo: int, interval: str) -> dict:
     })
 
 
+def get_plan(plan_code: str) -> dict:
+    """Fetches plan details from Paystack to verify it exists."""
+    return _request("GET", f"/plan/{plan_code}")
+
+
 def initialize_transaction(email: str, amount_kobo: int, plan_code: str, callback_url: str, metadata: dict) -> dict:
     """Starts a checkout. Returns data including `authorization_url` (redirect
     the user here) and `reference` (used to verify the result later)."""

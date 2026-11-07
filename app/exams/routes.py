@@ -57,17 +57,14 @@ def create_exam():
     # Instant results only ever make sense when there's no essay component to manually grade.
     settings["show_result_immediately"] = grading_mode == "objective" and bool(settings.get("show_result_immediately"))
 
-    # Same plan gate as update_exam() - without this, a free/basic-plan user
-    # could turn on AI proctoring from day one simply by including it in the
-    # initial create payload, bypassing the gate that only checks the
-    # off->on transition on a later edit.
+    # Gate AI proctoring: allowed with a personal Pro/Enterprise subscription,
+    # or through an authorized organization for classes this examiner teaches.
     if settings.get("ai_proctoring_enabled"):
-        from app.utils.plans import get_plan_limit
-        from app.utils.admin import effective_plan_type
-        user_plan = effective_plan_type(g.current_user)
-        if not get_plan_limit(user_plan, "can_use_ai_proctoring"):
+        from app.utils.exam_rules import check_ai_proctoring_allowed
+        allowed, err = check_ai_proctoring_allowed(g.current_user, data)
+        if not allowed:
             return jsonify({
-                "error": "AI proctoring requires a Pro or Enterprise plan.",
+                "error": err or "AI proctoring requires a personal Pro plan or an authorized organization class.",
                 "limit_reached": True,
                 "upgrade_url": "/pricing"
             }), 402
@@ -272,12 +269,13 @@ def update_exam(exam_id):
             wants_ai_proctoring = data["settings"].get("ai_proctoring_enabled")
             already_enabled = existing_exam.get("settings", {}).get("ai_proctoring_enabled")
             if wants_ai_proctoring and not already_enabled:
-                from app.utils.plans import get_plan_limit
-                from app.utils.admin import effective_plan_type
-                user_plan = effective_plan_type(g.current_user)
-                if not get_plan_limit(user_plan, "can_use_ai_proctoring"):
+                from app.utils.exam_rules import check_ai_proctoring_allowed
+                merged_payload = dict(existing_exam)
+                merged_payload.update(data)
+                allowed, err = check_ai_proctoring_allowed(g.current_user, merged_payload)
+                if not allowed:
                     return jsonify({
-                        "error": "AI proctoring requires a Pro or Enterprise plan.",
+                        "error": err or "AI proctoring requires a personal Pro plan or an authorized organization class.",
                         "limit_reached": True,
                         "upgrade_url": "/pricing"
                     }), 402

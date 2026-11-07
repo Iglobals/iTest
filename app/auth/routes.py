@@ -34,53 +34,106 @@ def get_redis():
     return _redis_client if _redis_client else None
 
 def store_oauth_state(state, code_verifier):
-    """Store OAuth state in Redis or memory"""
+    """Store OAuth state in MongoDB, Redis, or memory (works across serverless functions)"""
+    # 1. MongoDB (primary persistence across Vercel serverless functions)
+    try:
+        col = get_collection('oauth_states')
+        if col is not None:
+            col.update_one(
+                {'state': state},
+                {'$set': {
+                    'state': state,
+                    'code_verifier': code_verifier,
+                    'expires_at': datetime.utcnow() + timedelta(minutes=30),
+                    'created_at': datetime.utcnow()
+                }},
+                upsert=True
+            )
+            print(f"[AUTH DEBUG] Stored state in MongoDB with 30min TTL")
+    except Exception as e:
+        print(f"[AUTH ERROR] Failed to store state in MongoDB: {e}")
+
+    # 2. Redis mirror
     redis_client = get_redis()
-    
     if redis_client:
-        # Redis: Store with 30 minute expiration (extended to accommodate
-        # first-time ICA login flow where user may spend time signing up)
-        redis_client.setex(
-            f"oauth_state:{state}",
-            timedelta(minutes=30),
-            code_verifier
-        )
-        print(f"[AUTH DEBUG] Stored state in Redis with 30min TTL")
-    else:
-        _memory_store[state] = {
-            'code_verifier': code_verifier,
-            'expires_at': datetime.utcnow() + timedelta(minutes=30)
-        }
-        print(f"[AUTH DEBUG] Stored state in Memory with 30min TTL")
+        try:
+            redis_client.setex(
+                f"oauth_state:{state}",
+                timedelta(minutes=30),
+                code_verifier
+            )
+            print(f"[AUTH DEBUG] Stored state in Redis with 30min TTL")
+        except Exception as e:
+            print(f"[AUTH ERROR] Redis set failed: {e}")
+
+    # 3. Local memory mirror
+    _memory_store[state] = {
+        'code_verifier': code_verifier,
+        'expires_at': datetime.utcnow() + timedelta(minutes=30)
+    }
 
 def get_oauth_state(state):
-    """Retrieve OAuth state from Redis or memory"""
-    redis_client = get_redis()
-    
-    if redis_client:
-        code_verifier = redis_client.get(f"oauth_state:{state}")
-        if code_verifier:
-            print(f"[AUTH DEBUG] Retrieved state from Redis")
-            return {'code_verifier': code_verifier}
-        return None
-    else:
-        data = _memory_store.get(state)
-        if data and data['expires_at'] > datetime.utcnow():
-            print(f"[AUTH DEBUG] Retrieved state from Memory")
-            return {'code_verifier': data['code_verifier']}
+    """Retrieve OAuth state from MongoDB, Redis, or memory"""
+    if not state:
         return None
 
-def delete_oauth_state(state):
-    """Delete OAuth state after use"""
+    # 1. MongoDB (primary for serverless instances)
+    try:
+        col = get_collection('oauth_states')
+        if col is not None:
+            doc = col.find_one({
+                'state': state,
+                'expires_at': {'$gt': datetime.utcnow()}
+            })
+            if doc and doc.get('code_verifier'):
+                print(f"[AUTH DEBUG] Retrieved state from MongoDB")
+                return {'code_verifier': doc['code_verifier']}
+    except Exception as e:
+        print(f"[AUTH ERROR] Failed to get state from MongoDB: {e}")
+
+    # 2. Redis
     redis_client = get_redis()
-    
     if redis_client:
-        redis_client.delete(f"oauth_state:{state}")
-        print(f"[AUTH DEBUG] Deleted state from Redis")
-    else:
-        if state in _memory_store:
-            del _memory_store[state]
-            print(f"[AUTH DEBUG] Deleted state from Memory")
+        try:
+            code_verifier = redis_client.get(f"oauth_state:{state}")
+            if code_verifier:
+                print(f"[AUTH DEBUG] Retrieved state from Redis")
+                return {'code_verifier': code_verifier}
+        except Exception as e:
+            print(f"[AUTH ERROR] Redis get failed: {e}")
+
+    # 3. Memory store
+    data = _memory_store.get(state)
+    if data and data['expires_at'] > datetime.utcnow():
+        print(f"[AUTH DEBUG] Retrieved state from Memory")
+        return {'code_verifier': data['code_verifier']}
+
+    return None
+
+def delete_oauth_state(state):
+    """Delete OAuth state after use from all stores"""
+    if not state:
+        return
+
+    try:
+        col = get_collection('oauth_states')
+        if col is not None:
+            col.delete_one({'state': state})
+            print(f"[AUTH DEBUG] Deleted state from MongoDB")
+    except Exception as e:
+        pass
+
+    redis_client = get_redis()
+    if redis_client:
+        try:
+            redis_client.delete(f"oauth_state:{state}")
+            print(f"[AUTH DEBUG] Deleted state from Redis")
+        except Exception as e:
+            pass
+
+    if state in _memory_store:
+        del _memory_store[state]
+        print(f"[AUTH DEBUG] Deleted state from Memory")
 
 def get_ica_client():
     return IGlobalsAuth(

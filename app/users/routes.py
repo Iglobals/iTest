@@ -95,10 +95,12 @@ def start_didit():
     from app.users.service import start_didit_verification
     if not didit_client.is_configured():
         return jsonify({'error': 'Automatic verification is not available yet.'}), 503
-    nxt = _safe_next((request.get_json(silent=True) or {}).get('next'))
+    body = request.get_json(silent=True) or {}
+    nxt = _safe_next(body.get('next'))
+    force_new = bool(body.get('force_new'))
     callback = url_for('dashboard.verification_complete', _external=True, **({'next': nxt} if nxt else {}))
     try:
-        result = start_didit_verification(g.current_user, callback)
+        result = start_didit_verification(g.current_user, callback, force_new=force_new)
     except ValueError as e:
         return jsonify({'error': str(e)}), 409
     except didit_client.DiditError as e:

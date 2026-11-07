@@ -50,7 +50,27 @@ def select_plan():
             return redirect(url_for('dashboard.index'))
 
         plan_row = SubscriptionPlan.query.filter_by(tier=tier, interval=interval, is_active=True).first()
-        if not plan_row or not plan_row.paystack_plan_code:
+        if not plan_row:
+            flash("That plan isn't available right now.", "error")
+            return redirect(url_for('billing.select_plan'))
+
+        # Auto-create plan on Paystack if missing
+        if not plan_row.paystack_plan_code:
+            try:
+                p_interval = "monthly" if interval == "monthly" else "annually"
+                p_name = f"iTest {tier.capitalize()} {interval.capitalize()}"
+                created = paystack_client.create_plan(
+                    name=p_name,
+                    amount_kobo=int(plan_row.price_ngn * 100),
+                    interval=p_interval
+                )
+                plan_row.paystack_plan_code = created["plan_code"]
+                db.session.commit()
+                logger.info("Auto-created Paystack plan for tier=%s interval=%s: %s", tier, interval, plan_row.paystack_plan_code)
+            except Exception as e:
+                logger.error("Failed to auto-create Paystack plan: %s", e)
+
+        if not plan_row.paystack_plan_code:
             flash("That plan isn't available right now.", "error")
             return redirect(url_for('billing.select_plan'))
 
@@ -71,13 +91,39 @@ def select_plan():
             )
         except PaystackError as exc:
             error_msg = str(exc)
+            # If Paystack says "Plan not found", the stored plan_code belonged to a different
+            # integration (e.g. test vs live mismatch). Auto-recreate under current key and retry once!
+            if "plan not found" in error_msg.lower():
+                try:
+                    logger.warning("Paystack plan %s not found on this integration. Auto-recreating...", plan_row.paystack_plan_code)
+                    p_interval = "monthly" if interval == "monthly" else "annually"
+                    p_name = f"iTest {tier.capitalize()} {interval.capitalize()}"
+                    created = paystack_client.create_plan(
+                        name=p_name,
+                        amount_kobo=int(plan_row.price_ngn * 100),
+                        interval=p_interval
+                    )
+                    plan_row.paystack_plan_code = created["plan_code"]
+                    db.session.commit()
+
+                    data = paystack_client.initialize_transaction(
+                        email=g.current_user['email'],
+                        amount_kobo=int(plan_row.price_ngn * 100),
+                        plan_code=plan_row.paystack_plan_code,
+                        callback_url=url_for('billing.callback', _external=True),
+                        metadata={
+                            "user_id": str(g.current_user['_id']), "tier": tier, "interval": interval,
+                            "client_id": current_app.config.get('ICA_CLIENT_ID', ''),
+                            "purpose": "subscription",
+                        },
+                    )
+                    return redirect(data["authorization_url"])
+                except Exception as retry_exc:
+                    logger.error("Paystack retry failed for user=%s: %s", g.current_user['_id'], retry_exc)
+
             logger.error("Paystack initialize failed for user=%s tier=%s interval=%s plan_code=%s: %s",
                         g.current_user['_id'], tier, interval, plan_row.paystack_plan_code, error_msg)
-            # Show detailed error in debug mode to help diagnose plan issues
-            if current_app.debug:
-                flash(f"Paystack error: {error_msg}. Please ensure subscription plans are seeded.", "error")
-            else:
-                flash("Couldn't start checkout - please try again shortly.", "error")
+            flash("Couldn't start checkout - please try again shortly.", "error")
             return redirect(url_for('billing.select_plan'))
 
         return redirect(data["authorization_url"])
